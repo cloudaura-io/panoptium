@@ -38,14 +38,14 @@ type mockObserver struct {
 	finalErr   error
 
 	// Track calls for verification
-	canHandleCalled          int
-	processRequestCalled     int
-	processResponseCalled    int
-	finalizeCalled           int
-	lastObserverCtx          *ObserverContext
-	lastStreamCtx            *StreamContext
-	lastResponseBody         []byte
-	lastFinalizeErr          error
+	canHandleCalled       int
+	processRequestCalled  int
+	processResponseCalled int
+	finalizeCalled        int
+	lastObserverCtx       *ObserverContext
+	lastStreamCtx         *StreamContext
+	lastResponseBody      []byte
+	lastFinalizeErr       error
 }
 
 func newMockObserver(name string, canHandle bool, confidence float32) *mockObserver {
@@ -327,9 +327,9 @@ func TestRegistry_Register(t *testing.T) {
 	obs := newMockObserver("llm-openai", true, 1.0)
 
 	err := registry.Register(obs, ObserverConfig{
-		Name:     "llm-openai",
-		Priority: 10,
-		Protocol: "llm",
+		Name:      "llm-openai",
+		Priority:  10,
+		Protocol:  "llm",
 		Providers: []string{"openai"},
 	})
 	if err != nil {
