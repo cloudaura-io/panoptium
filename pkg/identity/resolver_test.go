@@ -140,10 +140,10 @@ func TestResolveIdentity_CascadingResolution(t *testing.T) {
 	resolver := NewResolver(cache)
 
 	tests := []struct {
-		name       string
-		headers    http.Header
-		wantConf   string
-		wantPod    string
+		name     string
+		headers  http.Header
+		wantConf string
+		wantPod  string
 	}{
 		{
 			name: "JWT auth gives high confidence",
