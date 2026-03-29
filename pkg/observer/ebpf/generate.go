@@ -22,3 +22,6 @@ package ebpf
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type openat_event openat ./c/openat.bpf.c -- -I./c -O2 -g -Wall -Werror
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type connect_event connect ./c/connect.bpf.c -- -I./c -O2 -g -Wall -Werror
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type fork_event fork ./c/fork.bpf.c -- -I./c -O2 -g -Wall -Werror
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type setns_event -type unshare_event namespace ./c/namespace.bpf.c -- -I./c -O2 -g -Wall -Werror
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type mount_event lsmMount ./c/lsm_mount.bpf.c -- -I./c -O2 -g -Wall -Werror
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type ptrace_event lsmPtrace ./c/lsm_ptrace.bpf.c -- -I./c -O2 -g -Wall -Werror
