@@ -1,0 +1,181 @@
+// Copyright 2026 Cloudaura sp. z o.o.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package panoptium.v1;
+
+option go_package = "github.com/panoptium/panoptium/pkg/eventbus/pb";
+
+import "google/protobuf/timestamp.proto";
+
+// Severity indicates the severity level of a PanoptiumEvent.
+enum Severity {
+  INFO = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+  CRITICAL = 4;
+}
+
+// EventSource identifies the component that emitted the event.
+message EventSource {
+  // component is the emitting subsystem (e.g., "extproc", "ebpf", "policy-engine", "controller").
+  string component = 1;
+
+  // instance is the specific instance identifier (e.g., pod name).
+  string instance = 2;
+
+  // version is the software version of the emitting component.
+  string version = 3;
+}
+
+// AgentIdentity contains information about the agent that initiated the request.
+message AgentIdentity {
+  // pod_name is the resolved Kubernetes pod name.
+  string pod_name = 1;
+
+  // namespace is the Kubernetes namespace of the agent pod.
+  string namespace = 2;
+
+  // labels contains the Kubernetes labels of the agent pod.
+  map<string, string> labels = 3;
+
+  // auth_type indicates how the agent was authenticated ("jwt" or "source-ip").
+  string auth_type = 4;
+
+  // auth_id is the primary agent identifier (JWT sub or "pod:<IP>").
+  string auth_id = 5;
+
+  // source_ip is the source pod IP for Kubernetes resolution.
+  string source_ip = 6;
+}
+
+// PanoptiumEvent is the core event envelope for all Panoptium telemetry.
+// Every event flowing through the event bus is wrapped in this message.
+message PanoptiumEvent {
+  // id is a ULID-based unique event identifier.
+  string id = 1;
+
+  // timestamp is the event creation time with nanosecond precision.
+  google.protobuf.Timestamp timestamp = 2;
+
+  // trace_id is the W3C Trace Context trace ID (16 bytes).
+  bytes trace_id = 3;
+
+  // span_id is the W3C Trace Context span ID (8 bytes).
+  bytes span_id = 4;
+
+  // parent_span_id is the parent span for correlation (8 bytes).
+  bytes parent_span_id = 5;
+
+  // source identifies the component that emitted this event.
+  EventSource source = 6;
+
+  // agent contains the resolved agent identity.
+  AgentIdentity agent = 7;
+
+  // category is the event category (e.g., "syscall", "network", "llm").
+  string category = 8;
+
+  // subcategory is the event subcategory (e.g., "execve", "connect", "request.start").
+  string subcategory = 9;
+
+  // severity is the event severity level.
+  Severity severity = 10;
+
+  // payload contains the typed event data per category.
+  oneof payload {
+    SyscallEvent syscall_event = 11;
+    NetworkEvent network_event = 12;
+    ProtocolEvent protocol_event = 13;
+    LLMStreamEvent llm_stream_event = 14;
+    PolicyEvent policy_event = 15;
+    LifecycleEvent lifecycle_event = 16;
+  }
+}
+
+// SyscallEvent contains data about a system call observation.
+message SyscallEvent {
+  uint32 pid = 1;
+  string comm = 2;
+  uint32 syscall_nr = 3;
+  repeated string args = 4;
+  int32 return_code = 5;
+  uint64 cgroup_id = 6;
+}
+
+// NetworkEvent contains data about a network connection observation.
+message NetworkEvent {
+  string src_ip = 1;
+  uint32 src_port = 2;
+  string dst_ip = 3;
+  uint32 dst_port = 4;
+  string protocol = 5;
+  uint64 bytes_tx = 6;
+  uint64 bytes_rx = 7;
+}
+
+// ProtocolEvent contains data about an application protocol observation.
+message ProtocolEvent {
+  string http_method = 1;
+  string url = 2;
+  map<string, string> headers = 3;
+  int32 status_code = 4;
+  string content_type = 5;
+}
+
+// LLMStreamEvent contains data about an LLM request/response observation.
+message LLMStreamEvent {
+  string model = 1;
+  string provider = 2;
+  repeated string messages = 3;
+  int32 tokens = 4;
+  double ttft_ms = 5;
+  string finish_reason = 6;
+  repeated ToolCall tool_calls = 7;
+}
+
+// ToolCall represents a tool invocation within an LLM response.
+message ToolCall {
+  string id = 1;
+  string name = 2;
+  string arguments = 3;
+}
+
+// PolicyEvent contains data about a policy evaluation or violation.
+message PolicyEvent {
+  string policy_name = 1;
+  int32 rule_index = 2;
+  string action = 3;
+  string match_details = 4;
+  string enforcement_mode = 5;
+}
+
+// LifecycleEvent contains data about a pod lifecycle observation.
+message LifecycleEvent {
+  string pod_name = 1;
+  string namespace = 2;
+  string phase = 3;
+  repeated ContainerStatus container_statuses = 4;
+  int32 restart_count = 5;
+}
+
+// ContainerStatus represents the status of a container in a pod.
+message ContainerStatus {
+  string name = 1;
+  string state = 2;
+  bool ready = 3;
+  int32 restart_count = 4;
+}
