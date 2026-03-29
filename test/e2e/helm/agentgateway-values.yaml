@@ -1,0 +1,6 @@
+# AgentGateway Helm values for E2E testing on kind cluster
+# Minimal configuration with HTTP listener for mock LLM routing
+
+controller:
+  replicaCount: 1
+  logLevel: debug
