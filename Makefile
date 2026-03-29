@@ -80,6 +80,18 @@ test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated 
 	}
 	go test ./test/e2e/ -v -ginkgo.v
 
+.PHONY: test-e2e-full
+test-e2e-full: ## Run the full E2E pipeline on a kind cluster (creates cluster, deploys all, runs tests).
+	@command -v kind >/dev/null 2>&1 || { \
+		echo "Kind is not installed. Please install Kind manually."; \
+		exit 1; \
+	}
+	@command -v helm >/dev/null 2>&1 || { \
+		echo "Helm is not installed. Please install Helm manually."; \
+		exit 1; \
+	}
+	./test/e2e/run-e2e.sh
+
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run
