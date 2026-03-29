@@ -19,3 +19,6 @@ limitations under the License.
 package ebpf
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type execve_event execve ./c/execve.bpf.c -- -I./c -O2 -g -Wall -Werror
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type openat_event openat ./c/openat.bpf.c -- -I./c -O2 -g -Wall -Werror
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type connect_event connect ./c/connect.bpf.c -- -I./c -O2 -g -Wall -Werror
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type fork_event fork ./c/fork.bpf.c -- -I./c -O2 -g -Wall -Werror
