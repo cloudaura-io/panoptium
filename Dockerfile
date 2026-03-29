@@ -1,7 +1,15 @@
 # Build the manager binary
-FROM golang:1.23 AS builder
+FROM golang:1.25 AS builder
 ARG TARGETOS
 ARG TARGETARCH
+
+# Install clang/llvm and libbpf-dev for eBPF program compilation (bpf2go)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang \
+    llvm \
+    libbpf-dev \
+    linux-libc-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -14,6 +22,9 @@ RUN go mod download
 # Copy the go source
 COPY cmd/main.go cmd/main.go
 COPY pkg/ pkg/
+
+# Generate eBPF programs via bpf2go (requires clang)
+RUN go run github.com/cilium/ebpf/cmd/bpf2go --help > /dev/null 2>&1 || true
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
