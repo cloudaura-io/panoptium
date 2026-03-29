@@ -833,7 +833,9 @@ verify:
 }
 
 // TestProcess_PassiveMode verifies that all ProcessingResponse messages
-// returned by the server are empty (no mutations to headers or body).
+// returned by the server have no header mutations, body responses echo
+// data verbatim via BodyMutation (passive echo), and header responses
+// remain empty.
 func TestProcess_PassiveMode(t *testing.T) {
 	_, _, _, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
@@ -884,11 +886,12 @@ func TestProcess_PassiveMode(t *testing.T) {
 		}
 	}
 
-	// Test request body response is empty
+	// Test request body response echoes body verbatim (passive echo)
+	reqBody := makeOpenAIRequestBody("gpt-4", true)
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        reqBody,
 				EndOfStream: true,
 			},
 		},
@@ -906,14 +909,19 @@ func TestProcess_PassiveMode(t *testing.T) {
 	if bodyResp == nil {
 		t.Fatal("expected RequestBody response")
 	}
-	if bodyResp.GetResponse() != nil {
-		commonResp := bodyResp.GetResponse()
-		if commonResp.GetHeaderMutation() != nil {
-			t.Error("expected no header mutations in passive mode for body")
-		}
-		if commonResp.GetBodyMutation() != nil {
-			t.Error("expected no body mutations in passive mode for body")
-		}
+	// In passive echo mode, body is echoed via BodyMutation (no content modification)
+	commonResp := bodyResp.GetResponse()
+	if commonResp == nil {
+		t.Fatal("expected CommonResponse with BodyMutation for body echo")
+	}
+	if commonResp.GetHeaderMutation() != nil {
+		t.Error("expected no header mutations in passive mode for body")
+	}
+	if commonResp.GetBodyMutation() == nil {
+		t.Fatal("expected BodyMutation for body echo, got nil")
+	}
+	if string(commonResp.GetBodyMutation().GetBody()) != string(reqBody) {
+		t.Error("expected body to be echoed verbatim")
 	}
 
 	// Test response headers response is empty
@@ -941,17 +949,18 @@ func TestProcess_PassiveMode(t *testing.T) {
 		t.Fatal("expected ResponseHeaders response")
 	}
 	if respHeaders.GetResponse() != nil {
-		commonResp := respHeaders.GetResponse()
-		if commonResp.GetHeaderMutation() != nil {
+		respCommon := respHeaders.GetResponse()
+		if respCommon.GetHeaderMutation() != nil {
 			t.Error("expected no header mutations in passive mode for response headers")
 		}
 	}
 
-	// Test response body response is empty
+	// Test response body echoes body verbatim (passive echo)
+	sseChunk := makeOpenAISSEChunk("test")
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseBody{
 			ResponseBody: &extprocv3.HttpBody{
-				Body:        makeOpenAISSEChunk("test"),
+				Body:        sseChunk,
 				EndOfStream: true,
 			},
 		},
@@ -969,11 +978,16 @@ func TestProcess_PassiveMode(t *testing.T) {
 	if respBody == nil {
 		t.Fatal("expected ResponseBody response")
 	}
-	if respBody.GetResponse() != nil {
-		commonResp := respBody.GetResponse()
-		if commonResp.GetBodyMutation() != nil {
-			t.Error("expected no body mutations in passive mode for response body")
-		}
+	// In passive echo mode, response body is echoed via BodyMutation
+	respCommon := respBody.GetResponse()
+	if respCommon == nil {
+		t.Fatal("expected CommonResponse with BodyMutation for response body echo")
+	}
+	if respCommon.GetBodyMutation() == nil {
+		t.Fatal("expected BodyMutation for response body echo, got nil")
+	}
+	if string(respCommon.GetBodyMutation().GetBody()) != string(sseChunk) {
+		t.Error("expected response body to be echoed verbatim")
 	}
 
 	// Verify no dynamic metadata or mode override

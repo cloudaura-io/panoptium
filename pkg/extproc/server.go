@@ -234,7 +234,16 @@ func (s *ExtProcServer) handleRequestBody(ctx context.Context, state *streamStat
 
 	return &extprocv3.ProcessingResponse{
 		Response: &extprocv3.ProcessingResponse_RequestBody{
-			RequestBody: &extprocv3.BodyResponse{},
+			RequestBody: &extprocv3.BodyResponse{
+				Response: &extprocv3.CommonResponse{
+					Status: extprocv3.CommonResponse_CONTINUE_AND_REPLACE,
+					BodyMutation: &extprocv3.BodyMutation{
+						Mutation: &extprocv3.BodyMutation_Body{
+							Body: body.GetBody(),
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -276,7 +285,16 @@ func (s *ExtProcServer) handleResponseBody(ctx context.Context, state *streamSta
 
 	return &extprocv3.ProcessingResponse{
 		Response: &extprocv3.ProcessingResponse_ResponseBody{
-			ResponseBody: &extprocv3.BodyResponse{},
+			ResponseBody: &extprocv3.BodyResponse{
+				Response: &extprocv3.CommonResponse{
+					Status: extprocv3.CommonResponse_CONTINUE_AND_REPLACE,
+					BodyMutation: &extprocv3.BodyMutation{
+						Mutation: &extprocv3.BodyMutation_Body{
+							Body: body.GetBody(),
+						},
+					},
+				},
+			},
 		},
 	}
 }
