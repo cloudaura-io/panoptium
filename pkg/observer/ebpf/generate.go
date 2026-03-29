@@ -25,3 +25,4 @@ package ebpf
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type setns_event -type unshare_event namespace ./c/namespace.bpf.c -- -I./c -O2 -g -Wall -Werror
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type mount_event lsmMount ./c/lsm_mount.bpf.c -- -I./c -O2 -g -Wall -Werror
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type ptrace_event lsmPtrace ./c/lsm_ptrace.bpf.c -- -I./c -O2 -g -Wall -Werror
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -target amd64 -type bpf_selfmon_event selfmon ./c/selfmon.bpf.c -- -I./c -O2 -g -Wall -Werror
