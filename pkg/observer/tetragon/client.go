@@ -133,8 +133,8 @@ func (c *Client) Events() <-chan *RawEvent {
 }
 
 // Metrics returns the client's performance counters.
-func (c *Client) Metrics() ClientMetrics {
-	return c.metrics
+func (c *Client) Metrics() *ClientMetrics {
+	return &c.metrics
 }
 
 // State returns the current connection state.

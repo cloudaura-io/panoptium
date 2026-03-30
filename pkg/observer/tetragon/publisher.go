@@ -128,8 +128,8 @@ func (p *Publisher) Stop() {
 }
 
 // Metrics returns the publisher's performance counters.
-func (p *Publisher) Metrics() PublisherMetrics {
-	return p.metrics
+func (p *Publisher) Metrics() *PublisherMetrics {
+	return &p.metrics
 }
 
 // worker processes events from the channel.

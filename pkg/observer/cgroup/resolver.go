@@ -216,8 +216,8 @@ func (r *CgroupResolver) CacheSize() int {
 }
 
 // CacheMetricsSnapshot returns the current cache hit/miss counters.
-func (r *CgroupResolver) CacheMetricsSnapshot() CacheMetrics {
-	return r.metrics
+func (r *CgroupResolver) CacheMetricsSnapshot() *CacheMetrics {
+	return &r.metrics
 }
 
 // evictIfNeeded removes the least recently used cache entry if at capacity.
