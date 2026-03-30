@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "panoptium.fullname" . }}-controller-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "panoptium.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller-manager
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "panoptium.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: controller-manager
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "panoptium.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: controller-manager
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "panoptium.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: manager
+          image: {{ include "panoptium.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --health-probe-bind-address={{ .Values.controller.healthProbeBindAddress }}
+            - --metrics-bind-address={{ .Values.controller.metricsBindAddress }}
+            {{- if .Values.controller.leaderElect }}
+            - --leader-elect
+            {{- end }}
+            {{- if .Values.controller.secureMetrics }}
+            - --metrics-secure
+            {{- end }}
+            {{- if .Values.extproc.enabled }}
+            - --extproc-enabled
+            - --extproc-port={{ .Values.extproc.port }}
+            {{- end }}
+          ports:
+            {{- if .Values.extproc.enabled }}
+            - name: extproc
+              containerPort: {{ .Values.extproc.port }}
+              protocol: TCP
+            {{- end }}
+            {{- if .Values.webhook.enabled }}
+            - name: webhook
+              containerPort: {{ .Values.webhook.port }}
+              protocol: TCP
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.controller.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.webhook.enabled }}
+          volumeMounts:
+            - name: cert
+              mountPath: /tmp/k8s-webhook-server/serving-certs
+              readOnly: true
+          {{- end }}
+      {{- if .Values.webhook.enabled }}
+      volumes:
+        - name: cert
+          secret:
+            secretName: {{ include "panoptium.fullname" . }}-webhook-cert
+            defaultMode: 420
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

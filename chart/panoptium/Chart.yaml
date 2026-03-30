@@ -1,0 +1,18 @@
+apiVersion: v2
+name: panoptium
+description: Panoptium Kubernetes operator for AI agent observability and governance
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.28.0"
+keywords:
+  - ai
+  - observability
+  - governance
+  - kubernetes
+  - operator
+home: https://github.com/panoptium/panoptium
+sources:
+  - https://github.com/panoptium/panoptium
+maintainers:
+  - name: panoptium

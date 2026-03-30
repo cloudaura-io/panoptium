@@ -1,0 +1,30 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "panoptium.fullname" . }}-validating
+  labels:
+    {{- include "panoptium.labels" . | nindent 4 }}
+  {{- if .Values.webhook.certManager }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "panoptium.fullname" . }}-webhook-cert
+  {{- end }}
+webhooks:
+  - name: vpanoptiumpolicy.panoptium.io
+    admissionReviewVersions: [v1]
+    clientConfig:
+      service:
+        name: {{ include "panoptium.fullname" . }}-webhook
+        namespace: {{ .Release.Namespace }}
+        path: /validate-panoptium-io-v1alpha1-panoptiumpolicy
+      {{- if not .Values.webhook.certManager }}
+      caBundle: Cg==
+      {{- end }}
+    failurePolicy: Fail
+    rules:
+      - apiGroups: [panoptium.io]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [panoptiumpolicies]
+    sideEffects: None
+{{- end }}

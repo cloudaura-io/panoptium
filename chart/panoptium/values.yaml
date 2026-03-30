@@ -1,0 +1,123 @@
+# Default values for panoptium.
+
+# -- Number of controller manager replicas
+replicaCount: 1
+
+image:
+  # -- Container image repository
+  repository: ghcr.io/panoptium/panoptium
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (defaults to appVersion)
+  tag: ""
+
+# -- Image pull secrets
+imagePullSecrets: []
+# -- Override the chart name
+nameOverride: ""
+# -- Override the full name
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount
+  create: true
+  # -- Annotations for the ServiceAccount
+  annotations: {}
+  # -- ServiceAccount name (generated if not set)
+  name: ""
+
+# Controller manager configuration
+controller:
+  # -- Enable leader election for HA
+  leaderElect: true
+  # -- Metrics bind address (0 to disable)
+  metricsBindAddress: "0"
+  # -- Health probe bind address
+  healthProbeBindAddress: ":8081"
+  # -- Enable secure metrics via HTTPS
+  secureMetrics: true
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# ExtProc gRPC server configuration
+extproc:
+  # -- Enable the ExtProc gRPC server
+  enabled: true
+  # -- ExtProc gRPC server port
+  port: 9001
+
+# Webhook configuration
+webhook:
+  # -- Enable admission webhooks
+  enabled: true
+  # -- Use cert-manager for webhook certificates
+  certManager: false
+  # -- Webhook service port
+  port: 9443
+
+# Observer DaemonSet configuration
+observer:
+  # -- Enable the observer DaemonSet
+  enabled: false
+  image:
+    # -- Observer image repository
+    repository: ghcr.io/panoptium/panoptium-observer
+    # -- Observer image pull policy
+    pullPolicy: IfNotPresent
+    # -- Observer image tag
+    tag: ""
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# OpenTelemetry configuration
+otel:
+  # -- Enable OpenTelemetry export
+  enabled: false
+  # -- OTLP endpoint
+  endpoint: ""
+
+# NATS JetStream configuration
+nats:
+  # -- NATS storage directory
+  storageDir: /data/nats
+  # -- Maximum stream size
+  maxStreamSize: 1Gi
+
+# -- Pod annotations
+podAnnotations: {}
+
+# -- Pod security context
+podSecurityContext: {}
+
+# -- Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+
+# -- Node selector
+nodeSelector: {}
+
+# -- Tolerations
+tolerations: []
+
+# -- Affinity rules
+affinity: {}
+
+# -- Namespace exclusions for the mutating webhook
+excludedNamespaces:
+  - kube-system

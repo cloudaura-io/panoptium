@@ -1,0 +1,34 @@
+{{- if and .Values.webhook.enabled (not .Values.webhook.certManager) }}
+# Self-signed webhook certificate Secret.
+# For production use, set webhook.certManager=true and install cert-manager.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "panoptium.fullname" . }}-webhook-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "panoptium.labels" . | nindent 4 }}
+type: kubernetes.io/tls
+data:
+  # Placeholder: inject real certificate data via a pre-install hook or cert-manager.
+  tls.crt: ""
+  tls.key: ""
+{{- end }}
+{{- if and .Values.webhook.enabled .Values.webhook.certManager }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "panoptium.fullname" . }}-webhook-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "panoptium.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+    - {{ include "panoptium.fullname" . }}-webhook.{{ .Release.Namespace }}.svc
+    - {{ include "panoptium.fullname" . }}-webhook.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: ClusterIssuer
+    name: selfsigned-issuer
+  secretName: {{ include "panoptium.fullname" . }}-webhook-cert
+{{- end }}

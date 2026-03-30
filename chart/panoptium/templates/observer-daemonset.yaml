@@ -1,0 +1,58 @@
+{{- if .Values.observer.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "panoptium.fullname" . }}-observer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "panoptium.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observer
+spec:
+  selector:
+    matchLabels:
+      {{- include "panoptium.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: observer
+  template:
+    metadata:
+      labels:
+        {{- include "panoptium.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: observer
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "panoptium.serviceAccountName" . }}
+      hostPID: true
+      containers:
+        - name: observer
+          image: {{ include "panoptium.observerImage" . }}
+          imagePullPolicy: {{ .Values.observer.image.pullPolicy }}
+          securityContext:
+            privileged: true
+          {{- with .Values.observer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: sys-kernel-debug
+              mountPath: /sys/kernel/debug
+              readOnly: true
+            - name: sys-fs-bpf
+              mountPath: /sys/fs/bpf
+      volumes:
+        - name: sys-kernel-debug
+          hostPath:
+            path: /sys/kernel/debug
+        - name: sys-fs-bpf
+          hostPath:
+            path: /sys/fs/bpf
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,71 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "panoptium.fullname" . }}-manager
+  labels:
+    {{- include "panoptium.labels" . | nindent 4 }}
+rules:
+  # Core resources
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/eviction]
+    verbs: [create]
+  # NetworkPolicy for quarantine enforcement
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [create, delete, get, list, patch, update, watch]
+  # PanoptiumPolicy
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumpolicies]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumpolicies/status]
+    verbs: [get, patch, update]
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumpolicies/finalizers]
+    verbs: [update]
+  # ClusterPanoptiumPolicy
+  - apiGroups: [panoptium.io]
+    resources: [clusterpanoptiumpolicies]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [panoptium.io]
+    resources: [clusterpanoptiumpolicies/status]
+    verbs: [get, patch, update]
+  - apiGroups: [panoptium.io]
+    resources: [clusterpanoptiumpolicies/finalizers]
+    verbs: [update]
+  # PanoptiumAgentProfile
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumagentprofiles]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumagentprofiles/status]
+    verbs: [get, patch, update]
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumagentprofiles/finalizers]
+    verbs: [update]
+  # PanoptiumThreatSignature
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumthreatsignatures]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumthreatsignatures/status]
+    verbs: [get, patch, update]
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumthreatsignatures/finalizers]
+    verbs: [update]
+  # PanoptiumQuarantine
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumquarantines]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumquarantines/status]
+    verbs: [get, patch, update]
+  - apiGroups: [panoptium.io]
+    resources: [panoptiumquarantines/finalizers]
+    verbs: [update]

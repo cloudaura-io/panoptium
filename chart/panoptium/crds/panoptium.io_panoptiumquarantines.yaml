@@ -1,0 +1,269 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.4
+  name: panoptiumquarantines.panoptium.io
+spec:
+  group: panoptium.io
+  names:
+    kind: PanoptiumQuarantine
+    listKind: PanoptiumQuarantineList
+    plural: panoptiumquarantines
+    singular: panoptiumquarantine
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Target pod
+      jsonPath: .spec.targetPod
+      name: Pod
+      type: string
+    - description: Target namespace
+      jsonPath: .spec.targetNamespace
+      name: Namespace
+      type: string
+    - description: Containment level
+      jsonPath: .spec.containmentLevel
+      name: Level
+      type: string
+    - description: Contained status
+      jsonPath: .status.conditions[?(@.type=="Contained")].status
+      name: Contained
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          PanoptiumQuarantine is the Schema for the panoptiumquarantines API.
+          It represents a containment action applied to a pod suspected of malicious
+          or anomalous behavior. The quarantine includes graduated containment levels,
+          resolution policies, and forensic snapshot configuration.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec defines the desired quarantine configuration.
+            properties:
+              containmentLevel:
+                description: ContainmentLevel defines the graduated containment level
+                  to apply.
+                enum:
+                - network-isolate
+                - syscall-restrict
+                - freeze
+                - evict
+                type: string
+              forensicSnapshot:
+                description: ForensicSnapshot defines what forensic data to capture
+                  at quarantine time.
+                properties:
+                  captureEnvironment:
+                    default: false
+                    description: |-
+                      CaptureEnvironment indicates whether to snapshot environment variables (redacted)
+                      at quarantine time.
+                    type: boolean
+                  captureNetworkState:
+                    default: true
+                    description: CaptureNetworkState indicates whether to snapshot
+                      NetworkPolicies at quarantine time.
+                    type: boolean
+                  captureProcessTree:
+                    default: true
+                    description: CaptureProcessTree indicates whether to snapshot
+                      running processes at quarantine time.
+                    type: boolean
+                type: object
+              reason:
+                description: Reason is a human-readable reason for this quarantine
+                  action.
+                minLength: 1
+                type: string
+              resolution:
+                description: Resolution defines how and when this quarantine should
+                  be resolved.
+                properties:
+                  autoRelease:
+                    default: false
+                    description: |-
+                      AutoRelease indicates whether the quarantine should be automatically released
+                      after the TTL expires.
+                    type: boolean
+                  manualApprovalRequired:
+                    default: false
+                    description: |-
+                      ManualApprovalRequired indicates that a human must explicitly approve
+                      the release of this quarantine.
+                    type: boolean
+                  ttlSeconds:
+                    description: |-
+                      TTLSeconds is the time-to-live in seconds for auto-release.
+                      Only used when AutoRelease is true.
+                    format: int32
+                    minimum: 0
+                    type: integer
+                type: object
+              targetNamespace:
+                description: TargetNamespace is the namespace of the target pod.
+                minLength: 1
+                type: string
+              targetPod:
+                description: TargetPod is the name of the pod to quarantine.
+                minLength: 1
+                type: string
+              triggeringPolicy:
+                description: TriggeringPolicy is the name of the PanoptiumPolicy that
+                  triggered this quarantine.
+                type: string
+              triggeringSignature:
+                description: TriggeringSignature is the name of the PanoptiumThreatSignature
+                  that matched.
+                type: string
+            required:
+            - containmentLevel
+            - reason
+            - targetNamespace
+            - targetPod
+            type: object
+          status:
+            description: Status reflects the observed state of the quarantine.
+            properties:
+              appliedNetworkPolicies:
+                description: AppliedNetworkPolicies lists the names of NetworkPolicies
+                  created for isolation.
+                items:
+                  type: string
+                type: array
+              bpfLSMRules:
+                description: BPFLSMRules lists descriptions of BPF-LSM rules applied
+                  for containment.
+                items:
+                  type: string
+                type: array
+              conditions:
+                description: |-
+                  Conditions represent the latest available observations of the quarantine's state.
+                  Supported condition types: Ready, Contained, Released, Error.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              containedAt:
+                description: ContainedAt is the timestamp when containment was first
+                  applied.
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                  by the controller.
+                format: int64
+                type: integer
+              releasedAt:
+                description: ReleasedAt is the timestamp when containment was released.
+                format: date-time
+                type: string
+              triggeringEventChain:
+                description: TriggeringEventChain is the ordered list of events that
+                  led to this quarantine.
+                items:
+                  description: EventReference is a reference to a specific event in
+                    the triggering event chain.
+                  properties:
+                    category:
+                      description: Category is the event category (e.g., "syscall",
+                        "network", "llm").
+                      type: string
+                    eventID:
+                      description: EventID is the unique identifier of the referenced
+                        event.
+                      type: string
+                    summary:
+                      description: Summary is a human-readable summary of the referenced
+                        event.
+                      type: string
+                    timestamp:
+                      description: Timestamp is when the referenced event occurred.
+                      format: date-time
+                      type: string
+                  required:
+                  - category
+                  - eventID
+                  - timestamp
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
