@@ -9,3 +9,12 @@ namespace: panoptium-system
 resources:
   - rbac.yaml
   - tetragon-config.yaml
+  - policies/execve-monitor.yaml
+  - policies/openat-monitor.yaml
+  - policies/connect-monitor.yaml
+  - policies/fork-monitor.yaml
+  - policies/exit-monitor.yaml
+  - policies/namespace-monitor.yaml
+  - policies/mount-enforce.yaml
+  - policies/ptrace-enforce.yaml
+  - policies/bpf-selfmon.yaml

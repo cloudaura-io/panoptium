@@ -1,0 +1,28 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: panoptium-mount-enforce
+  labels:
+    app.kubernetes.io/name: panoptium
+    app.kubernetes.io/part-of: panoptium
+    app.kubernetes.io/component: kernel-observer
+spec:
+  kprobes:
+    - call: security_sb_mount
+      args:
+        - index: 0
+          type: string
+          label: dev_name
+        - index: 1
+          type: string
+          label: path
+        - index: 2
+          type: string
+          label: type
+        - index: 3
+          type: int
+          label: flags
+      selectors:
+        - matchActions:
+            - action: Override
+              argError: -1

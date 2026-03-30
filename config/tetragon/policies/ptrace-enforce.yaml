@@ -1,0 +1,22 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: panoptium-ptrace-enforce
+  labels:
+    app.kubernetes.io/name: panoptium
+    app.kubernetes.io/part-of: panoptium
+    app.kubernetes.io/component: kernel-observer
+spec:
+  kprobes:
+    - call: security_ptrace_access_check
+      args:
+        - index: 0
+          type: int
+          label: child_pid
+        - index: 1
+          type: int
+          label: mode
+      selectors:
+        - matchActions:
+            - action: Override
+              argError: -1

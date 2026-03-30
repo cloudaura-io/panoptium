@@ -1,0 +1,22 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: panoptium-bpf-selfmon
+  labels:
+    app.kubernetes.io/name: panoptium
+    app.kubernetes.io/part-of: panoptium
+    app.kubernetes.io/component: kernel-observer
+spec:
+  kprobes:
+    - call: sys_bpf
+      syscall: true
+      args:
+        - index: 0
+          type: int
+          label: cmd
+        - index: 2
+          type: int
+          label: size
+      selectors:
+        - matchActions:
+            - action: Post

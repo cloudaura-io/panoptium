@@ -1,0 +1,33 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: panoptium-openat-monitor
+  labels:
+    app.kubernetes.io/name: panoptium
+    app.kubernetes.io/part-of: panoptium
+    app.kubernetes.io/component: kernel-observer
+spec:
+  kprobes:
+    - call: sys_openat
+      syscall: true
+      args:
+        - index: 0
+          type: int
+          label: dirfd
+        - index: 1
+          type: string
+          label: pathname
+        - index: 2
+          type: int
+          label: flags
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: Prefix
+              values:
+                - /etc
+                - /proc
+                - /sys
+                - /var/run/secrets
+          matchActions:
+            - action: Post

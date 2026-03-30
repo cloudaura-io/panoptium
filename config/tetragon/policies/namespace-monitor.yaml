@@ -1,0 +1,31 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: panoptium-namespace-monitor
+  labels:
+    app.kubernetes.io/name: panoptium
+    app.kubernetes.io/part-of: panoptium
+    app.kubernetes.io/component: kernel-observer
+spec:
+  kprobes:
+    - call: sys_setns
+      syscall: true
+      args:
+        - index: 0
+          type: int
+          label: fd
+        - index: 1
+          type: int
+          label: nstype
+      selectors:
+        - matchActions:
+            - action: Post
+    - call: sys_unshare
+      syscall: true
+      args:
+        - index: 0
+          type: int
+          label: flags
+      selectors:
+        - matchActions:
+            - action: Post

@@ -1,0 +1,18 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: panoptium-fork-monitor
+  labels:
+    app.kubernetes.io/name: panoptium
+    app.kubernetes.io/part-of: panoptium
+    app.kubernetes.io/component: kernel-observer
+spec:
+  tracepoints:
+    - subsystem: sched
+      event: sched_process_fork
+      args:
+        - index: 0
+          type: nop
+      selectors:
+        - matchActions:
+            - action: Post

@@ -1,0 +1,28 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: panoptium-connect-monitor
+  labels:
+    app.kubernetes.io/name: panoptium
+    app.kubernetes.io/part-of: panoptium
+    app.kubernetes.io/component: kernel-observer
+spec:
+  kprobes:
+    - call: sys_connect
+      syscall: true
+      args:
+        - index: 0
+          type: int
+          label: sockfd
+        - index: 1
+          type: sockaddr
+          label: addr
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: SAddr
+              values:
+                - AF_INET
+                - AF_INET6
+          matchActions:
+            - action: Post
