@@ -20,6 +20,8 @@ package enforce
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -101,4 +103,44 @@ func NewUnenrolledDenyResponse(sourceIP string) *extprocv3.ProcessingResponse {
 		Error:   "unenrolled_pod",
 		Message: "request from un-enrolled pod (source IP: " + sourceIP + ")",
 	})
+}
+
+// NewThrottleResponse creates a 429 Too Many Requests ImmediateResponse for
+// a policy throttle/rate-limit action. It includes a Retry-After header and
+// a structured JSON error body.
+func NewThrottleResponse(rule, signature string, retryAfterSeconds int) *extprocv3.ProcessingResponse {
+	bodyBytes, _ := json.Marshal(&ErrorResponse{
+		Error:      "rate_limited",
+		Rule:       rule,
+		Signature:  signature,
+		Message:    fmt.Sprintf("rate limited, retry after %d seconds", retryAfterSeconds),
+		RetryAfter: retryAfterSeconds,
+	})
+
+	return &extprocv3.ProcessingResponse{
+		Response: &extprocv3.ProcessingResponse_ImmediateResponse{
+			ImmediateResponse: &extprocv3.ImmediateResponse{
+				Status: &typev3.HttpStatus{
+					Code: typev3.StatusCode_TooManyRequests,
+				},
+				Body: bodyBytes,
+				Headers: &extprocv3.HeaderMutation{
+					SetHeaders: []*corev3.HeaderValueOption{
+						{
+							Header: &corev3.HeaderValue{
+								Key:      "content-type",
+								RawValue: []byte("application/json"),
+							},
+						},
+						{
+							Header: &corev3.HeaderValue{
+								Key:      "retry-after",
+								RawValue: []byte(strconv.Itoa(retryAfterSeconds)),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }

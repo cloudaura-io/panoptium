@@ -22,19 +22,33 @@ package extproc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
 	"github.com/panoptium/panoptium/pkg/eventbus"
 	"github.com/panoptium/panoptium/pkg/extproc/enforce"
 	"github.com/panoptium/panoptium/pkg/identity"
 	"github.com/panoptium/panoptium/pkg/observer"
+	"github.com/panoptium/panoptium/pkg/policy"
 )
+
+// PolicyEvaluator is the interface used by the ExtProc server to evaluate
+// request events against compiled policies. It decouples the ExtProc server
+// from the policy engine implementation, enabling testability via mock
+// evaluators and supporting composition resolvers in production.
+type PolicyEvaluator interface {
+	// Evaluate evaluates a PolicyEvent against the active policy set and
+	// returns a Decision indicating the action to take.
+	Evaluate(event *policy.PolicyEvent) (*policy.Decision, error)
+}
 
 // ExtProcServer implements the Envoy ExternalProcessor gRPC service.
 // It observes LLM traffic flowing through AgentGateway, resolves agent
@@ -47,6 +61,7 @@ type ExtProcServer struct {
 	resolver        *identity.Resolver
 	bus             eventbus.EventBus
 	enforcementMode enforce.EnforcementMode
+	policyEvaluator PolicyEvaluator
 }
 
 // NewExtProcServer creates a new ExtProcServer with the given dependencies.
@@ -66,6 +81,13 @@ func NewExtProcServer(registry *observer.ObserverRegistry, resolver *identity.Re
 // events emitted.
 func (s *ExtProcServer) SetEnforcementMode(mode enforce.EnforcementMode) {
 	s.enforcementMode = mode
+}
+
+// SetPolicyEvaluator configures the policy evaluator used for request-path
+// and response-path policy enforcement. When nil, no policy evaluation is
+// performed and all traffic passes through (observation-only mode).
+func (s *ExtProcServer) SetPolicyEvaluator(evaluator PolicyEvaluator) {
+	s.policyEvaluator = evaluator
 }
 
 // streamState tracks the per-stream state for an active ExtProc bidirectional stream.
@@ -233,6 +255,45 @@ func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamS
 		EventBus:      s.bus,
 	}
 
+	// Policy evaluation: evaluate request against active policies
+	if s.policyEvaluator != nil {
+		host := httpHeaders.Get("host")
+		if host == "" {
+			host = httpHeaders.Get(":authority")
+		}
+
+		policyEvent := &policy.PolicyEvent{
+			Category:    "protocol",
+			Subcategory: "llm_request",
+			Timestamp:   time.Now(),
+			Namespace:   agentIdentity.Namespace,
+			PodName:     agentIdentity.PodName,
+			PodLabels:   agentIdentity.Labels,
+			Fields: map[string]interface{}{
+				"path":      path,
+				"method":    method,
+				"host":      host,
+				"requestID": requestID,
+				"sourceIP":  agentIdentity.SourceIP,
+			},
+		}
+
+		decision, err := s.policyEvaluator.Evaluate(policyEvent)
+		if err != nil {
+			if l, ok := logger.(interface {
+				Info(string, ...interface{})
+			}); ok {
+				l.Info("policy evaluation error", "error", err, "requestID", requestID)
+			}
+			// On evaluation error, fall through to pass-through (fail-open default)
+		} else if decision != nil && decision.Matched {
+			resp := s.applyEnforcementDecision(decision, agentIdentity, requestID)
+			if resp != nil {
+				return resp
+			}
+		}
+	}
+
 	return &extprocv3.ProcessingResponse{
 		Response: &extprocv3.ProcessingResponse_RequestHeaders{
 			RequestHeaders: &extprocv3.HeadersResponse{},
@@ -386,6 +447,63 @@ func (s *ExtProcServer) emitRequestStartEvent(state *streamState) {
 		Model:  state.streamCtx.Model,
 		Stream: state.streamCtx.Stream,
 	})
+}
+
+// applyEnforcementDecision routes a matched policy decision to the appropriate
+// enforcement action and returns an ExtProc ProcessingResponse. It also emits
+// a policy.decision event to the Event Bus. Returns nil if the decision is an
+// allow action (pass-through).
+func (s *ExtProcServer) applyEnforcementDecision(decision *policy.Decision, agentIdentity eventbus.AgentIdentity, requestID string) *extprocv3.ProcessingResponse {
+	ruleRef := formatRuleReference(decision.PolicyNamespace, decision.PolicyName, decision.MatchedRuleIndex)
+	signature := decision.Action.Parameters["signature"]
+	message := decision.Action.Parameters["message"]
+
+	// Emit policy.decision event for all matched decisions
+	s.bus.Emit(&eventbus.EnforcementEvent{
+		BaseEvent: eventbus.BaseEvent{
+			Type:      eventbus.EventTypePolicyDecision,
+			Time:      time.Now(),
+			ReqID:     requestID,
+			AgentInfo: agentIdentity,
+		},
+		Reason: fmt.Sprintf("policy rule matched: %s", ruleRef),
+		Action: string(decision.Action.Type),
+	})
+
+	switch decision.Action.Type {
+	case v1alpha1.ActionTypeDeny:
+		if message == "" {
+			message = fmt.Sprintf("denied by policy rule %q", decision.MatchedRule)
+		}
+		return enforce.NewDenyResponse(ruleRef, signature, message)
+
+	case v1alpha1.ActionTypeRateLimit:
+		retryAfter := 60 // default
+		if v, ok := decision.Action.Parameters["retryAfter"]; ok {
+			if parsed, err := strconv.Atoi(v); err == nil {
+				retryAfter = parsed
+			}
+		}
+		return enforce.NewThrottleResponse(ruleRef, signature, retryAfter)
+
+	case v1alpha1.ActionTypeAllow:
+		// Explicit allow — pass through
+		return nil
+
+	default:
+		// Unknown or unhandled action type — pass through
+		return nil
+	}
+}
+
+// formatRuleReference formats a policy rule reference as
+// "<namespace>/<policy-name>/rule-<index>" or "<policy-name>/rule-<index>".
+func formatRuleReference(namespace, policyName string, ruleIndex int) string {
+	ruleSuffix := fmt.Sprintf("rule-%d", ruleIndex)
+	if namespace != "" {
+		return fmt.Sprintf("%s/%s/%s", namespace, policyName, ruleSuffix)
+	}
+	return fmt.Sprintf("%s/%s", policyName, ruleSuffix)
 }
 
 // envoyHeadersToHTTP converts Envoy's HeaderMap proto to a standard http.Header.
