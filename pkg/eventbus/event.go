@@ -30,6 +30,22 @@ const (
 
 	// EventTypeLLMRequestComplete is emitted when the response stream ends.
 	EventTypeLLMRequestComplete = "llm.request.complete"
+
+	// EventTypeEnforcementUnenrolled is emitted when a request from an un-enrolled pod
+	// is observed in audit mode (passed through with warning).
+	EventTypeEnforcementUnenrolled = "enforcement.unenrolled"
+
+	// EventTypeEnforcementBypass is emitted when the policy engine is unavailable
+	// and fail-open mode passes traffic through.
+	EventTypeEnforcementBypass = "enforcement.bypass"
+
+	// EventTypeEnforcementUnavailable is emitted when fail-closed mode rejects
+	// traffic due to policy engine unavailability.
+	EventTypeEnforcementUnavailable = "enforcement.unavailable"
+
+	// EventTypePolicyDecision is emitted when a policy evaluation produces a
+	// match (deny, throttle, modify, suspend).
+	EventTypePolicyDecision = "policy.decision"
 )
 
 // Protocol constants identify the protocol of the observed traffic.
@@ -206,4 +222,19 @@ type LLMRequestCompleteEvent struct {
 
 	// FinishReason is the reason the response ended (e.g., "stop", "length").
 	FinishReason string
+}
+
+// EnforcementEvent is emitted for enforcement-related occurrences such as
+// un-enrolled pod access, policy bypass, and policy decisions.
+type EnforcementEvent struct {
+	BaseEvent
+
+	// Reason describes why this enforcement event was generated.
+	Reason string
+
+	// SourceIP is the source IP that triggered the event.
+	SourceIP string
+
+	// Action is the enforcement action taken (e.g., "deny", "pass-through").
+	Action string
 }

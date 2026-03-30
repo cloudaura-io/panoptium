@@ -15,7 +15,8 @@ limitations under the License.
 */
 
 // Package extproc implements an Envoy External Processing (ExtProc) gRPC server
-// that passively observes LLM token streams flowing through AgentGateway.
+// that observes LLM token streams flowing through AgentGateway and enforces
+// policy decisions including deny, throttle, modify, and suspend actions.
 package extproc
 
 import (
@@ -23,35 +24,48 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/panoptium/panoptium/pkg/eventbus"
+	"github.com/panoptium/panoptium/pkg/extproc/enforce"
 	"github.com/panoptium/panoptium/pkg/identity"
 	"github.com/panoptium/panoptium/pkg/observer"
 )
 
 // ExtProcServer implements the Envoy ExternalProcessor gRPC service.
-// It passively observes LLM traffic flowing through AgentGateway by
-// delegating to the ObserverRegistry for protocol-specific parsing
-// and publishing events via the EventBus.
+// It observes LLM traffic flowing through AgentGateway, resolves agent
+// identity via PodCache, evaluates policy rules, and enforces decisions
+// (deny, throttle, modify, suspend) based on the configured enforcement mode.
 type ExtProcServer struct {
 	extprocv3.UnimplementedExternalProcessorServer
 
-	registry *observer.ObserverRegistry
-	resolver *identity.Resolver
-	bus      eventbus.EventBus
+	registry        *observer.ObserverRegistry
+	resolver        *identity.Resolver
+	bus             eventbus.EventBus
+	enforcementMode enforce.EnforcementMode
 }
 
 // NewExtProcServer creates a new ExtProcServer with the given dependencies.
+// The default enforcement mode is audit (observe-only, no blocking).
 func NewExtProcServer(registry *observer.ObserverRegistry, resolver *identity.Resolver, bus eventbus.EventBus) *ExtProcServer {
 	return &ExtProcServer{
-		registry: registry,
-		resolver: resolver,
-		bus:      bus,
+		registry:        registry,
+		resolver:        resolver,
+		bus:             bus,
+		enforcementMode: enforce.ModeAudit,
 	}
+}
+
+// SetEnforcementMode configures the enforcement behavior for this server.
+// In ModeEnforcing, un-enrolled pods are rejected and policy decisions are
+// actively enforced. In ModeAudit, all traffic passes through with warning
+// events emitted.
+func (s *ExtProcServer) SetEnforcementMode(mode enforce.EnforcementMode) {
+	s.enforcementMode = mode
 }
 
 // streamState tracks the per-stream state for an active ExtProc bidirectional stream.
@@ -142,7 +156,8 @@ func (s *ExtProcServer) Process(stream extprocv3.ExternalProcessor_ProcessServer
 }
 
 // handleRequestHeaders processes incoming request headers, selects an observer,
-// resolves agent identity, and builds the initial ObserverContext.
+// resolves agent identity via PodCache, enforces un-enrolled pod policy,
+// and builds the initial ObserverContext.
 func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamState, headers *extprocv3.HttpHeaders, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
 	httpHeaders := envoyHeadersToHTTP(headers.GetHeaders())
 
@@ -150,8 +165,41 @@ func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamS
 	method := httpHeaders.Get(":method")
 	requestID := httpHeaders.Get("x-panoptium-request-id")
 
-	// Resolve agent identity
+	// Resolve agent identity from source IP via PodCache
 	agentIdentity := s.resolver.Resolve(httpHeaders)
+
+	// Check for un-enrolled pods (source IP not found in PodCache)
+	if agentIdentity.Confidence == eventbus.ConfidenceLow && agentIdentity.SourceIP != "" {
+		if s.enforcementMode == enforce.ModeEnforcing {
+			// Enforcing mode: reject un-enrolled pod requests with 403
+			if l, ok := logger.(interface {
+				Info(string, ...interface{})
+			}); ok {
+				l.Info("rejecting request from un-enrolled pod",
+					"sourceIP", agentIdentity.SourceIP, "requestID", requestID)
+			}
+			return enforce.NewUnenrolledDenyResponse(agentIdentity.SourceIP)
+		}
+
+		// Audit mode: pass through but emit warning event
+		if l, ok := logger.(interface {
+			Info(string, ...interface{})
+		}); ok {
+			l.Info("request from un-enrolled pod (audit mode, passing through)",
+				"sourceIP", agentIdentity.SourceIP, "requestID", requestID)
+		}
+		s.bus.Emit(&eventbus.EnforcementEvent{
+			BaseEvent: eventbus.BaseEvent{
+				Type:      eventbus.EventTypeEnforcementUnenrolled,
+				Time:      time.Now(),
+				ReqID:     requestID,
+				AgentInfo: agentIdentity,
+			},
+			Reason:   "un-enrolled pod",
+			SourceIP: agentIdentity.SourceIP,
+			Action:   "pass-through",
+		})
+	}
 
 	// Build observer context
 	state.obsCtx = &observer.ObserverContext{
