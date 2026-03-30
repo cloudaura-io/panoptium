@@ -91,20 +91,23 @@ type Event interface {
 
 // AgentIdentity contains information about the agent that initiated the request.
 type AgentIdentity struct {
-	// ID is the primary agent identifier (JWT sub or "pod:<IP>").
+	// ID is the primary agent identifier (pod name from PodCache).
 	ID string
 
 	// SourceIP is the source pod IP for Kubernetes resolution.
 	SourceIP string
 
-	// AuthType indicates how the agent was authenticated ("jwt" or "source-ip").
-	AuthType string
-
 	// Confidence indicates the reliability of the identity resolution.
+	// "high" = resolved from PodCache with full metadata
+	// "medium" = partially resolved
+	// "low" = unknown / unenrolled pod
 	Confidence string
 
 	// PodName is the resolved Kubernetes pod name.
 	PodName string
+
+	// PodUID is the Kubernetes pod UID for unambiguous pod identification.
+	PodUID string
 
 	// Namespace is the Kubernetes namespace of the agent pod.
 	Namespace string

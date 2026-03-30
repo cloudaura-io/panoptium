@@ -284,7 +284,6 @@ func TestStreamContext_Fields(t *testing.T) {
 		AgentIdentity: eventbus.AgentIdentity{
 			ID:         "agent-test",
 			SourceIP:   "10.0.0.1",
-			AuthType:   eventbus.AuthTypeJWT,
 			Confidence: eventbus.ConfidenceHigh,
 			PodName:    "test-pod",
 			Namespace:  "default",

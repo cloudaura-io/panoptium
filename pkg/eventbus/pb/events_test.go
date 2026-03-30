@@ -290,7 +290,7 @@ func TestEventSource_RoundTrip(t *testing.T) {
 // TestAgentIdentity_RoundTrip verifies the AgentIdentity message fields.
 func TestAgentIdentity_RoundTrip(t *testing.T) {
 	agent := &AgentIdentity{
-		PodName:   "chatbot-pod-abc",
+		PodName:  "chatbot-pod-abc",
 		Namespace: "production",
 		Labels:    map[string]string{"app": "chatbot", "tier": "frontend"},
 		AuthType:  "jwt",
@@ -325,5 +325,24 @@ func TestAgentIdentity_RoundTrip(t *testing.T) {
 	}
 	if restored.SourceIp != "10.0.1.5" {
 		t.Errorf("SourceIp = %q, want %q", restored.SourceIp, "10.0.1.5")
+	}
+}
+
+// TestAgentIdentity_NewFields verifies the new confidence and pod_uid fields
+// are accessible on the Go struct. Wire-format round-trip requires protoc
+// regeneration of events.pb.go (the raw descriptor does not yet include
+// field numbers 7 and 8).
+func TestAgentIdentity_NewFields(t *testing.T) {
+	agent := &AgentIdentity{
+		PodName:    "test-pod",
+		Confidence: "high",
+		PodUid:     "uid-abc-123",
+	}
+
+	if agent.GetConfidence() != "high" {
+		t.Errorf("GetConfidence() = %q, want %q", agent.GetConfidence(), "high")
+	}
+	if agent.GetPodUid() != "uid-abc-123" {
+		t.Errorf("GetPodUid() = %q, want %q", agent.GetPodUid(), "uid-abc-123")
 	}
 }

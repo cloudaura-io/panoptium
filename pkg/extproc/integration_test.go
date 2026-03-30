@@ -94,12 +94,15 @@ func collectEvents(sub *eventbus.Subscription, expectedCount int, timeout time.D
 func sendOpenAIStreamingRequest(
 	t *testing.T,
 	stream extprocv3.ExternalProcessor_ProcessClient,
-	agentID, clientIP, authType, requestID, model string,
+	sourceIP, requestID, model string,
 	tokenContents []string,
 ) {
 	t.Helper()
 
 	// 1. Send request headers
+	// Identity is resolved via X-Forwarded-For -> PodCache lookup (K8s-native).
+	// The old x-panoptium-agent-id / x-panoptium-auth-type headers are no longer
+	// used for identity resolution.
 	if err := stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestHeaders{
 			RequestHeaders: &extprocv3.HttpHeaders{
@@ -108,9 +111,7 @@ func sendOpenAIStreamingRequest(
 					":method", "POST",
 					"host", "api.openai.com",
 					"content-type", "application/json",
-					"x-panoptium-agent-id", agentID,
-					"x-panoptium-client-ip", clientIP,
-					"x-panoptium-auth-type", authType,
+					"x-forwarded-for", sourceIP,
 					"x-panoptium-request-id", requestID,
 				),
 			},
@@ -179,14 +180,23 @@ func sendOpenAIStreamingRequest(
 	}
 }
 
-// TestIntegration_OpenAIStreamingWithJWTIdentity verifies the full end-to-end
-// flow for an OpenAI streaming request with JWT-based agent identity:
-// request headers with x-panoptium-agent-id → LLMRequestStart event,
+// TestIntegration_OpenAIStreamingWithEnrolledPod verifies the full end-to-end
+// flow for an OpenAI streaming request with K8s-native pod identity:
+// request headers with X-Forwarded-For → PodCache lookup → LLMRequestStart event,
 // streaming SSE response chunks → LLMTokenChunk events in order,
 // end-of-stream → LLMRequestComplete with metrics and agent identity.
-func TestIntegration_OpenAIStreamingWithJWTIdentity(t *testing.T) {
-	bus, _, client, cleanup := setupIntegrationComponents(t)
+func TestIntegration_OpenAIStreamingWithEnrolledPod(t *testing.T) {
+	bus, podCache, client, cleanup := setupIntegrationComponents(t)
 	defer cleanup()
+
+	// Pre-populate the PodCache with the enrolled pod
+	podCache.Set("10.0.0.1", identity.PodInfo{
+		Name:           "agent-summarizer",
+		Namespace:      "ai-agents",
+		UID:            "uid-summarizer-123",
+		Labels:         map[string]string{"app": "summarizer"},
+		ServiceAccount: "summarizer-sa",
+	})
 
 	sub := bus.Subscribe()
 	defer bus.Unsubscribe(sub)
@@ -200,7 +210,7 @@ func TestIntegration_OpenAIStreamingWithJWTIdentity(t *testing.T) {
 	}
 
 	tokens := []string{"Hello", " from", " the", " AI", " assistant"}
-	sendOpenAIStreamingRequest(t, stream, "agent-summarizer", "10.0.0.1", "jwt", "req-openai-1", "gpt-4", tokens)
+	sendOpenAIStreamingRequest(t, stream, "10.0.0.1", "req-openai-1", "gpt-4", tokens)
 
 	// Expect: 1 LLMRequestStart + 5 LLMTokenChunk + 1 LLMRequestComplete = 7 events
 	events := collectEvents(sub, 7, 5*time.Second)
@@ -242,13 +252,16 @@ func TestIntegration_OpenAIStreamingWithJWTIdentity(t *testing.T) {
 		t.Error("LLMRequestStart.Stream = false, want true")
 	}
 
-	// Verify agent identity on start event
+	// Verify agent identity on start event (resolved via PodCache)
 	agentInfo := start.Identity()
 	if agentInfo.ID != "agent-summarizer" {
 		t.Errorf("AgentIdentity.ID = %q, want %q", agentInfo.ID, "agent-summarizer")
 	}
-	if agentInfo.AuthType != eventbus.AuthTypeJWT {
-		t.Errorf("AgentIdentity.AuthType = %q, want %q", agentInfo.AuthType, eventbus.AuthTypeJWT)
+	if agentInfo.PodName != "agent-summarizer" {
+		t.Errorf("AgentIdentity.PodName = %q, want %q", agentInfo.PodName, "agent-summarizer")
+	}
+	if agentInfo.Namespace != "ai-agents" {
+		t.Errorf("AgentIdentity.Namespace = %q, want %q", agentInfo.Namespace, "ai-agents")
 	}
 	if agentInfo.Confidence != eventbus.ConfidenceHigh {
 		t.Errorf("AgentIdentity.Confidence = %q, want %q", agentInfo.Confidence, eventbus.ConfidenceHigh)
@@ -573,18 +586,19 @@ func TestIntegration_AnthropicStreamingRequest(t *testing.T) {
 	}
 }
 
-// TestIntegration_SourceIPIdentityWithPodCache verifies that when an agent
-// authenticates via source-ip, the pod IP cache is consulted to resolve the
-// pod name, namespace, and labels into the AgentIdentity with medium confidence.
-func TestIntegration_SourceIPIdentityWithPodCache(t *testing.T) {
+// TestIntegration_EnrolledPodIdentityWithPodCache verifies that when an enrolled
+// pod's source IP is in the PodCache, the identity is resolved with high
+// confidence including pod name, namespace, and labels.
+func TestIntegration_EnrolledPodIdentityWithPodCache(t *testing.T) {
 	bus, podCache, client, cleanup := setupIntegrationComponents(t)
 	defer cleanup()
 
 	// Pre-populate the pod IP cache (simulating a Kubernetes Informer having
-	// observed the pod)
+	// observed the pod with panoptium.io/monitored=true)
 	podCache.Set("10.0.5.42", identity.PodInfo{
 		Name:           "agent-pod-abc",
 		Namespace:      "ml-workloads",
+		UID:            "uid-pod-abc",
 		Labels:         map[string]string{"app": "summarizer", "team": "ai"},
 		ServiceAccount: "summarizer-sa",
 	})
@@ -600,7 +614,7 @@ func TestIntegration_SourceIPIdentityWithPodCache(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	// Send request with source-ip auth type
+	// Send request with X-Forwarded-For for K8s-native identity resolution
 	if err := stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestHeaders{
 			RequestHeaders: &extprocv3.HttpHeaders{
@@ -608,9 +622,7 @@ func TestIntegration_SourceIPIdentityWithPodCache(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-agent-id", "pod:10.0.5.42",
-					"x-panoptium-client-ip", "10.0.5.42",
-					"x-panoptium-auth-type", "source-ip",
+					"x-forwarded-for", "10.0.5.42",
 					"x-panoptium-request-id", "req-podcache-1",
 				),
 			},
@@ -639,15 +651,15 @@ func TestIntegration_SourceIPIdentityWithPodCache(t *testing.T) {
 
 	stream.CloseSend()
 
-	// Verify the event has medium confidence with resolved pod info
+	// Verify the event has high confidence with resolved pod info
 	select {
 	case evt := <-sub.Events():
 		agentInfo := evt.Identity()
-		if agentInfo.Confidence != eventbus.ConfidenceMedium {
-			t.Errorf("Confidence = %q, want %q", agentInfo.Confidence, eventbus.ConfidenceMedium)
+		if agentInfo.Confidence != eventbus.ConfidenceHigh {
+			t.Errorf("Confidence = %q, want %q", agentInfo.Confidence, eventbus.ConfidenceHigh)
 		}
-		if agentInfo.ID != "pod:10.0.5.42" {
-			t.Errorf("ID = %q, want %q", agentInfo.ID, "pod:10.0.5.42")
+		if agentInfo.ID != "agent-pod-abc" {
+			t.Errorf("ID = %q, want %q", agentInfo.ID, "agent-pod-abc")
 		}
 		if agentInfo.PodName != "agent-pod-abc" {
 			t.Errorf("PodName = %q, want %q", agentInfo.PodName, "agent-pod-abc")
@@ -660,9 +672,6 @@ func TestIntegration_SourceIPIdentityWithPodCache(t *testing.T) {
 		}
 		if agentInfo.Labels["team"] != "ai" {
 			t.Errorf("Labels[team] = %q, want %q", agentInfo.Labels["team"], "ai")
-		}
-		if agentInfo.AuthType != eventbus.AuthTypeSourceIP {
-			t.Errorf("AuthType = %q, want %q", agentInfo.AuthType, eventbus.AuthTypeSourceIP)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for LLMRequestStart event")
@@ -733,9 +742,6 @@ func TestIntegration_NoIdentityHeaders(t *testing.T) {
 		if agentInfo.ID != "" {
 			t.Errorf("ID = %q, want empty string", agentInfo.ID)
 		}
-		if agentInfo.AuthType != "" {
-			t.Errorf("AuthType = %q, want empty string", agentInfo.AuthType)
-		}
 		if agentInfo.PodName != "" {
 			t.Errorf("PodName = %q, want empty string", agentInfo.PodName)
 		}
@@ -749,37 +755,51 @@ func TestIntegration_NoIdentityHeaders(t *testing.T) {
 // streams with correct agent attribution. Each agent's events must carry the
 // correct agent identity, and events from different agents must not be mixed.
 func TestIntegration_ConcurrentStreamsFromDifferentAgents(t *testing.T) {
-	bus, _, client, cleanup := setupIntegrationComponents(t)
+	bus, podCache, client, cleanup := setupIntegrationComponents(t)
 	defer cleanup()
+
+	// Pre-populate PodCache with enrolled pods
+	podCache.Set("10.0.0.1", identity.PodInfo{
+		Name:      "agent-alpha",
+		Namespace: "default",
+	})
+	podCache.Set("10.0.0.2", identity.PodInfo{
+		Name:      "agent-beta",
+		Namespace: "default",
+	})
+	podCache.Set("10.0.0.3", identity.PodInfo{
+		Name:      "agent-gamma",
+		Namespace: "default",
+	})
 
 	// Subscribe to all events
 	sub := bus.Subscribe()
 	defer bus.Unsubscribe(sub)
 
 	agents := []struct {
-		agentID   string
-		clientIP  string
+		podName   string
+		sourceIP  string
 		requestID string
 		model     string
 		tokens    []string
 	}{
 		{
-			agentID:   "agent-alpha",
-			clientIP:  "10.0.0.1",
+			podName:   "agent-alpha",
+			sourceIP:  "10.0.0.1",
 			requestID: "req-alpha-1",
 			model:     "gpt-4",
 			tokens:    []string{"Alpha", " response", " here"},
 		},
 		{
-			agentID:   "agent-beta",
-			clientIP:  "10.0.0.2",
+			podName:   "agent-beta",
+			sourceIP:  "10.0.0.2",
 			requestID: "req-beta-1",
 			model:     "gpt-3.5-turbo",
 			tokens:    []string{"Beta", " answering"},
 		},
 		{
-			agentID:   "agent-gamma",
-			clientIP:  "10.0.0.3",
+			podName:   "agent-gamma",
+			sourceIP:  "10.0.0.3",
 			requestID: "req-gamma-1",
 			model:     "gpt-4",
 			tokens:    []string{"Gamma", " data", " output", " done"},
@@ -791,8 +811,8 @@ func TestIntegration_ConcurrentStreamsFromDifferentAgents(t *testing.T) {
 	for _, ag := range agents {
 		wg.Add(1)
 		go func(agent struct {
-			agentID   string
-			clientIP  string
+			podName   string
+			sourceIP  string
 			requestID string
 			model     string
 			tokens    []string
@@ -804,13 +824,13 @@ func TestIntegration_ConcurrentStreamsFromDifferentAgents(t *testing.T) {
 
 			stream, err := client.Process(ctx)
 			if err != nil {
-				t.Errorf("agent %s: failed to open stream: %v", agent.agentID, err)
+				t.Errorf("agent %s: failed to open stream: %v", agent.podName, err)
 				return
 			}
 
 			sendOpenAIStreamingRequest(
 				t, stream,
-				agent.agentID, agent.clientIP, "jwt", agent.requestID, agent.model,
+				agent.sourceIP, agent.requestID, agent.model,
 				agent.tokens,
 			)
 		}(ag)
@@ -832,16 +852,16 @@ func TestIntegration_ConcurrentStreamsFromDifferentAgents(t *testing.T) {
 	for _, ag := range agents {
 		agentEvents, ok := eventsByReqID[ag.requestID]
 		if !ok {
-			t.Errorf("no events found for agent %s (requestID=%s)", ag.agentID, ag.requestID)
+			t.Errorf("no events found for agent %s (requestID=%s)", ag.podName, ag.requestID)
 			continue
 		}
 
 		var starts, chunks, completes int
 		for _, evt := range agentEvents {
-			// Verify all events carry correct agent identity
+			// Verify all events carry correct agent identity (resolved via PodCache)
 			agentInfo := evt.Identity()
-			if agentInfo.ID != ag.agentID {
-				t.Errorf("agent %s: event Identity.ID = %q, want %q", ag.agentID, agentInfo.ID, ag.agentID)
+			if agentInfo.ID != ag.podName {
+				t.Errorf("agent %s: event Identity.ID = %q, want %q", ag.podName, agentInfo.ID, ag.podName)
 			}
 
 			switch evt.EventType() {
@@ -855,13 +875,13 @@ func TestIntegration_ConcurrentStreamsFromDifferentAgents(t *testing.T) {
 		}
 
 		if starts != 1 {
-			t.Errorf("agent %s: expected 1 LLMRequestStart, got %d", ag.agentID, starts)
+			t.Errorf("agent %s: expected 1 LLMRequestStart, got %d", ag.podName, starts)
 		}
 		if chunks != len(ag.tokens) {
-			t.Errorf("agent %s: expected %d LLMTokenChunk events, got %d", ag.agentID, len(ag.tokens), chunks)
+			t.Errorf("agent %s: expected %d LLMTokenChunk events, got %d", ag.podName, len(ag.tokens), chunks)
 		}
 		if completes != 1 {
-			t.Errorf("agent %s: expected 1 LLMRequestComplete, got %d", ag.agentID, completes)
+			t.Errorf("agent %s: expected 1 LLMRequestComplete, got %d", ag.podName, completes)
 		}
 	}
 }

@@ -1,11 +1,72 @@
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
-    app.kubernetes.io/name: panoptium
-    app.kubernetes.io/managed-by: kustomize
   name: manager-role
 rules:
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/eviction
+  verbs:
+  - create
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - list
+  - watch
+- apiGroups:
+  - panoptium.io
+  resources:
+  - panoptiumagentprofiles
+  - panoptiumpolicies
+  - panoptiumquarantines
+  - panoptiumthreatsignatures
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - panoptium.io
+  resources:
+  - panoptiumagentprofiles/finalizers
+  - panoptiumpolicies/finalizers
+  - panoptiumquarantines/finalizers
+  - panoptiumthreatsignatures/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - panoptium.io
+  resources:
+  - panoptiumagentprofiles/status
+  - panoptiumpolicies/status
+  - panoptiumquarantines/status
+  - panoptiumthreatsignatures/status
+  verbs:
+  - get
+  - patch
+  - update

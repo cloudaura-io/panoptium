@@ -157,6 +157,7 @@ func (x *EventSource) GetVersion() string {
 }
 
 // AgentIdentity contains information about the agent that initiated the request.
+// Identity is resolved via PodCache lookup from the source pod IP.
 type AgentIdentity struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// pod_name is the resolved Kubernetes pod name.
@@ -165,12 +166,19 @@ type AgentIdentity struct {
 	Namespace string `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	// labels contains the Kubernetes labels of the agent pod.
 	Labels map[string]string `protobuf:"bytes,3,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// auth_type indicates how the agent was authenticated ("jwt" or "source-ip").
+	// auth_type indicates how the agent was authenticated.
+	// Deprecated: retained for wire compatibility; new events use confidence instead.
 	AuthType string `protobuf:"bytes,4,opt,name=auth_type,json=authType,proto3" json:"auth_type,omitempty"`
-	// auth_id is the primary agent identifier (JWT sub or "pod:<IP>").
+	// auth_id is the primary agent identifier.
+	// Deprecated: retained for wire compatibility; new events use pod_name as the ID.
 	AuthId string `protobuf:"bytes,5,opt,name=auth_id,json=authId,proto3" json:"auth_id,omitempty"`
-	// source_ip is the source pod IP for Kubernetes resolution.
-	SourceIp      string `protobuf:"bytes,6,opt,name=source_ip,json=sourceIp,proto3" json:"source_ip,omitempty"`
+	// source_ip is the source pod IP used for Kubernetes-native identity resolution.
+	SourceIp string `protobuf:"bytes,6,opt,name=source_ip,json=sourceIp,proto3" json:"source_ip,omitempty"`
+	// confidence indicates the reliability of the identity resolution.
+	// "high" = resolved from PodCache, "medium" = partially resolved, "low" = unknown.
+	Confidence string `protobuf:"bytes,7,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	// pod_uid is the Kubernetes pod UID for unambiguous pod identification.
+	PodUid        string `protobuf:"bytes,8,opt,name=pod_uid,json=podUid,proto3" json:"pod_uid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -243,6 +251,20 @@ func (x *AgentIdentity) GetAuthId() string {
 func (x *AgentIdentity) GetSourceIp() string {
 	if x != nil {
 		return x.SourceIp
+	}
+	return ""
+}
+
+func (x *AgentIdentity) GetConfidence() string {
+	if x != nil {
+		return x.Confidence
+	}
+	return ""
+}
+
+func (x *AgentIdentity) GetPodUid() string {
+	if x != nil {
+		return x.PodUid
 	}
 	return ""
 }

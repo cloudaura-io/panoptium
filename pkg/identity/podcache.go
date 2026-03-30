@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -33,6 +34,9 @@ type PodInfo struct {
 
 	// Namespace is the Kubernetes namespace.
 	Namespace string
+
+	// UID is the Kubernetes pod UID for unambiguous identification.
+	UID string
 
 	// Labels contains the pod's Kubernetes labels.
 	Labels map[string]string
@@ -89,10 +93,20 @@ type PodCacheInformer struct {
 	synced  []cache.InformerSynced
 }
 
-// NewPodCacheInformer creates a new PodCacheInformer that watches all pods
-// across all namespaces and keeps the PodCache in sync.
+// MonitoredLabelSelector is the label selector used to filter watched pods.
+// Only pods with panoptium.io/monitored=true are cached.
+const MonitoredLabelSelector = "panoptium.io/monitored=true"
+
+// NewPodCacheInformer creates a new PodCacheInformer that watches pods with
+// the panoptium.io/monitored=true label across all namespaces and keeps the
+// PodCache in sync. This filtered informer ensures only enrolled pods are
+// watched and cached, reducing memory usage on large clusters.
 func NewPodCacheInformer(client kubernetes.Interface, podCache *PodCache) *PodCacheInformer {
-	factory := informers.NewSharedInformerFactory(client, 0)
+	factory := informers.NewFilteredSharedInformerFactory(client, 0, metav1.NamespaceAll,
+		func(opts *metav1.ListOptions) {
+			opts.LabelSelector = MonitoredLabelSelector
+		},
+	)
 
 	pci := &PodCacheInformer{
 		client:  client,
@@ -188,6 +202,7 @@ func podInfoFromPod(pod *corev1.Pod) PodInfo {
 	return PodInfo{
 		Name:           pod.Name,
 		Namespace:      pod.Namespace,
+		UID:            string(pod.UID),
 		Labels:         labels,
 		ServiceAccount: pod.Spec.ServiceAccountName,
 	}

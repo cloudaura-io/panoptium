@@ -432,12 +432,13 @@ func TestLifecycleManagerWithPodCacheInformer(t *testing.T) {
 
 	registry := observer.NewObserverRegistry()
 
-	// Create a fake Kubernetes client with a test pod
+	// Create a fake Kubernetes client with a test pod (must have monitored label
+	// for the filtered informer to watch it)
 	fakeClient := fake.NewSimpleClientset(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-agent",
 			Namespace: "default",
-			Labels:    map[string]string{"app": "agent"},
+			Labels:    map[string]string{"app": "agent", "panoptium.io/monitored": "true"},
 		},
 		Status: corev1.PodStatus{
 			PodIP: "10.0.0.1",

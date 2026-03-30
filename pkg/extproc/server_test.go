@@ -446,7 +446,8 @@ func TestProcess_RequestHeaderExtraction(t *testing.T) {
 }
 
 // TestProcess_AgentIdentityExtraction verifies that agent identity is correctly
-// extracted from x-panoptium-* headers and included in all emitted events.
+// resolved via PodCache lookup from X-Forwarded-For header and included in
+// all emitted events.
 func TestProcess_AgentIdentityExtraction(t *testing.T) {
 	bus := eventbus.NewSimpleBus()
 	registry := observer.NewObserverRegistry()
@@ -461,6 +462,7 @@ func TestProcess_AgentIdentityExtraction(t *testing.T) {
 	podCache.Set("10.0.1.5", identity.PodInfo{
 		Name:      "agent-pod-xyz",
 		Namespace: "ai-workloads",
+		UID:       "uid-xyz",
 		Labels:    map[string]string{"app": "analyzer"},
 	})
 	resolver := identity.NewResolver(podCache)
@@ -474,34 +476,30 @@ func TestProcess_AgentIdentityExtraction(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		agentID        string
-		clientIP       string
-		authType       string
+		sourceIP       string
 		wantConfidence string
+		wantID         string
 		wantPodName    string
 	}{
 		{
-			name:           "JWT auth gives high confidence",
-			agentID:        "jwt-agent-1",
-			clientIP:       "10.0.1.5",
-			authType:       "jwt",
+			name:           "Enrolled pod gives high confidence",
+			sourceIP:       "10.0.1.5",
 			wantConfidence: eventbus.ConfidenceHigh,
-			wantPodName:    "",
-		},
-		{
-			name:           "Source-IP with cached pod gives medium confidence",
-			agentID:        "pod:10.0.1.5",
-			clientIP:       "10.0.1.5",
-			authType:       "source-ip",
-			wantConfidence: eventbus.ConfidenceMedium,
+			wantID:         "agent-pod-xyz",
 			wantPodName:    "agent-pod-xyz",
 		},
 		{
-			name:           "Source-IP without cached pod gives low confidence",
-			agentID:        "pod:10.0.2.99",
-			clientIP:       "10.0.2.99",
-			authType:       "source-ip",
+			name:           "Unenrolled pod gives low confidence",
+			sourceIP:       "10.0.2.99",
 			wantConfidence: eventbus.ConfidenceLow,
+			wantID:         "",
+			wantPodName:    "",
+		},
+		{
+			name:           "No source IP gives low confidence",
+			sourceIP:       "",
+			wantConfidence: eventbus.ConfidenceLow,
+			wantID:         "",
 			wantPodName:    "",
 		},
 	}
@@ -517,18 +515,19 @@ func TestProcess_AgentIdentityExtraction(t *testing.T) {
 			}
 
 			reqID := "req-identity-" + tt.name
+			headers := []string{
+				":path", "/v1/chat/completions",
+				":method", "POST",
+				"host", "api.openai.com",
+				"x-panoptium-request-id", reqID,
+			}
+			if tt.sourceIP != "" {
+				headers = append(headers, "x-forwarded-for", tt.sourceIP)
+			}
 			err = stream.Send(&extprocv3.ProcessingRequest{
 				Request: &extprocv3.ProcessingRequest_RequestHeaders{
 					RequestHeaders: &extprocv3.HttpHeaders{
-						Headers: makeHeaderMap(
-							":path", "/v1/chat/completions",
-							":method", "POST",
-							"host", "api.openai.com",
-							"x-panoptium-agent-id", tt.agentID,
-							"x-panoptium-client-ip", tt.clientIP,
-							"x-panoptium-auth-type", tt.authType,
-							"x-panoptium-request-id", reqID,
-						),
+						Headers: makeHeaderMap(headers...),
 					},
 				},
 			})
@@ -567,8 +566,8 @@ func TestProcess_AgentIdentityExtraction(t *testing.T) {
 				if agentInfo.Confidence != tt.wantConfidence {
 					t.Errorf("Confidence = %q, want %q", agentInfo.Confidence, tt.wantConfidence)
 				}
-				if agentInfo.ID != tt.agentID {
-					t.Errorf("ID = %q, want %q", agentInfo.ID, tt.agentID)
+				if agentInfo.ID != tt.wantID {
+					t.Errorf("ID = %q, want %q", agentInfo.ID, tt.wantID)
 				}
 				if agentInfo.PodName != tt.wantPodName {
 					t.Errorf("PodName = %q, want %q", agentInfo.PodName, tt.wantPodName)
@@ -1013,9 +1012,22 @@ func TestProcess_PassiveMode(t *testing.T) {
 
 // TestProcess_EndOfStreamComplete verifies that when the stream ends,
 // an LLMRequestComplete event is emitted with correct aggregated metrics
-// and the correct agent identity.
+// and the correct agent identity (resolved via PodCache).
 func TestProcess_EndOfStreamComplete(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus := eventbus.NewSimpleBus()
+	registry := observer.NewObserverRegistry()
+	llmObs := llm.NewLLMObserver(bus)
+	registry.Register(llmObs, observer.ObserverConfig{
+		Name:     "llm",
+		Priority: 100,
+	})
+	podCache := identity.NewPodCache()
+	podCache.Set("10.0.0.99", identity.PodInfo{
+		Name:      "agent-complete-test",
+		Namespace: "default",
+	})
+	resolver := identity.NewResolver(podCache)
+	srv := NewExtProcServer(registry, resolver, bus)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -1030,7 +1042,7 @@ func TestProcess_EndOfStreamComplete(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	// Full request lifecycle
+	// Full request lifecycle with K8s-native identity via X-Forwarded-For
 	stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestHeaders{
 			RequestHeaders: &extprocv3.HttpHeaders{
@@ -1038,8 +1050,7 @@ func TestProcess_EndOfStreamComplete(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-agent-id", "agent-complete-test",
-					"x-panoptium-auth-type", "jwt",
+					"x-forwarded-for", "10.0.0.99",
 					"x-panoptium-request-id", "req-complete-1",
 				),
 			},
@@ -1121,14 +1132,33 @@ func TestProcess_EndOfStreamComplete(t *testing.T) {
 // bidirectional streams from different agents are handled independently,
 // with correct agent attribution for each stream.
 func TestProcess_ConcurrentStreams(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus := eventbus.NewSimpleBus()
+	registry := observer.NewObserverRegistry()
+	llmObs := llm.NewLLMObserver(bus)
+	registry.Register(llmObs, observer.ObserverConfig{
+		Name:     "llm",
+		Priority: 100,
+	})
+	podCache := identity.NewPodCache()
+
+	numStreams := 5
+	// Pre-populate PodCache with entries for each concurrent agent
+	for i := 0; i < numStreams; i++ {
+		ip := fmt.Sprintf("10.0.10.%d", i)
+		podCache.Set(ip, identity.PodInfo{
+			Name:      fmt.Sprintf("agent-%d", i),
+			Namespace: "default",
+		})
+	}
+
+	resolver := identity.NewResolver(podCache)
+	srv := NewExtProcServer(registry, resolver, bus)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
 	sub := bus.Subscribe(eventbus.EventTypeLLMRequestComplete)
 	defer bus.Unsubscribe(sub)
 
-	numStreams := 5
 	var wg sync.WaitGroup
 	wg.Add(numStreams)
 
@@ -1145,10 +1175,10 @@ func TestProcess_ConcurrentStreams(t *testing.T) {
 				return
 			}
 
-			agentID := fmt.Sprintf("agent-%d", idx)
+			sourceIP := fmt.Sprintf("10.0.10.%d", idx)
 			reqID := fmt.Sprintf("req-concurrent-%d", idx)
 
-			// Request headers
+			// Request headers with X-Forwarded-For for PodCache identity resolution
 			err = stream.Send(&extprocv3.ProcessingRequest{
 				Request: &extprocv3.ProcessingRequest_RequestHeaders{
 					RequestHeaders: &extprocv3.HttpHeaders{
@@ -1156,8 +1186,7 @@ func TestProcess_ConcurrentStreams(t *testing.T) {
 							":path", "/v1/chat/completions",
 							":method", "POST",
 							"host", "api.openai.com",
-							"x-panoptium-agent-id", agentID,
-							"x-panoptium-auth-type", "jwt",
+							"x-forwarded-for", sourceIP,
 							"x-panoptium-request-id", reqID,
 						),
 					},

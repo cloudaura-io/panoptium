@@ -42,6 +42,7 @@ message EventSource {
 }
 
 // AgentIdentity contains information about the agent that initiated the request.
+// Identity is resolved via PodCache lookup from the source pod IP.
 message AgentIdentity {
   // pod_name is the resolved Kubernetes pod name.
   string pod_name = 1;
@@ -52,14 +53,25 @@ message AgentIdentity {
   // labels contains the Kubernetes labels of the agent pod.
   map<string, string> labels = 3;
 
-  // auth_type indicates how the agent was authenticated ("jwt" or "source-ip").
+  // auth_type indicates how the agent was authenticated.
+  // Deprecated: retained for wire compatibility; new events use confidence instead.
   string auth_type = 4;
 
-  // auth_id is the primary agent identifier (JWT sub or "pod:<IP>").
+  // auth_id is the primary agent identifier.
+  // Deprecated: retained for wire compatibility; new events use pod_name as the ID.
   string auth_id = 5;
 
-  // source_ip is the source pod IP for Kubernetes resolution.
+  // source_ip is the source pod IP used for Kubernetes-native identity resolution.
   string source_ip = 6;
+
+  // confidence indicates the reliability of the identity resolution.
+  // "high" = resolved from PodCache with full metadata (enrolled pod)
+  // "medium" = partially resolved
+  // "low" = unknown / unenrolled pod
+  string confidence = 7;
+
+  // pod_uid is the Kubernetes pod UID for unambiguous pod identification.
+  string pod_uid = 8;
 }
 
 // PanoptiumEvent is the core event envelope for all Panoptium telemetry.

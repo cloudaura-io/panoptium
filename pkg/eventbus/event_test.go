@@ -84,9 +84,9 @@ func TestBaseEvent_Identity(t *testing.T) {
 	identity := AgentIdentity{
 		ID:         "agent-summarizer",
 		SourceIP:   "10.0.0.5",
-		AuthType:   AuthTypeJWT,
 		Confidence: ConfidenceHigh,
 		PodName:    "summarizer-pod-abc",
+		PodUID:     "uid-abc-123",
 		Namespace:  "default",
 		Labels:     map[string]string{"app": "summarizer"},
 	}
@@ -100,8 +100,8 @@ func TestBaseEvent_Identity(t *testing.T) {
 	if got.SourceIP != identity.SourceIP {
 		t.Errorf("Identity().SourceIP = %q, want %q", got.SourceIP, identity.SourceIP)
 	}
-	if got.AuthType != identity.AuthType {
-		t.Errorf("Identity().AuthType = %q, want %q", got.AuthType, identity.AuthType)
+	if got.PodUID != identity.PodUID {
+		t.Errorf("Identity().PodUID = %q, want %q", got.PodUID, identity.PodUID)
 	}
 	if got.Confidence != identity.Confidence {
 		t.Errorf("Identity().Confidence = %q, want %q", got.Confidence, identity.Confidence)
@@ -136,7 +136,6 @@ func TestLLMRequestStartEvent(t *testing.T) {
 	now := time.Now()
 	identity := AgentIdentity{
 		ID:         "agent-chat",
-		AuthType:   AuthTypeSourceIP,
 		Confidence: ConfidenceMedium,
 	}
 	e := &LLMRequestStartEvent{
@@ -173,7 +172,6 @@ func TestLLMRequestStartEvent(t *testing.T) {
 func TestLLMTokenChunkEvent(t *testing.T) {
 	identity := AgentIdentity{
 		ID:         "agent-coder",
-		AuthType:   AuthTypeJWT,
 		Confidence: ConfidenceHigh,
 		PodName:    "coder-pod-xyz",
 		Namespace:  "production",
@@ -209,7 +207,6 @@ func TestLLMRequestCompleteEvent(t *testing.T) {
 	identity := AgentIdentity{
 		ID:         "agent-analyst",
 		SourceIP:   "10.0.1.10",
-		AuthType:   AuthTypeSourceIP,
 		Confidence: ConfidenceLow,
 	}
 	e := &LLMRequestCompleteEvent{

@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // Package identity provides agent identity resolution for the Panoptium operator.
-// It extracts agent identity from x-panoptium-* headers injected by AgentGateway
-// and resolves pod information via a Kubernetes-backed IP cache.
+// Identity is resolved from the source pod IP via a Kubernetes-backed PodCache
+// filtered to only enrolled pods (panoptium.io/monitored=true).
 package identity
 
 import (
@@ -25,79 +25,78 @@ import (
 	"github.com/panoptium/panoptium/pkg/eventbus"
 )
 
-// Header constants for x-panoptium-* headers injected by AgentGateway.
+// Header constants for correlation headers.
 const (
-	// HeaderAgentID is the primary agent identifier header.
-	HeaderAgentID = "X-Panoptium-Agent-Id"
-
-	// HeaderClientIP is the source pod IP header.
-	HeaderClientIP = "X-Panoptium-Client-Ip"
-
-	// HeaderAuthType is the authentication type header ("jwt" or "source-ip").
-	HeaderAuthType = "X-Panoptium-Auth-Type"
-
 	// HeaderRequestID is the unique request correlation ID header.
+	// This is retained as a tracing header — it does not convey identity.
 	HeaderRequestID = "X-Panoptium-Request-Id"
 )
 
-// Resolver resolves agent identity from HTTP headers using cascading lookup:
-//  1. Use x-panoptium-agent-id if auth-type is "jwt" (high confidence)
-//  2. Fallback: resolve pod name from x-panoptium-client-ip via pod IP cache (medium confidence)
-//  3. Last resort: use raw source IP as identifier (low confidence)
+// Resolver resolves agent identity from the source pod IP via the PodCache.
+// The PodCache is filtered by panoptium.io/monitored=true, so only enrolled
+// pods are resolvable. Un-enrolled source IPs receive a degraded identity
+// with low confidence.
 type Resolver struct {
 	cache *PodCache
 }
 
 // NewResolver creates a new Resolver with the given pod IP cache.
-// The cache may be nil if pod resolution is not needed.
+// The cache may be nil if pod resolution is not available.
 func NewResolver(cache *PodCache) *Resolver {
 	return &Resolver{cache: cache}
 }
 
-// Resolve extracts agent identity from the provided HTTP headers using
-// cascading resolution. It reads the x-panoptium-* headers injected by
-// AgentGateway's transformation policy and resolves the agent identity
-// with the appropriate confidence level.
-func (r *Resolver) Resolve(headers http.Header) eventbus.AgentIdentity {
-	agentID := headers.Get(HeaderAgentID)
-	clientIP := headers.Get(HeaderClientIP)
-	authType := headers.Get(HeaderAuthType)
-
-	identity := eventbus.AgentIdentity{
-		ID:       agentID,
-		SourceIP: clientIP,
-		AuthType: authType,
-	}
-
-	// Cascading resolution:
-	// 1. JWT auth type -> high confidence
-	if authType == eventbus.AuthTypeJWT {
-		identity.Confidence = eventbus.ConfidenceHigh
-		recordResolution("jwt", "success")
-		return identity
-	}
-
-	// 2. Source-IP auth type -> try pod lookup for medium confidence
-	if authType == eventbus.AuthTypeSourceIP && clientIP != "" && r.cache != nil {
-		podInfo, ok := r.cache.Get(clientIP)
-		if ok {
-			identity.Confidence = eventbus.ConfidenceMedium
-			identity.PodName = podInfo.Name
-			identity.Namespace = podInfo.Namespace
-			identity.Labels = podInfo.Labels
-			recordResolution("pod", "success")
-			return identity
-		}
-		// Pod not found in cache, fall through to IP fallback
-		recordResolution("pod", "fallback")
-	}
-
-	// 3. Fallback: low confidence (raw IP or unknown)
-	identity.Confidence = eventbus.ConfidenceLow
-	if agentID == "" {
+// ResolveFromIP resolves agent identity from the given source IP address.
+// This is the primary identity resolution path for K8s-native identity.
+//
+// Resolution logic:
+//  1. Look up the source IP in the filtered PodCache
+//  2. If found: return identity with high confidence (1.0) including pod metadata
+//  3. If not found: return degraded identity with low confidence (0.0)
+func (r *Resolver) ResolveFromIP(sourceIP string) eventbus.AgentIdentity {
+	if sourceIP == "" || r.cache == nil {
 		recordResolution("ip", "unknown")
-	} else {
-		recordResolution("ip", "fallback")
+		return eventbus.AgentIdentity{
+			SourceIP:   sourceIP,
+			Confidence: eventbus.ConfidenceLow,
+		}
 	}
-	return identity
+
+	podInfo, ok := r.cache.Get(sourceIP)
+	if ok {
+		recordResolution("pod", "success")
+		return eventbus.AgentIdentity{
+			ID:         podInfo.Name,
+			SourceIP:   sourceIP,
+			PodName:    podInfo.Name,
+			Namespace:  podInfo.Namespace,
+			PodUID:     podInfo.UID,
+			Labels:     podInfo.Labels,
+			Confidence: eventbus.ConfidenceHigh,
+		}
+	}
+
+	// Source IP not in PodCache — pod is not enrolled
+	recordResolution("ip", "unenrolled")
+	return eventbus.AgentIdentity{
+		SourceIP:   sourceIP,
+		Confidence: eventbus.ConfidenceLow,
+	}
+}
+
+// Resolve extracts agent identity from the source IP found in HTTP headers.
+// This is a convenience wrapper around ResolveFromIP that extracts the
+// client IP from the request context or X-Forwarded-For header.
+//
+// NOTE: X-Panoptium-Agent-Id, X-Panoptium-Client-Ip, and X-Panoptium-Auth-Type
+// headers are no longer used for identity resolution (removed per FR-9).
+// Only X-Panoptium-Request-Id is retained as a correlation/tracing header.
+func (r *Resolver) Resolve(headers http.Header) eventbus.AgentIdentity {
+	// Extract source IP from standard forwarding headers
+	sourceIP := headers.Get("X-Forwarded-For")
+	if sourceIP == "" {
+		sourceIP = headers.Get("X-Real-Ip")
+	}
+
+	return r.ResolveFromIP(sourceIP)
 }

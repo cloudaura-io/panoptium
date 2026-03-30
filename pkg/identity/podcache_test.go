@@ -134,7 +134,7 @@ func TestPodCacheInformer_AddEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod",
 			Namespace: "test-ns",
-			Labels:    map[string]string{"app": "agent"},
+			Labels:    map[string]string{"app": "agent", "panoptium.io/monitored": "true"},
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: "agent-sa",
@@ -184,6 +184,7 @@ func TestPodCacheInformer_DeleteEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "delete-me",
 			Namespace: "test-ns",
+			Labels:    map[string]string{"panoptium.io/monitored": "true"},
 		},
 		Status: corev1.PodStatus{
 			PodIP: "10.0.2.2",
@@ -234,7 +235,7 @@ func TestPodCacheInformer_UpdateEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "update-pod",
 			Namespace: "test-ns",
-			Labels:    map[string]string{"version": "v1"},
+			Labels:    map[string]string{"version": "v1", "panoptium.io/monitored": "true"},
 		},
 		Status: corev1.PodStatus{
 			PodIP: "10.0.3.3",
@@ -281,6 +282,7 @@ func TestPodCacheInformer_PodWithNoIP(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pending-pod",
 			Namespace: "test-ns",
+			Labels:    map[string]string{"panoptium.io/monitored": "true"},
 		},
 		Status: corev1.PodStatus{
 			PodIP: "", // No IP assigned yet
