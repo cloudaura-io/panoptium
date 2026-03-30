@@ -85,6 +85,30 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
+	// Register the PanoptiumAgentProfile reconciler
+	err = (&PanoptiumAgentProfileReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("panoptiumagentprofile-controller"),
+	}).SetupWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Register the PanoptiumThreatSignature reconciler
+	err = (&PanoptiumThreatSignatureReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("panoptiumthreatsignature-controller"),
+	}).SetupWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Register the PanoptiumQuarantine reconciler
+	err = (&PanoptiumQuarantineReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("panoptiumquarantine-controller"),
+	}).SetupWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
 	go func() {
 		defer GinkgoRecover()
 		err = mgr.Start(ctx)

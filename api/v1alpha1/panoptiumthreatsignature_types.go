@@ -69,7 +69,7 @@ type PanoptiumThreatSignatureSpec struct {
 	// Enabled indicates whether this signature is active for detection.
 	// +optional
 	// +kubebuilder:default=true
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled"`
 
 	// MITRETactic is the MITRE ATT&CK tactic reference for this threat.
 	// +optional
