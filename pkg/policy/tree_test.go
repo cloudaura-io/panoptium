@@ -17,6 +17,8 @@ limitations under the License.
 package policy
 
 import (
+	"net"
+	"regexp"
 	"testing"
 	"time"
 
@@ -413,4 +415,1109 @@ func TestDecisionTree_EmptyRules(t *testing.T) {
 	if decision.Action.Type != "allow" {
 		t.Errorf("Decision.Action.Type = %q, want %q", decision.Action.Type, "allow")
 	}
+}
+
+// --- Phase 4: Inequality and Numeric Operator Tests ---
+
+func TestDecisionTree_InequalityOperator(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "neq-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "deny-not-python",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "process_exec",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.processName != "python"`,
+						FieldPath: "event.processName",
+						Operator:  "!=",
+						Value:     "python",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity: v1alpha1.SeverityHigh,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+
+	t.Run("!= returns true when field differs from value", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "process_exec",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"processName": "curl"},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true when field != value")
+		}
+		if decision.MatchedRule != "deny-not-python" {
+			t.Errorf("Decision.MatchedRule = %q, want %q", decision.MatchedRule, "deny-not-python")
+		}
+	})
+
+	t.Run("!= returns false when field equals value", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "process_exec",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"processName": "python"},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if decision.Matched {
+			t.Error("Decision.Matched = true, want false when field == value for != operator")
+		}
+	})
+}
+
+func TestDecisionTree_GreaterThanOperator(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "gt-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "alert-high-tokens",
+				Index:        0,
+				TriggerLayer: "llm",
+				TriggerEvent: "completion_receive",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.tokenCount > 1000`,
+						FieldPath: "event.tokenCount",
+						Operator:  ">",
+						Value:     "1000",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeAlert},
+				Severity: v1alpha1.SeverityMedium,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+
+	t.Run("> with int field value", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "llm",
+			Subcategory: "completion_receive",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"tokenCount": 1500},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true for int > threshold")
+		}
+	})
+
+	t.Run("> with float64 field value", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "llm",
+			Subcategory: "completion_receive",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"tokenCount": float64(1500.5)},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true for float64 > threshold")
+		}
+	})
+
+	t.Run("> returns false when below threshold", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "llm",
+			Subcategory: "completion_receive",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"tokenCount": 500},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if decision.Matched {
+			t.Error("Decision.Matched = true, want false for value < threshold")
+		}
+	})
+}
+
+func TestDecisionTree_LessThanOperator(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "lt-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "alert-low-latency",
+				Index:        0,
+				TriggerLayer: "llm",
+				TriggerEvent: "completion_receive",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.latencyMs < 100`,
+						FieldPath: "event.latencyMs",
+						Operator:  "<",
+						Value:     "100",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeAlert},
+				Severity: v1alpha1.SeverityLow,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+
+	t.Run("< with int field value", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "llm",
+			Subcategory: "completion_receive",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"latencyMs": 50},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true for int < threshold")
+		}
+	})
+
+	t.Run("< with float64 field value", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "llm",
+			Subcategory: "completion_receive",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"latencyMs": float64(50.5)},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true for float64 < threshold")
+		}
+	})
+
+	t.Run("< returns false when above threshold", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "llm",
+			Subcategory: "completion_receive",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"latencyMs": 200},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if decision.Matched {
+			t.Error("Decision.Matched = true, want false for value > threshold")
+		}
+	})
+}
+
+// --- Phase 4: Regex, Glob, and CIDR End-to-End Evaluation Tests ---
+
+func TestDecisionTree_RegexEvaluation(t *testing.T) {
+	re := regexp.MustCompile(`^/tmp/.*\.sh$`)
+	compiled := &CompiledPolicy{
+		Name:      "regex-eval-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "deny-tmp-scripts",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "file_open",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.path.matches("^/tmp/.*\\.sh$")`,
+						FieldPath: "event.path",
+						Operator:  "matches",
+						Value:     `^/tmp/.*\.sh$`,
+					},
+				},
+				Action:          CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity:        v1alpha1.SeverityHigh,
+				CompiledRegexes: map[string]*regexp.Regexp{`^/tmp/.*\.sh$`: re},
+				CompiledGlobs:   map[string]*GlobMatcher{},
+				CompiledCIDRs:   map[string]*net.IPNet{},
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+
+	t.Run("regex matches", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "file_open",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"path": "/tmp/exploit.sh"},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true for regex match")
+		}
+	})
+
+	t.Run("regex does not match", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "file_open",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"path": "/home/user/script.py"},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if decision.Matched {
+			t.Error("Decision.Matched = true, want false for regex non-match")
+		}
+	})
+}
+
+func TestDecisionTree_GlobEvaluation(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "glob-eval-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "deny-etc-writes",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "file_write",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.path.glob("/etc/**")`,
+						FieldPath: "event.path",
+						Operator:  "glob",
+						Value:     "/etc/**",
+					},
+				},
+				Action:          CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity:        v1alpha1.SeverityHigh,
+				CompiledRegexes: map[string]*regexp.Regexp{},
+				CompiledGlobs:   map[string]*GlobMatcher{"/etc/**": {Pattern: "/etc/**"}},
+				CompiledCIDRs:   map[string]*net.IPNet{},
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+
+	t.Run("glob matches", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "file_write",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"path": "/etc/passwd"},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true for glob match")
+		}
+	})
+
+	t.Run("glob does not match", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "file_write",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"path": "/home/user/file.txt"},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if decision.Matched {
+			t.Error("Decision.Matched = true, want false for glob non-match")
+		}
+	})
+}
+
+func TestDecisionTree_CIDREvaluation(t *testing.T) {
+	_, ipNet, _ := net.ParseCIDR("10.0.0.0/8")
+	compiled := &CompiledPolicy{
+		Name:      "cidr-eval-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "alert-internal-network",
+				Index:        0,
+				TriggerLayer: "network",
+				TriggerEvent: "egress_attempt",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.destinationIP.inCIDR("10.0.0.0/8")`,
+						FieldPath: "event.destinationIP",
+						Operator:  "inCIDR",
+						Value:     "10.0.0.0/8",
+					},
+				},
+				Action:          CompiledAction{Type: v1alpha1.ActionTypeAlert},
+				Severity:        v1alpha1.SeverityMedium,
+				CompiledRegexes: map[string]*regexp.Regexp{},
+				CompiledGlobs:   map[string]*GlobMatcher{},
+				CompiledCIDRs:   map[string]*net.IPNet{"10.0.0.0/8": ipNet},
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+
+	t.Run("CIDR matches", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "network",
+			Subcategory: "egress_attempt",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"destinationIP": "10.1.2.3"},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true for IP in CIDR")
+		}
+	})
+
+	t.Run("CIDR does not match", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "network",
+			Subcategory: "egress_attempt",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"destinationIP": "192.168.1.1"},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if decision.Matched {
+			t.Error("Decision.Matched = true, want false for IP not in CIDR")
+		}
+	})
+}
+
+// --- Phase 4: Raw Operator and Unknown Operator Tests ---
+
+func TestDecisionTree_RawOperator(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "raw-op-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "raw-always-matches",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "process_exec",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `some.complex.cel.expression()`,
+						FieldPath: "some.complex.cel.expression()",
+						Operator:  "raw",
+						Value:     "some.complex.cel.expression()",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeAlert},
+				Severity: v1alpha1.SeverityLow,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "kernel",
+		Subcategory: "process_exec",
+		Timestamp:   time.Now(),
+		Fields:      map[string]interface{}{"processName": "anything"},
+	}
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() unexpected error: %v", err)
+	}
+	if !decision.Matched {
+		t.Error("Decision.Matched = false, want true for raw operator (always matches)")
+	}
+}
+
+func TestDecisionTree_UnknownOperator(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "unknown-op-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "rule-with-unknown-op",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "process_exec",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.field ?? "value"`,
+						FieldPath: "event.field",
+						Operator:  "??",
+						Value:     "value",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity: v1alpha1.SeverityHigh,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "kernel",
+		Subcategory: "process_exec",
+		Timestamp:   time.Now(),
+		Fields:      map[string]interface{}{"field": "value"},
+	}
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() unexpected error: %v", err)
+	}
+	// Unknown operator should not match (returns false).
+	if decision.Matched {
+		t.Error("Decision.Matched = true, want false for unknown operator")
+	}
+	// The trace should contain an error entry.
+	found := false
+	for _, entry := range decision.PredicateTrace {
+		if entry.Error != "" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("PredicateTrace should contain an error entry for unknown operator")
+	}
+}
+
+// --- Phase 4: Multi-Predicate AND Logic and Trace Tests ---
+
+func TestDecisionTree_MultiPredicateAND(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "and-logic-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "deny-curl-to-external",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "process_exec",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.processName == "curl"`,
+						FieldPath: "event.processName",
+						Operator:  "==",
+						Value:     "curl",
+					},
+					{
+						RawCEL:    `event.uid == "0"`,
+						FieldPath: "event.uid",
+						Operator:  "==",
+						Value:     "0",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity: v1alpha1.SeverityHigh,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+
+	t.Run("all predicates match (AND success)", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "process_exec",
+			Timestamp:   time.Now(),
+			Fields: map[string]interface{}{
+				"processName": "curl",
+				"uid":         "0",
+			},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true when all predicates match")
+		}
+	})
+
+	t.Run("one predicate fails (AND failure)", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "process_exec",
+			Timestamp:   time.Now(),
+			Fields: map[string]interface{}{
+				"processName": "curl",
+				"uid":         "1000",
+			},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if decision.Matched {
+			t.Error("Decision.Matched = true, want false when one predicate fails")
+		}
+	})
+}
+
+func TestDecisionTree_PredicateTracePopulated(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "trace-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "traced-rule",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "process_exec",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.processName == "curl"`,
+						FieldPath: "event.processName",
+						Operator:  "==",
+						Value:     "curl",
+					},
+					{
+						RawCEL:    `event.uid == "0"`,
+						FieldPath: "event.uid",
+						Operator:  "==",
+						Value:     "0",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity: v1alpha1.SeverityHigh,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "kernel",
+		Subcategory: "process_exec",
+		Timestamp:   time.Now(),
+		Fields: map[string]interface{}{
+			"processName": "curl",
+			"uid":         "0",
+		},
+	}
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() unexpected error: %v", err)
+	}
+	if len(decision.PredicateTrace) != 2 {
+		t.Fatalf("PredicateTrace length = %d, want 2", len(decision.PredicateTrace))
+	}
+	// First predicate trace entry.
+	if decision.PredicateTrace[0].RuleName != "traced-rule" {
+		t.Errorf("PredicateTrace[0].RuleName = %q, want %q", decision.PredicateTrace[0].RuleName, "traced-rule")
+	}
+	if decision.PredicateTrace[0].PredicateCEL != `event.processName == "curl"` {
+		t.Errorf("PredicateTrace[0].PredicateCEL = %q, want %q", decision.PredicateTrace[0].PredicateCEL, `event.processName == "curl"`)
+	}
+	if !decision.PredicateTrace[0].Matched {
+		t.Error("PredicateTrace[0].Matched = false, want true")
+	}
+	if decision.PredicateTrace[0].Duration <= 0 {
+		t.Error("PredicateTrace[0].Duration should be > 0")
+	}
+	// Second predicate trace entry.
+	if !decision.PredicateTrace[1].Matched {
+		t.Error("PredicateTrace[1].Matched = false, want true")
+	}
+}
+
+// --- Phase 4: Decision Metadata and Trigger Matching Tests ---
+
+func TestDecisionTree_DecisionMetadata(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "metadata-policy",
+		Namespace: "production",
+		Rules: []*CompiledRule{
+			{
+				Name:         "rule-1",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "process_exec",
+				Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity:     v1alpha1.SeverityHigh,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "kernel",
+		Subcategory: "process_exec",
+		Timestamp:   time.Now(),
+		Fields:      map[string]interface{}{},
+	}
+
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() unexpected error: %v", err)
+	}
+
+	t.Run("PolicyName is set on Decision", func(t *testing.T) {
+		if decision.PolicyName != "metadata-policy" {
+			t.Errorf("Decision.PolicyName = %q, want %q", decision.PolicyName, "metadata-policy")
+		}
+	})
+
+	t.Run("PolicyNamespace is set on Decision", func(t *testing.T) {
+		if decision.PolicyNamespace != "production" {
+			t.Errorf("Decision.PolicyNamespace = %q, want %q", decision.PolicyNamespace, "production")
+		}
+	})
+}
+
+func TestDecisionTree_EmptyTriggerEventMatchesAllSubcategories(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "empty-trigger-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "catch-all-kernel",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "", // Empty subcategory: match all kernel events.
+				Action:       CompiledAction{Type: v1alpha1.ActionTypeAlert},
+				Severity:     v1alpha1.SeverityLow,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+
+	subcategories := []string{"process_exec", "file_open", "file_write", "module_load"}
+	for _, sub := range subcategories {
+		t.Run("matches "+sub, func(t *testing.T) {
+			event := &PolicyEvent{
+				Category:    "kernel",
+				Subcategory: sub,
+				Timestamp:   time.Now(),
+				Fields:      map[string]interface{}{},
+			}
+			decision, err := tree.Evaluate(event)
+			if err != nil {
+				t.Fatalf("Evaluate() unexpected error: %v", err)
+			}
+			if !decision.Matched {
+				t.Errorf("Decision.Matched = false, want true for empty TriggerEvent with subcategory %q", sub)
+			}
+		})
+	}
+}
+
+// --- Phase 4: Error-Handling and Defensive Edge-Case Tests ---
+
+func TestDecisionTree_CIDRWithInvalidIP(t *testing.T) {
+	_, ipNet, _ := net.ParseCIDR("10.0.0.0/8")
+	compiled := &CompiledPolicy{
+		Name:      "cidr-invalid-ip",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "cidr-rule",
+				Index:        0,
+				TriggerLayer: "network",
+				TriggerEvent: "egress_attempt",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.destinationIP.inCIDR("10.0.0.0/8")`,
+						FieldPath: "event.destinationIP",
+						Operator:  "inCIDR",
+						Value:     "10.0.0.0/8",
+					},
+				},
+				Action:          CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity:        v1alpha1.SeverityHigh,
+				CompiledRegexes: map[string]*regexp.Regexp{},
+				CompiledGlobs:   map[string]*GlobMatcher{},
+				CompiledCIDRs:   map[string]*net.IPNet{"10.0.0.0/8": ipNet},
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "network",
+		Subcategory: "egress_attempt",
+		Timestamp:   time.Now(),
+		Fields:      map[string]interface{}{"destinationIP": "not-an-ip"},
+	}
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() should not return error for invalid IP, got: %v", err)
+	}
+	if decision.Matched {
+		t.Error("Decision.Matched = true, want false for invalid IP string")
+	}
+}
+
+func TestDecisionTree_NumericOperatorWithNonNumericField(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "non-numeric-field",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "gt-rule",
+				Index:        0,
+				TriggerLayer: "llm",
+				TriggerEvent: "completion_receive",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.tokenCount > 100`,
+						FieldPath: "event.tokenCount",
+						Operator:  ">",
+						Value:     "100",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeAlert},
+				Severity: v1alpha1.SeverityMedium,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "llm",
+		Subcategory: "completion_receive",
+		Timestamp:   time.Now(),
+		Fields:      map[string]interface{}{"tokenCount": "not-a-number"},
+	}
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() should not return error for non-numeric field, got: %v", err)
+	}
+	if decision.Matched {
+		t.Error("Decision.Matched = true, want false for non-numeric field value")
+	}
+}
+
+func TestDecisionTree_NumericOperatorWithInvalidPredicateValue(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "invalid-pred-value",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "bad-threshold",
+				Index:        0,
+				TriggerLayer: "llm",
+				TriggerEvent: "completion_receive",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.tokenCount > abc`,
+						FieldPath: "event.tokenCount",
+						Operator:  ">",
+						Value:     "abc",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeAlert},
+				Severity: v1alpha1.SeverityMedium,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "llm",
+		Subcategory: "completion_receive",
+		Timestamp:   time.Now(),
+		Fields:      map[string]interface{}{"tokenCount": 500},
+	}
+	decision, err := tree.Evaluate(event)
+	// The error path: evalNumericComparison returns error when predicate value is invalid.
+	// DecisionTree.Evaluate does not propagate evaluatePredicate errors as return errors;
+	// it records them in the trace. Let's check what actually happens.
+	if err != nil {
+		t.Fatalf("Evaluate() unexpected error: %v", err)
+	}
+	// The predicate should not match because parsing "abc" as float fails.
+	if decision.Matched {
+		t.Error("Decision.Matched = true, want false for invalid predicate value")
+	}
+	// Check trace for error.
+	found := false
+	for _, entry := range decision.PredicateTrace {
+		if entry.Error != "" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("PredicateTrace should contain an error for invalid numeric predicate value")
+	}
+}
+
+func TestDecisionTree_MissingPrecompiledRegex(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "missing-regex",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "regex-rule",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "process_exec",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.path.matches("^/tmp/.*$")`,
+						FieldPath: "event.path",
+						Operator:  "matches",
+						Value:     "^/tmp/.*$",
+					},
+				},
+				Action:          CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity:        v1alpha1.SeverityHigh,
+				CompiledRegexes: map[string]*regexp.Regexp{}, // Empty — missing the pattern.
+				CompiledGlobs:   map[string]*GlobMatcher{},
+				CompiledCIDRs:   map[string]*net.IPNet{},
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "kernel",
+		Subcategory: "process_exec",
+		Timestamp:   time.Now(),
+		Fields:      map[string]interface{}{"path": "/tmp/test.sh"},
+	}
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() unexpected error: %v", err)
+	}
+	if decision.Matched {
+		t.Error("Decision.Matched = true, want false for missing pre-compiled regex")
+	}
+	// Check trace for error.
+	found := false
+	for _, entry := range decision.PredicateTrace {
+		if entry.Error != "" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("PredicateTrace should contain an error for missing pre-compiled regex")
+	}
+}
+
+func TestDecisionTree_MissingPrecompiledGlob(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "missing-glob",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "glob-rule",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "file_write",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.path.glob("/etc/**")`,
+						FieldPath: "event.path",
+						Operator:  "glob",
+						Value:     "/etc/**",
+					},
+				},
+				Action:          CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity:        v1alpha1.SeverityHigh,
+				CompiledRegexes: map[string]*regexp.Regexp{},
+				CompiledGlobs:   map[string]*GlobMatcher{}, // Empty — missing the pattern.
+				CompiledCIDRs:   map[string]*net.IPNet{},
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "kernel",
+		Subcategory: "file_write",
+		Timestamp:   time.Now(),
+		Fields:      map[string]interface{}{"path": "/etc/passwd"},
+	}
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() unexpected error: %v", err)
+	}
+	if decision.Matched {
+		t.Error("Decision.Matched = true, want false for missing pre-compiled glob")
+	}
+	found := false
+	for _, entry := range decision.PredicateTrace {
+		if entry.Error != "" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("PredicateTrace should contain an error for missing pre-compiled glob")
+	}
+}
+
+func TestDecisionTree_MissingPrecompiledCIDR(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "missing-cidr",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "cidr-rule",
+				Index:        0,
+				TriggerLayer: "network",
+				TriggerEvent: "egress_attempt",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.destinationIP.inCIDR("10.0.0.0/8")`,
+						FieldPath: "event.destinationIP",
+						Operator:  "inCIDR",
+						Value:     "10.0.0.0/8",
+					},
+				},
+				Action:          CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity:        v1alpha1.SeverityHigh,
+				CompiledRegexes: map[string]*regexp.Regexp{},
+				CompiledGlobs:   map[string]*GlobMatcher{},
+				CompiledCIDRs:   map[string]*net.IPNet{}, // Empty — missing the CIDR.
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+	event := &PolicyEvent{
+		Category:    "network",
+		Subcategory: "egress_attempt",
+		Timestamp:   time.Now(),
+		Fields:      map[string]interface{}{"destinationIP": "10.1.2.3"},
+	}
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() unexpected error: %v", err)
+	}
+	if decision.Matched {
+		t.Error("Decision.Matched = true, want false for missing pre-compiled CIDR")
+	}
+	found := false
+	for _, entry := range decision.PredicateTrace {
+		if entry.Error != "" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("PredicateTrace should contain an error for missing pre-compiled CIDR")
+	}
+}
+
+// --- Phase 4: resolveField Prefix-Stripping Tests ---
+
+func TestDecisionTree_ResolveFieldStripPrefix(t *testing.T) {
+	compiled := &CompiledPolicy{
+		Name:      "resolve-field-test",
+		Namespace: "default",
+		Rules: []*CompiledRule{
+			{
+				Name:         "with-prefix",
+				Index:        0,
+				TriggerLayer: "kernel",
+				TriggerEvent: "process_exec",
+				Predicates: []CompiledPredicate{
+					{
+						RawCEL:    `event.processName == "curl"`,
+						FieldPath: "event.processName",
+						Operator:  "==",
+						Value:     "curl",
+					},
+				},
+				Action:   CompiledAction{Type: v1alpha1.ActionTypeDeny},
+				Severity: v1alpha1.SeverityHigh,
+			},
+		},
+	}
+
+	tree := NewDecisionTree(compiled)
+
+	t.Run("strips event. prefix and resolves field", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "process_exec",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"processName": "curl"},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true when event. prefix is stripped correctly")
+		}
+	})
+
+	t.Run("works without event. prefix", func(t *testing.T) {
+		// Build a compiled policy with FieldPath without "event." prefix.
+		compiled2 := &CompiledPolicy{
+			Name:      "no-prefix-test",
+			Namespace: "default",
+			Rules: []*CompiledRule{
+				{
+					Name:         "no-prefix",
+					Index:        0,
+					TriggerLayer: "kernel",
+					TriggerEvent: "process_exec",
+					Predicates: []CompiledPredicate{
+						{
+							RawCEL:    `processName == "curl"`,
+							FieldPath: "processName",
+							Operator:  "==",
+							Value:     "curl",
+						},
+					},
+					Action:   CompiledAction{Type: v1alpha1.ActionTypeDeny},
+					Severity: v1alpha1.SeverityHigh,
+				},
+			},
+		}
+		tree2 := NewDecisionTree(compiled2)
+		event := &PolicyEvent{
+			Category:    "kernel",
+			Subcategory: "process_exec",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{"processName": "curl"},
+		}
+		decision, err := tree2.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Error("Decision.Matched = false, want true when FieldPath has no event. prefix")
+		}
+	})
 }
