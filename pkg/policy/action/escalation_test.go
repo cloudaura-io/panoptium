@@ -188,3 +188,31 @@ func TestEscalationProcessor_NoMatchingEscalation(t *testing.T) {
 		t.Error("expected no escalation for action type without escalation rule")
 	}
 }
+
+func TestEscalationProcessor_Cleanup(t *testing.T) {
+	proc := NewEscalationProcessor([]EscalationLevel{
+		{FromAction: "deny", ToAction: "quarantine", Threshold: 3, Window: 50 * time.Millisecond},
+	})
+
+	for i := 0; i < 3; i++ {
+		proc.RecordAction("agent-1", "deny")
+	}
+	proc.RecordAction("agent-2", "deny")
+
+	// Wait for window to expire
+	time.Sleep(80 * time.Millisecond)
+
+	proc.Cleanup()
+
+	// After cleanup, all expired records should be removed
+	escalated, _ := proc.CheckEscalation("agent-1", "deny")
+	if escalated {
+		t.Error("expected no escalation after cleanup removed expired records")
+	}
+}
+
+func TestEscalationProcessor_CleanupEmptyLevels(t *testing.T) {
+	proc := NewEscalationProcessor([]EscalationLevel{})
+	proc.RecordAction("agent-1", "deny")
+	proc.Cleanup() // Should not panic with empty levels
+}
