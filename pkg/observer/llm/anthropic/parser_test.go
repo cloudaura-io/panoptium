@@ -252,3 +252,78 @@ func TestParseNonStreamingResponse(t *testing.T) {
 		t.Errorf("OutputTokens = %d, want 9", resp.OutputTokens)
 	}
 }
+
+// --- Tool Extraction Tests ---
+
+// TestParseRequest_ToolExtraction_SingleTool verifies extracting tools[].name
+// from an Anthropic messages API request with a single tool.
+func TestParseRequest_ToolExtraction_SingleTool(t *testing.T) {
+	body := []byte(`{
+		"model": "claude-3-opus-20240229",
+		"messages": [{"role": "user", "content": "What is the weather?"}],
+		"tools": [
+			{
+				"name": "get_weather",
+				"description": "Get the current weather",
+				"input_schema": {"type": "object", "properties": {"location": {"type": "string"}}}
+			}
+		],
+		"max_tokens": 1024
+	}`)
+
+	req, err := ParseRequest(body)
+	if err != nil {
+		t.Fatalf("ParseRequest() error = %v", err)
+	}
+	if len(req.ToolNames) != 1 {
+		t.Fatalf("ToolNames count = %d, want 1", len(req.ToolNames))
+	}
+	if req.ToolNames[0] != "get_weather" {
+		t.Errorf("ToolNames[0] = %q, want %q", req.ToolNames[0], "get_weather")
+	}
+}
+
+// TestParseRequest_ToolExtraction_MultipleTools verifies extracting multiple tool names.
+func TestParseRequest_ToolExtraction_MultipleTools(t *testing.T) {
+	body := []byte(`{
+		"model": "claude-3-opus-20240229",
+		"messages": [{"role": "user", "content": "Do tasks"}],
+		"tools": [
+			{"name": "get_weather", "description": "weather"},
+			{"name": "dangerous_exec", "description": "exec"},
+			{"name": "read_file", "description": "file"}
+		],
+		"max_tokens": 1024
+	}`)
+
+	req, err := ParseRequest(body)
+	if err != nil {
+		t.Fatalf("ParseRequest() error = %v", err)
+	}
+	if len(req.ToolNames) != 3 {
+		t.Fatalf("ToolNames count = %d, want 3", len(req.ToolNames))
+	}
+	expected := []string{"get_weather", "dangerous_exec", "read_file"}
+	for i, name := range expected {
+		if req.ToolNames[i] != name {
+			t.Errorf("ToolNames[%d] = %q, want %q", i, req.ToolNames[i], name)
+		}
+	}
+}
+
+// TestParseRequest_ToolExtraction_NoTools verifies that a request without tools returns empty list.
+func TestParseRequest_ToolExtraction_NoTools(t *testing.T) {
+	body := []byte(`{
+		"model": "claude-3-opus-20240229",
+		"messages": [{"role": "user", "content": "Hello"}],
+		"max_tokens": 1024
+	}`)
+
+	req, err := ParseRequest(body)
+	if err != nil {
+		t.Fatalf("ParseRequest() error = %v", err)
+	}
+	if len(req.ToolNames) != 0 {
+		t.Errorf("ToolNames count = %d, want 0", len(req.ToolNames))
+	}
+}

@@ -35,6 +35,10 @@ type MessagesRequest struct {
 
 	// MaxTokens is the maximum number of tokens to generate.
 	MaxTokens int
+
+	// ToolNames contains the tool names extracted from the tools array.
+	// Each entry corresponds to tools[i].name in the request.
+	ToolNames []string
 }
 
 // Message represents a single message in a messages API request.
@@ -79,12 +83,18 @@ type MessagesResponse struct {
 	OutputTokens int
 }
 
+// rawTool is the internal JSON structure for a single tool in the Anthropic request.
+type rawTool struct {
+	Name string `json:"name"`
+}
+
 // rawRequest is the internal JSON structure for request deserialization.
 type rawRequest struct {
 	Model     string       `json:"model"`
 	Messages  []rawMessage `json:"messages"`
 	Stream    bool         `json:"stream"`
 	MaxTokens int          `json:"max_tokens"`
+	Tools     []rawTool    `json:"tools"`
 }
 
 // rawMessage is the internal JSON structure for message deserialization.
@@ -140,11 +150,20 @@ func ParseRequest(body []byte) (*MessagesRequest, error) {
 		}
 	}
 
+	// Extract tool names from tools array
+	var toolNames []string
+	for _, tool := range raw.Tools {
+		if tool.Name != "" {
+			toolNames = append(toolNames, tool.Name)
+		}
+	}
+
 	return &MessagesRequest{
 		Model:     raw.Model,
 		Messages:  messages,
 		Stream:    raw.Stream,
 		MaxTokens: raw.MaxTokens,
+		ToolNames: toolNames,
 	}, nil
 }
 
