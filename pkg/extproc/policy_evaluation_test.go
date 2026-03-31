@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-
 	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
 	"github.com/panoptium/panoptium/pkg/eventbus"
 	"github.com/panoptium/panoptium/pkg/extproc/enforce"
@@ -75,8 +73,8 @@ func setupPolicyEvalTestComponents(t *testing.T, evaluator PolicyEvaluator) (*ev
 }
 
 // TestPolicyEvaluation_InvokedAfterObserverParsing verifies that the policy
-// evaluator is invoked during request header processing, receiving a PolicyEvent
-// built from the parsed request context and agent identity.
+// evaluator is invoked during request body processing (after body parsing),
+// receiving a PolicyEvent built from the parsed request context and agent identity.
 func TestPolicyEvaluation_InvokedAfterObserverParsing(t *testing.T) {
 	evaluator := &mockPolicyEvaluator{
 		decision: policy.DefaultAllowDecision(),
@@ -103,29 +101,16 @@ func TestPolicyEvaluation_InvokedAfterObserverParsing(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	// Send request headers
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.50",
-					"x-panoptium-request-id", "req-policy-eval-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	body := makeOpenAIRequestBody("gpt-4", false)
 
-	_, err = stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.50",
+		"x-panoptium-request-id", "req-policy-eval-1",
+	}, body)
 
 	// Verify the evaluator was called
 	if evaluator.lastEvent == nil {
@@ -135,7 +120,7 @@ func TestPolicyEvaluation_InvokedAfterObserverParsing(t *testing.T) {
 
 // TestPolicyEvaluation_EventContextExtraction verifies that the PolicyEvent
 // passed to the evaluator contains correct agent identity, destination path,
-// and protocol fields extracted from the request context.
+// model, provider, and protocol fields extracted from the request body parsing.
 func TestPolicyEvaluation_EventContextExtraction(t *testing.T) {
 	evaluator := &mockPolicyEvaluator{
 		decision: policy.DefaultAllowDecision(),
@@ -161,28 +146,16 @@ func TestPolicyEvaluation_EventContextExtraction(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.60",
-					"x-panoptium-request-id", "req-context-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	body := makeOpenAIRequestBody("gpt-4", false)
 
-	_, err = stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.60",
+		"x-panoptium-request-id", "req-context-1",
+	}, body)
 
 	event := evaluator.lastEvent
 	if event == nil {
@@ -211,6 +184,14 @@ func TestPolicyEvaluation_EventContextExtraction(t *testing.T) {
 		t.Errorf("expected host 'api.openai.com', got %q", event.GetStringField("host"))
 	}
 
+	// Verify body-derived fields
+	if event.GetStringField("model") != "gpt-4" {
+		t.Errorf("expected model 'gpt-4', got %q", event.GetStringField("model"))
+	}
+	if event.GetStringField("provider") != "openai" {
+		t.Errorf("expected provider 'openai', got %q", event.GetStringField("provider"))
+	}
+
 	// Verify category and subcategory
 	if event.Category != "protocol" {
 		t.Errorf("expected Category 'protocol', got %q", event.Category)
@@ -222,7 +203,7 @@ func TestPolicyEvaluation_EventContextExtraction(t *testing.T) {
 
 // TestPolicyEvaluation_PassThroughWhenNoMatch verifies that when the policy
 // evaluator returns a default allow decision (no rule matched), traffic passes
-// through with no mutations (empty HeadersResponse).
+// through with no mutations.
 func TestPolicyEvaluation_PassThroughWhenNoMatch(t *testing.T) {
 	evaluator := &mockPolicyEvaluator{
 		decision: policy.DefaultAllowDecision(),
@@ -248,41 +229,30 @@ func TestPolicyEvaluation_PassThroughWhenNoMatch(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.70",
-					"x-panoptium-request-id", "req-passthrough-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	body := makeOpenAIRequestBody("gpt-4", false)
 
-	resp, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	resp := sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.70",
+		"x-panoptium-request-id", "req-passthrough-1",
+	}, body)
 
 	// Should be a pass-through (no ImmediateResponse)
 	if resp.GetImmediateResponse() != nil {
 		t.Fatal("expected pass-through, got ImmediateResponse")
 	}
-	if resp.GetRequestHeaders() == nil {
-		t.Fatal("expected RequestHeaders response for pass-through")
+	// Body-phase response should be RequestBody, not RequestHeaders
+	if resp.GetRequestBody() == nil {
+		t.Fatal("expected RequestBody response for pass-through")
 	}
 }
 
 // TestPolicyEvaluation_DenyDecision verifies that when the policy evaluator
-// returns a deny decision, the ExtProc server returns an ImmediateResponse
-// with status 403 and a structured JSON error body.
+// returns a deny decision after body parsing, the ExtProc server returns an
+// ImmediateResponse with status 403 and a structured JSON error body.
 func TestPolicyEvaluation_DenyDecision(t *testing.T) {
 	evaluator := &mockPolicyEvaluator{
 		decision: &policy.Decision{
@@ -293,11 +263,11 @@ func TestPolicyEvaluation_DenyDecision(t *testing.T) {
 					"signature": "PAN-SIG-0042",
 				},
 			},
-			Matched:         true,
-			MatchedRule:     "block-dangerous-tools",
+			Matched:          true,
+			MatchedRule:      "block-dangerous-tools",
 			MatchedRuleIndex: 0,
-			PolicyName:      "security-policy",
-			PolicyNamespace: "production",
+			PolicyName:       "security-policy",
+			PolicyNamespace:  "production",
 		},
 	}
 	bus, podCache, srv := setupPolicyEvalTestComponents(t, evaluator)
@@ -325,28 +295,16 @@ func TestPolicyEvaluation_DenyDecision(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.80",
-					"x-panoptium-request-id", "req-deny-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
 
-	resp, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	resp := sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.80",
+		"x-panoptium-request-id", "req-deny-1",
+	}, reqBody)
 
 	// Should receive an ImmediateResponse with 403
 	ir := resp.GetImmediateResponse()
@@ -358,21 +316,21 @@ func TestPolicyEvaluation_DenyDecision(t *testing.T) {
 	}
 
 	// Parse the structured JSON body
-	var body enforce.ErrorResponse
-	if err := json.Unmarshal(ir.Body, &body); err != nil {
+	var respBody enforce.ErrorResponse
+	if err := json.Unmarshal(ir.Body, &respBody); err != nil {
 		t.Fatalf("failed to unmarshal error body: %v", err)
 	}
-	if body.Error != "policy_violation" {
-		t.Errorf("expected error 'policy_violation', got %q", body.Error)
+	if respBody.Error != "policy_violation" {
+		t.Errorf("expected error 'policy_violation', got %q", respBody.Error)
 	}
-	if body.Rule != "production/security-policy/rule-0" {
-		t.Errorf("expected rule 'production/security-policy/rule-0', got %q", body.Rule)
+	if respBody.Rule != "production/security-policy/rule-0" {
+		t.Errorf("expected rule 'production/security-policy/rule-0', got %q", respBody.Rule)
 	}
-	if body.Signature != "PAN-SIG-0042" {
-		t.Errorf("expected signature 'PAN-SIG-0042', got %q", body.Signature)
+	if respBody.Signature != "PAN-SIG-0042" {
+		t.Errorf("expected signature 'PAN-SIG-0042', got %q", respBody.Signature)
 	}
-	if body.Message != "tool call denied by policy" {
-		t.Errorf("expected message 'tool call denied by policy', got %q", body.Message)
+	if respBody.Message != "tool call denied by policy" {
+		t.Errorf("expected message 'tool call denied by policy', got %q", respBody.Message)
 	}
 
 	// Verify policy.decision event was emitted
@@ -387,8 +345,8 @@ func TestPolicyEvaluation_DenyDecision(t *testing.T) {
 }
 
 // TestPolicyEvaluation_ThrottleDecision verifies that when the policy evaluator
-// returns a throttle decision, the ExtProc server returns an ImmediateResponse
-// with status 429 and a Retry-After header.
+// returns a throttle decision after body parsing, the ExtProc server returns an
+// ImmediateResponse with status 429 and a Retry-After header.
 func TestPolicyEvaluation_ThrottleDecision(t *testing.T) {
 	evaluator := &mockPolicyEvaluator{
 		decision: &policy.Decision{
@@ -398,11 +356,11 @@ func TestPolicyEvaluation_ThrottleDecision(t *testing.T) {
 					"retryAfter": "30",
 				},
 			},
-			Matched:         true,
-			MatchedRule:     "rate-limit-api-calls",
+			Matched:          true,
+			MatchedRule:      "rate-limit-api-calls",
 			MatchedRuleIndex: 1,
-			PolicyName:      "rate-policy",
-			PolicyNamespace: "production",
+			PolicyName:       "rate-policy",
+			PolicyNamespace:  "production",
 		},
 	}
 	bus, podCache, srv := setupPolicyEvalTestComponents(t, evaluator)
@@ -426,28 +384,16 @@ func TestPolicyEvaluation_ThrottleDecision(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.90",
-					"x-panoptium-request-id", "req-throttle-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
 
-	resp, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	resp := sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.90",
+		"x-panoptium-request-id", "req-throttle-1",
+	}, reqBody)
 
 	// Should receive an ImmediateResponse with 429
 	ir := resp.GetImmediateResponse()
@@ -459,15 +405,15 @@ func TestPolicyEvaluation_ThrottleDecision(t *testing.T) {
 	}
 
 	// Parse the structured JSON body
-	var body enforce.ErrorResponse
-	if err := json.Unmarshal(ir.Body, &body); err != nil {
+	var respBody enforce.ErrorResponse
+	if err := json.Unmarshal(ir.Body, &respBody); err != nil {
 		t.Fatalf("failed to unmarshal error body: %v", err)
 	}
-	if body.Error != "rate_limited" {
-		t.Errorf("expected error 'rate_limited', got %q", body.Error)
+	if respBody.Error != "rate_limited" {
+		t.Errorf("expected error 'rate_limited', got %q", respBody.Error)
 	}
-	if body.RetryAfter != 30 {
-		t.Errorf("expected retry_after 30, got %d", body.RetryAfter)
+	if respBody.RetryAfter != 30 {
+		t.Errorf("expected retry_after 30, got %d", respBody.RetryAfter)
 	}
 
 	// Verify Retry-After header is set
@@ -512,34 +458,22 @@ func TestPolicyEvaluation_NilEvaluator(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.55",
-					"x-panoptium-request-id", "req-nil-eval-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
 
-	resp, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	resp := sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.55",
+		"x-panoptium-request-id", "req-nil-eval-1",
+	}, reqBody)
 
 	// Should pass through without blocking
 	if resp.GetImmediateResponse() != nil {
 		t.Fatal("expected pass-through when no evaluator is set")
 	}
-	if resp.GetRequestHeaders() == nil {
-		t.Fatal("expected RequestHeaders response for pass-through")
+	if resp.GetRequestBody() == nil {
+		t.Fatal("expected RequestBody response for pass-through")
 	}
 }

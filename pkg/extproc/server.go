@@ -26,6 +26,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -265,44 +266,6 @@ func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamS
 		EventBus:      s.bus,
 	}
 
-	// Policy evaluation: evaluate request against active policies
-	if s.policyEvaluator != nil {
-		host := httpHeaders.Get("host")
-		if host == "" {
-			host = httpHeaders.Get(":authority")
-		}
-
-		policyEvent := &policy.PolicyEvent{
-			Category:    "protocol",
-			Subcategory: "llm_request",
-			Timestamp:   time.Now(),
-			Namespace:   agentIdentity.Namespace,
-			PodName:     agentIdentity.PodName,
-			PodLabels:   agentIdentity.Labels,
-			Fields: map[string]interface{}{
-				"path":      path,
-				"method":    method,
-				"host":      host,
-				"requestID": requestID,
-				"sourceIP":  agentIdentity.SourceIP,
-			},
-		}
-
-		decision, err := s.policyEvaluator.Evaluate(policyEvent)
-		if err != nil {
-			resp := s.handleEvaluationError(err, agentIdentity, requestID, logger)
-			if resp != nil {
-				return resp
-			}
-			// fail-open: fall through to pass-through
-		} else if decision != nil && decision.Matched {
-			resp := s.applyEnforcementDecision(decision, agentIdentity, requestID)
-			if resp != nil {
-				return resp
-			}
-		}
-	}
-
 	return &extprocv3.ProcessingResponse{
 		Response: &extprocv3.ProcessingResponse_RequestHeaders{
 			RequestHeaders: &extprocv3.HeadersResponse{},
@@ -347,6 +310,15 @@ func (s *ExtProcServer) handleRequestBody(ctx context.Context, state *streamStat
 			// Emit LLMRequestStart event
 			s.emitRequestStartEvent(state)
 			state.startEventEmitted = true
+		}
+
+		// Policy evaluation: evaluate request against active policies
+		// This runs after body parsing so we have model, provider, and tool names.
+		if s.policyEvaluator != nil && state.streamCtx != nil {
+			resp := s.evaluateRequestPolicy(state, logger)
+			if resp != nil {
+				return resp
+			}
 		}
 	}
 
@@ -495,6 +467,77 @@ func (s *ExtProcServer) emitRequestStartEvent(state *streamState) {
 		Model:  state.streamCtx.Model,
 		Stream: state.streamCtx.Stream,
 	})
+}
+
+// evaluateRequestPolicy builds a PolicyEvent from the parsed StreamContext
+// and evaluates it against active policies. Returns an ImmediateResponse
+// if the decision requires blocking (deny/throttle), nil for pass-through.
+//
+// The PolicyEvent is populated with body-derived fields (model, provider,
+// toolName, toolNames) rather than agent-controlled headers, ensuring
+// policy decisions are based on trusted data.
+func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
+	sc := state.streamCtx
+	agentIdentity := sc.AgentIdentity
+	requestID := sc.RequestID
+
+	// Determine subcategory based on parsed tool names
+	subcategory := "llm_request"
+	if len(sc.ToolNames) > 0 {
+		subcategory = "tool_call"
+	}
+
+	// Build fields from trusted body-parsed data
+	fields := map[string]interface{}{
+		"path":      state.obsCtx.Path,
+		"method":    state.obsCtx.Method,
+		"requestID": requestID,
+		"sourceIP":  agentIdentity.SourceIP,
+		"model":     sc.Model,
+		"provider":  sc.Provider,
+	}
+
+	// Host from headers (infrastructure, not agent-controlled)
+	host := state.obsCtx.Headers.Get("host")
+	if host == "" {
+		host = state.obsCtx.Headers.Get(":authority")
+	}
+	fields["host"] = host
+
+	// Tool names from body parsing (trusted)
+	if len(sc.ToolNames) > 0 {
+		fields["toolName"] = sc.ToolNames[0]
+		fields["toolNames"] = strings.Join(sc.ToolNames, ",")
+	}
+
+	policyEvent := &policy.PolicyEvent{
+		Category:    "protocol",
+		Subcategory: subcategory,
+		Timestamp:   time.Now(),
+		Namespace:   agentIdentity.Namespace,
+		PodName:     agentIdentity.PodName,
+		PodLabels:   agentIdentity.Labels,
+		Fields:      fields,
+	}
+
+	decision, err := s.policyEvaluator.Evaluate(policyEvent)
+	if err != nil {
+		resp := s.handleEvaluationError(err, agentIdentity, requestID, logger)
+		if resp != nil {
+			return resp
+		}
+		// fail-open: fall through to pass-through
+		return nil
+	}
+
+	if decision != nil && decision.Matched {
+		resp := s.applyEnforcementDecision(decision, agentIdentity, requestID)
+		if resp != nil {
+			return resp
+		}
+	}
+
+	return nil
 }
 
 // handleEvaluationError handles policy evaluation errors based on the

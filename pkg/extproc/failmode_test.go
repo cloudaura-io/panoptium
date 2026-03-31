@@ -23,8 +23,6 @@ import (
 	"testing"
 	"time"
 
-	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-
 	"github.com/panoptium/panoptium/pkg/eventbus"
 	"github.com/panoptium/panoptium/pkg/extproc/enforce"
 	"github.com/panoptium/panoptium/pkg/identity"
@@ -99,35 +97,23 @@ func TestFailOpen_PassThroughOnPolicyError(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.100",
-					"x-panoptium-request-id", "req-failopen-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
 
-	resp, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	resp := sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.100",
+		"x-panoptium-request-id", "req-failopen-1",
+	}, reqBody)
 
 	// Fail-open: should pass through (no ImmediateResponse)
 	if resp.GetImmediateResponse() != nil {
 		t.Fatal("expected pass-through in fail-open mode, got ImmediateResponse")
 	}
-	if resp.GetRequestHeaders() == nil {
-		t.Fatal("expected RequestHeaders response for fail-open pass-through")
+	if resp.GetRequestBody() == nil {
+		t.Fatal("expected RequestBody response for fail-open pass-through")
 	}
 }
 
@@ -160,28 +146,16 @@ func TestFailOpen_EmitsBypassEvent(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.101",
-					"x-panoptium-request-id", "req-bypass-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
 
-	_, err = stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.101",
+		"x-panoptium-request-id", "req-bypass-1",
+	}, reqBody)
 
 	// Verify enforcement.bypass event was emitted
 	select {
@@ -222,28 +196,16 @@ func TestFailClosed_Returns503OnPolicyError(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.102",
-					"x-panoptium-request-id", "req-failclosed-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
 
-	resp, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	resp := sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.102",
+		"x-panoptium-request-id", "req-failclosed-1",
+	}, reqBody)
 
 	// Fail-closed: should return 503 ImmediateResponse
 	ir := resp.GetImmediateResponse()
@@ -255,12 +217,12 @@ func TestFailClosed_Returns503OnPolicyError(t *testing.T) {
 	}
 
 	// Verify structured error body
-	var body enforce.ErrorResponse
-	if err := json.Unmarshal(ir.Body, &body); err != nil {
+	var respBody enforce.ErrorResponse
+	if err := json.Unmarshal(ir.Body, &respBody); err != nil {
 		t.Fatalf("failed to unmarshal error body: %v", err)
 	}
-	if body.Error != "service_unavailable" {
-		t.Errorf("expected error 'service_unavailable', got %q", body.Error)
+	if respBody.Error != "service_unavailable" {
+		t.Errorf("expected error 'service_unavailable', got %q", respBody.Error)
 	}
 }
 
@@ -293,28 +255,16 @@ func TestFailClosed_EmitsUnavailableEvent(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", "10.0.0.103",
-					"x-panoptium-request-id", "req-unavailable-1",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
 
-	_, err = stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to receive response: %v", err)
-	}
+	sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.103",
+		"x-panoptium-request-id", "req-unavailable-1",
+	}, reqBody)
 
 	// Verify enforcement.unavailable event was emitted
 	select {

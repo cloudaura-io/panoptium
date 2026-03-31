@@ -885,27 +885,16 @@ func TestLifecycleManagerPolicyEvaluator(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"x-forwarded-for", "10.0.0.42",
-					"x-panoptium-request-id", "req-eval-lifecycle",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send: %v", err)
-	}
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
 
-	resp, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("failed to recv: %v", err)
-	}
+	resp := sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.42",
+		"x-panoptium-request-id", "req-eval-lifecycle",
+	}, reqBody)
 
 	// The mock evaluator returns a deny, so we should get 403
 	ir := resp.GetImmediateResponse()
