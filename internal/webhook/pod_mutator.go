@@ -85,11 +85,14 @@ func (m *PodMutator) Default(ctx context.Context, obj runtime.Object) error {
 		return nil
 	}
 
-	// Check if any PanoptiumPolicy matches this pod
+	// Check if any PanoptiumPolicy matches this pod.
+	// Fail-closed: if the policy check fails, block the operation rather than
+	// allowing unmonitored pods through. This is consistent with failurePolicy=Fail
+	// on the webhook configuration.
 	matches, err := m.matchesPanoptiumPolicy(ctx, pod)
 	if err != nil {
-		logger.Error(err, "Failed to check policy match", "pod", pod.Name)
-		return nil // Don't block pod creation on policy lookup failure
+		logger.Error(err, "Failed to check policy match, blocking pod (fail-closed)", "pod", pod.Name)
+		return fmt.Errorf("failed to check policy match for pod %s/%s: %w (fail-closed)", pod.Namespace, pod.Name, err)
 	}
 
 	if !matches {
@@ -115,9 +118,10 @@ func (m *PodMutator) Default(ctx context.Context, obj runtime.Object) error {
 }
 
 // matchesPanoptiumPolicy checks if the pod matches any PanoptiumPolicy targetSelector.
+// Returns an error if the check cannot be performed (fail-closed).
 func (m *PodMutator) matchesPanoptiumPolicy(ctx context.Context, pod *corev1.Pod) (bool, error) {
 	if m.Client == nil {
-		return false, nil
+		return false, fmt.Errorf("kubernetes client is nil, cannot verify policy match")
 	}
 
 	policies := &panoptiumiov1alpha1.PanoptiumPolicyList{}
