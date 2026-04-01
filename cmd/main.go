@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -39,12 +40,14 @@ import (
 	panoptiumiov1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
 	"github.com/panoptium/panoptium/internal/controller"
 	panoptiumwebhook "github.com/panoptium/panoptium/internal/webhook"
+	"github.com/panoptium/panoptium/pkg/escalation"
 	natsbus "github.com/panoptium/panoptium/pkg/eventbus/nats"
 	"github.com/panoptium/panoptium/pkg/extproc"
 	"github.com/panoptium/panoptium/pkg/identity"
 	"github.com/panoptium/panoptium/pkg/observer"
 	"github.com/panoptium/panoptium/pkg/observer/llm"
 	"github.com/panoptium/panoptium/pkg/policy"
+	"github.com/panoptium/panoptium/pkg/policy/predicate"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -162,7 +165,8 @@ func main() {
 	// Set up the policy engine: compiler, cache, resolver, evaluator adapter
 	policyCompiler := policy.NewPolicyCompiler()
 	policyCache := policy.NewPolicyCache(policyCompiler)
-	policyResolver := policy.NewPolicyCompositionResolver()
+	rateLimitCounter := predicate.NewSlidingWindowCounter(60 * time.Second)
+	policyResolver := policy.NewPolicyCompositionResolverWithRateLimit(rateLimitCounter)
 	policyEvaluator := policy.NewEvaluatorAdapter(policyCache, policyResolver)
 	setupLog.Info("policy engine initialized",
 		"enforcementMode", enforcementMode)
@@ -179,9 +183,10 @@ func main() {
 	}
 
 	if err := (&controller.ClusterPanoptiumPolicyReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("clusterpanoptiumpolicy-controller"),
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		Recorder:    mgr.GetEventRecorderFor("clusterpanoptiumpolicy-controller"),
+		PolicyCache: policyCache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterPanoptiumPolicy")
 		os.Exit(1)
@@ -290,6 +295,15 @@ func main() {
 		setupLog.Error(err, "unable to add ExtProc lifecycle manager")
 		os.Exit(1)
 	}
+
+	// Set up the escalation manager to watch for repeated deny decisions
+	// and create PanoptiumQuarantine CRDs when thresholds are reached.
+	escalationMgr := escalation.NewEscalationManager(bus, mgr.GetClient())
+	if err := mgr.Add(escalationMgr); err != nil {
+		setupLog.Error(err, "unable to add escalation manager")
+		os.Exit(1)
+	}
+	setupLog.Info("escalation manager registered")
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")

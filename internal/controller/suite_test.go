@@ -115,11 +115,12 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Register the ClusterPanoptiumPolicy reconciler
+	// Register the ClusterPanoptiumPolicy reconciler with PolicyCache
 	err = (&ClusterPanoptiumPolicyReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("clusterpanoptiumpolicy-controller"),
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		Recorder:    mgr.GetEventRecorderFor("clusterpanoptiumpolicy-controller"),
+		PolicyCache: testPolicyCache,
 	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 

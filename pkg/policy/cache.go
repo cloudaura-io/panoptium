@@ -91,6 +91,24 @@ func (c *PolicyCache) OnAdd(pol *v1alpha1.PanoptiumPolicy) error {
 	return nil
 }
 
+// OnAddCluster compiles and adds a ClusterPanoptiumPolicy to the cache.
+// Returns an error if compilation fails; the cache is not modified on error.
+func (c *PolicyCache) OnAddCluster(pol *v1alpha1.ClusterPanoptiumPolicy) error {
+	compiled, err := c.compiler.CompileCluster(pol)
+	if err != nil {
+		return fmt.Errorf("compile cluster policy %s: %w", pol.Name, err)
+	}
+
+	key := policyKey("", pol.Name)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.policies[key] = compiled
+	c.rebuildSnapshotLocked()
+	return nil
+}
+
 // OnUpdate recompiles a policy that has changed. Only the changed policy is
 // recompiled; other policies in the cache are unaffected.
 // Returns an error if recompilation fails; the cache retains the old version.
@@ -118,6 +136,24 @@ func (c *PolicyCache) OnUpdate(oldPol, newPol *v1alpha1.PanoptiumPolicy) error {
 // OnDelete removes a policy from the cache.
 func (c *PolicyCache) OnDelete(pol *v1alpha1.PanoptiumPolicy) error {
 	key := policyKey(pol.Namespace, pol.Name)
+
+	c.mu.Lock()
+	_, existed := c.policies[key]
+	delete(c.policies, key)
+	c.rebuildSnapshotLocked()
+	cb := c.invalidationCallback
+	c.mu.Unlock()
+
+	if existed && cb != nil {
+		cb(key)
+	}
+
+	return nil
+}
+
+// OnDeleteCluster removes a ClusterPanoptiumPolicy from the cache.
+func (c *PolicyCache) OnDeleteCluster(pol *v1alpha1.ClusterPanoptiumPolicy) error {
+	key := policyKey("", pol.Name)
 
 	c.mu.Lock()
 	_, existed := c.policies[key]
