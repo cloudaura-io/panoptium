@@ -75,6 +75,12 @@ var _ = Describe("Gateway Enforcement E2E", Label("e2e-enforcement"), Ordered, f
 	// GE-1: Deny Rule Enforcement
 	// -------------------------------------------------------------------
 	Context("GE-1: Deny Rule Enforcement", func() {
+		var curlPod string
+		BeforeAll(func() {
+			curlPod = createPersistentCurlPod(namespace)
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+		})
+
 		It("should return 403 with structured error when request matches deny rule", func() {
 			policyName := uniqueName("ge1-deny")
 			yaml := fmt.Sprintf(`apiVersion: panoptium.io/v1alpha1
@@ -111,7 +117,7 @@ spec:
 			waitForPolicyReady(policyName, namespace, 2*time.Minute)
 
 			By("sending request that matches deny rule through gateway")
-			statusCode, body, err := sendToolCallRequest(gwIP, "e2e-agent", "dangerous_exec", nil)
+			statusCode, body, err := execToolCallRequest(curlPod, gwIP, "e2e-agent", "dangerous_exec", nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying 403 response with structured error")
@@ -132,6 +138,12 @@ spec:
 	// GE-2: Throttle/Rate Limit Enforcement
 	// -------------------------------------------------------------------
 	Context("GE-2: Throttle Enforcement with Rate Limiting", func() {
+		var curlPod string
+		BeforeAll(func() {
+			curlPod = createPersistentCurlPod(namespace)
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+		})
+
 		It("should return 429 with Retry-After after exceeding rate limit", func() {
 			policyName := uniqueName("ge2-throttle")
 			yaml := fmt.Sprintf(`apiVersion: panoptium.io/v1alpha1
@@ -172,7 +184,7 @@ spec:
 			// Send multiple requests; when rate limit is enforced, we expect 429
 			var got429 bool
 			for i := 0; i < 10; i++ {
-				statusCode, body, err := sendToolCallRequest(gwIP, "e2e-agent", "api_call", nil)
+				statusCode, body, err := execToolCallRequest(curlPod, gwIP, "e2e-agent", "api_call", nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				if statusCode == 429 {
@@ -194,13 +206,19 @@ spec:
 	// GE-3: Fail-Open Degradation
 	// -------------------------------------------------------------------
 	Context("GE-3: Fail-Open Degradation", func() {
+		var curlPod string
+		BeforeAll(func() {
+			curlPod = createPersistentCurlPod(namespace)
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+		})
+
 		It("should pass traffic through when policy engine is unavailable in fail-open mode", func() {
 			By("verifying operator is configured with fail-open mode (default)")
 			// The default failure mode is fail-open; verify traffic passes
 			// even when a policy evaluation might error
 
 			By("sending request through gateway")
-			statusCode, _, err := sendToolCallRequest(gwIP, "e2e-agent", "safe_tool", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "e2e-agent", "safe_tool", nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying request passes through (not blocked)")
@@ -220,6 +238,12 @@ spec:
 	// GE-4: Backward Compatibility
 	// -------------------------------------------------------------------
 	Context("GE-4: Backward Compatibility", func() {
+		var curlPod string
+		BeforeAll(func() {
+			curlPod = createPersistentCurlPod(namespace)
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+		})
+
 		It("should allow all traffic when no deny policies are applied", func() {
 			By("ensuring no blocking policies exist")
 			cmd := exec.Command("kubectl", "get", "panoptiumpolicies",
@@ -230,7 +254,7 @@ spec:
 			}
 
 			By("sending a standard request through gateway")
-			statusCode, _, err := sendToolCallRequest(gwIP, "e2e-agent", "standard_tool", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "e2e-agent", "standard_tool", nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying request is not blocked (backward compatibility)")
