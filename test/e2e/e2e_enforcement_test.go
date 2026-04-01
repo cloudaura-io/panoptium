@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:revive
@@ -266,51 +265,3 @@ spec:
 	})
 })
 
-// sendEnforcementRequest sends an HTTP request through the gateway with
-// enforcement-specific headers and returns the status code, body, and
-// response headers.
-func sendEnforcementRequest(gwIP, path string, headers map[string]string) (statusCode int, body string, respHeaders string, err error) {
-	podName := fmt.Sprintf("enforce-req-%d", time.Now().UnixNano()%100000)
-
-	curlArgs := []string{
-		"run", podName,
-		"--restart=Never",
-		"--rm", "--attach",
-		"--image=curlimages/curl:8.4.0",
-		"-n", namespace,
-		"--", "curl", "-s", "-o", "/dev/null",
-		"-w", `%{http_code}\n%{response_header}`,
-	}
-
-	for k, v := range headers {
-		curlArgs = append(curlArgs, "-H", fmt.Sprintf("%s: %s", k, v))
-	}
-
-	url := fmt.Sprintf("http://%s%s", gwIP, path)
-	curlArgs = append(curlArgs, url)
-
-	cmd := exec.Command("kubectl", curlArgs...)
-	output, err := utils.Run(cmd)
-	if err != nil {
-		return 0, "", "", fmt.Errorf("curl failed: %w, output: %s", err, output)
-	}
-
-	lines := strings.SplitN(output, "\n", 2)
-	if len(lines) < 1 {
-		return 0, "", "", fmt.Errorf("unexpected curl output: %s", output)
-	}
-
-	var code int
-	_, err = fmt.Sscanf(lines[0], "%d", &code)
-	if err != nil {
-		return 0, "", "", fmt.Errorf("failed to parse status code from %q: %w", lines[0], err)
-	}
-
-	respBody := ""
-	hdrs := ""
-	if len(lines) > 1 {
-		hdrs = lines[1]
-	}
-
-	return code, respBody, hdrs, nil
-}
