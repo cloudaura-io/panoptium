@@ -434,6 +434,177 @@ func TestPolicyEvaluation_ThrottleDecision(t *testing.T) {
 	}
 }
 
+// TestPolicyEvaluation_AuditOnlyPassesThrough verifies that when the policy
+// evaluator returns a deny decision with AuditOnly=true, the ExtProc server
+// emits a policy.decision event but passes the request through (no blocking).
+func TestPolicyEvaluation_AuditOnlyPassesThrough(t *testing.T) {
+	evaluator := &mockPolicyEvaluator{
+		decision: &policy.Decision{
+			Action: policy.CompiledAction{
+				Type: v1alpha1.ActionTypeDeny,
+				Parameters: map[string]string{
+					"message":   "tool call denied by policy",
+					"signature": "PAN-SIG-0099",
+				},
+			},
+			Matched:          true,
+			AuditOnly:        true,
+			MatchedRule:      "block-dangerous-tools",
+			MatchedRuleIndex: 0,
+			PolicyName:       "audit-policy",
+			PolicyNamespace:  "staging",
+		},
+	}
+	bus, podCache, srv := setupPolicyEvalTestComponents(t, evaluator)
+	defer bus.Close()
+
+	podCache.Set("10.0.0.81", identity.PodInfo{
+		Name:      "audit-pod",
+		Namespace: "staging",
+		UID:       "uid-audit-1",
+		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+	})
+
+	// Subscribe to policy decision events to verify emission
+	sub := bus.Subscribe(eventbus.EventTypePolicyDecision)
+	defer bus.Unsubscribe(sub)
+
+	client, cleanup := startTestServer(t, srv)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := client.Process(ctx)
+	if err != nil {
+		t.Fatalf("failed to open stream: %v", err)
+	}
+
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
+
+	resp := sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.81",
+		"x-panoptium-request-id", "req-audit-1",
+	}, reqBody)
+
+	// Should pass through — no ImmediateResponse despite deny action
+	if resp.GetImmediateResponse() != nil {
+		t.Fatal("expected pass-through for audit-only deny decision, got ImmediateResponse")
+	}
+	if resp.GetRequestBody() == nil {
+		t.Fatal("expected RequestBody response for audit-only pass-through")
+	}
+
+	// Verify policy.decision event was still emitted
+	select {
+	case evt := <-sub.Events():
+		if evt.EventType() != eventbus.EventTypePolicyDecision {
+			t.Errorf("expected policy.decision event, got %q", evt.EventType())
+		}
+		// Verify the action label includes the "audit:" prefix
+		ee, ok := evt.(*eventbus.EnforcementEvent)
+		if !ok {
+			t.Fatal("expected EnforcementEvent type")
+		}
+		if ee.Action != "audit:deny" {
+			t.Errorf("expected audit action label 'audit:deny', got %q", ee.Action)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for policy.decision event — audit-only should still emit events")
+	}
+}
+
+// TestPolicyEvaluation_GlobalAuditOverridesPerPolicyEnforcing verifies that when
+// the server-level enforcement mode is "audit", even decisions from per-policy
+// "enforcing" rules are treated as audit-only: the event is emitted with an
+// "audit:" prefix in the action label, and traffic passes through without blocking.
+func TestPolicyEvaluation_GlobalAuditOverridesPerPolicyEnforcing(t *testing.T) {
+	evaluator := &mockPolicyEvaluator{
+		decision: &policy.Decision{
+			Action: policy.CompiledAction{
+				Type: v1alpha1.ActionTypeDeny,
+				Parameters: map[string]string{
+					"message":   "tool call denied by policy",
+					"signature": "PAN-SIG-0100",
+				},
+			},
+			Matched:          true,
+			AuditOnly:        false, // Per-policy mode is enforcing (no AuditOnly)
+			MatchedRule:      "deny-tools",
+			MatchedRuleIndex: 0,
+			PolicyName:       "enforcing-policy",
+			PolicyNamespace:  "production",
+		},
+	}
+	bus, podCache, srv := setupPolicyEvalTestComponents(t, evaluator)
+	defer bus.Close()
+
+	// Override to audit mode (global) — this should override per-policy enforcing
+	srv.SetEnforcementMode(enforce.ModeAudit)
+
+	podCache.Set("10.0.0.82", identity.PodInfo{
+		Name:      "global-audit-pod",
+		Namespace: "production",
+		UID:       "uid-gaud-1",
+		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+	})
+
+	// Subscribe to policy decision events to verify emission
+	sub := bus.Subscribe(eventbus.EventTypePolicyDecision)
+	defer bus.Unsubscribe(sub)
+
+	client, cleanup := startTestServer(t, srv)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := client.Process(ctx)
+	if err != nil {
+		t.Fatalf("failed to open stream: %v", err)
+	}
+
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
+
+	resp := sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.82",
+		"x-panoptium-request-id", "req-global-audit-1",
+	}, reqBody)
+
+	// Should pass through — global audit mode overrides per-policy enforcing
+	if resp.GetImmediateResponse() != nil {
+		t.Fatal("expected pass-through for global audit mode, got ImmediateResponse (deny was enforced)")
+	}
+	if resp.GetRequestBody() == nil {
+		t.Fatal("expected RequestBody response for audit-mode pass-through")
+	}
+
+	// Verify policy.decision event was emitted with "audit:" prefix
+	select {
+	case evt := <-sub.Events():
+		if evt.EventType() != eventbus.EventTypePolicyDecision {
+			t.Errorf("expected policy.decision event, got %q", evt.EventType())
+		}
+		ee, ok := evt.(*eventbus.EnforcementEvent)
+		if !ok {
+			t.Fatal("expected EnforcementEvent type")
+		}
+		if ee.Action != "audit:deny" {
+			t.Errorf("expected audit action label 'audit:deny', got %q", ee.Action)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for policy.decision event")
+	}
+}
+
 // TestPolicyEvaluation_NilEvaluator verifies that when no PolicyEvaluator is
 // configured, the server passes through all requests without policy evaluation.
 func TestPolicyEvaluation_NilEvaluator(t *testing.T) {
