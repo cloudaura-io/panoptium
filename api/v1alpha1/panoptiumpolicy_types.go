@@ -57,7 +57,7 @@ const (
 )
 
 // ActionType defines the type of response action a policy rule can take.
-// +kubebuilder:validation:Enum=allow;deny;alert;quarantine;rateLimit;customWebhook
+// +kubebuilder:validation:Enum=allow;deny;alert;quarantine;rateLimit
 type ActionType string
 
 const (
@@ -75,9 +75,6 @@ const (
 
 	// ActionTypeRateLimit applies rate limiting to the request.
 	ActionTypeRateLimit ActionType = "rateLimit"
-
-	// ActionTypeCustomWebhook invokes an external webhook for custom handling.
-	ActionTypeCustomWebhook ActionType = "customWebhook"
 )
 
 // Trigger defines the event category and subcategory pattern that activates a policy rule.
@@ -110,7 +107,6 @@ type Action struct {
 
 	// Parameters contains action-specific configuration as key-value pairs.
 	// For rateLimit: "requestsPerMinute", "burstSize"
-	// For customWebhook: "url", "timeout"
 	// +optional
 	Parameters map[string]string `json:"parameters,omitempty"`
 }

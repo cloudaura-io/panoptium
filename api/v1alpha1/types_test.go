@@ -186,7 +186,6 @@ func TestActionTypeValues(t *testing.T) {
 		{ActionTypeAlert, "alert"},
 		{ActionTypeQuarantine, "quarantine"},
 		{ActionTypeRateLimit, "rateLimit"},
-		{ActionTypeCustomWebhook, "customWebhook"},
 	}
 	for _, tt := range tests {
 		if string(tt.action) != tt.want {

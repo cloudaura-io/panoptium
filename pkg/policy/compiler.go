@@ -25,6 +25,18 @@ import (
 	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
 )
 
+// validActionTypes is the set of ActionTypes supported by the policy engine.
+// Any ActionType not in this set will cause a CompilationError. This prevents
+// unknown or removed action types (e.g., customWebhook) from silently passing
+// through the compilation pipeline.
+var validActionTypes = map[v1alpha1.ActionType]bool{
+	v1alpha1.ActionTypeAllow:      true,
+	v1alpha1.ActionTypeDeny:       true,
+	v1alpha1.ActionTypeAlert:      true,
+	v1alpha1.ActionTypeQuarantine: true,
+	v1alpha1.ActionTypeRateLimit:  true,
+}
+
 // validTriggerLayers maps each trigger layer to its valid event subcategories.
 var validTriggerLayers = map[string]map[string]bool{
 	"kernel": {
@@ -169,6 +181,17 @@ func (c *PolicyCompiler) compileRule(policyName string, index int, rule v1alpha1
 	// Validate trigger layer and event.
 	if err := c.validateTrigger(policyName, index, rule); err != nil {
 		return nil, err
+	}
+
+	// Validate action type — reject unknown or unsupported types at compile time.
+	if !validActionTypes[rule.Action.Type] {
+		return nil, &CompilationError{
+			PolicyName: policyName,
+			RuleName:   rule.Name,
+			RuleIndex:  index,
+			Field:      "action.type",
+			Message:    fmt.Sprintf("unsupported action type %q; valid types: allow, deny, alert, quarantine, rateLimit", rule.Action.Type),
+		}
 	}
 
 	cr := &CompiledRule{

@@ -101,7 +101,6 @@ spec:
                           description: |-
                             Parameters contains action-specific configuration as key-value pairs.
                             For rateLimit: "requestsPerMinute", "burstSize"
-                            For customWebhook: "url", "timeout"
                           type: object
                         type:
                           description: Type is the kind of action to take.
@@ -111,7 +110,6 @@ spec:
                           - alert
                           - quarantine
                           - rateLimit
-                          - customWebhook
                           type: string
                       required:
                       - type
