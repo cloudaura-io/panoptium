@@ -161,6 +161,11 @@ func waitForQuarantineContained(name, ns string, timeout time.Duration) {
 // Tool Call Request Helper
 // ---------------------------------------------------------------------------
 
+// Deprecated: sendToolCallRequest creates an ephemeral kubectl run pod per
+// request, incurring ~2s scheduling overhead. Use execToolCallRequest with a
+// persistent curl pod instead. This function is retained for ExtProc and other
+// test suites that have not yet been migrated.
+//
 // sendToolCallRequest sends a POST request through AgentGateway that simulates
 // a tool_call event. It uses a curl pod in the test namespace to reach the
 // gateway ClusterIP. Returns the HTTP status code and response body.
