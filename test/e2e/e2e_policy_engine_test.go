@@ -898,7 +898,7 @@ spec:
 
 		BeforeAll(func() {
 			By("pre-creating 5 persistent curl pods (one per simulated agent)")
-			for i := 0; i < numAgents; i++ {
+			for i := range numAgents {
 				podName := persistentCurlPodName(fmt.Sprintf("pe11-agent-%d", i))
 				curlPods[i] = createPersistentCurlPodWithName(podName, namespace)
 			}
@@ -952,7 +952,7 @@ spec:
 			results := make([]result, totalRequests)
 			var wg sync.WaitGroup
 
-			for i := 0; i < totalRequests; i++ {
+			for i := range totalRequests {
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
@@ -996,7 +996,7 @@ spec:
 
 		BeforeAll(func() {
 			By("pre-creating 10 persistent curl pods for benchmark")
-			for i := 0; i < numBenchPods; i++ {
+			for i := range numBenchPods {
 				podName := persistentCurlPodName(fmt.Sprintf("pe12-bench-%d", i))
 				benchPods[i] = createPersistentCurlPodWithName(podName, namespace)
 			}
@@ -1013,7 +1013,7 @@ spec:
 			categories := []string{"protocol", "kernel", "network", "llm", "protocol"}
 			subcategories := []string{"tool_call", "process_exec", "egress_attempt", "prompt_submit", "message_send"}
 
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				policyName := uniqueName(fmt.Sprintf("pe12-bench-%d", i))
 				policyNames = append(policyNames, policyName)
 
@@ -1058,7 +1058,7 @@ spec:
 
 			By("sending 100 sequential requests via 10 persistent pods (10 requests each)")
 			var latencies []time.Duration
-			for i := 0; i < numBenchPods*requestsPerPod; i++ {
+			for i := range numBenchPods * requestsPerPod {
 				podIdx := i / requestsPerPod
 				start := time.Now()
 				_, _, err := execToolCallRequest(benchPods[podIdx], gwIP,
