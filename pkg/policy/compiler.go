@@ -123,7 +123,7 @@ func (c *PolicyCompiler) Compile(policy *v1alpha1.PanoptiumPolicy) (*CompiledPol
 		Namespace:       policy.Namespace,
 		Priority:        policy.Spec.Priority,
 		EnforcementMode: policy.Spec.EnforcementMode,
-		TargetSelector:  policy.Spec.TargetSelector.MatchLabels,
+		TargetSelector:  &policy.Spec.TargetSelector,
 		IsClusterScoped: false,
 	}
 
@@ -147,7 +147,7 @@ func (c *PolicyCompiler) CompileCluster(policy *v1alpha1.ClusterPanoptiumPolicy)
 		Namespace:       "",
 		Priority:        policy.Spec.Priority,
 		EnforcementMode: policy.Spec.EnforcementMode,
-		TargetSelector:  policy.Spec.TargetSelector.MatchLabels,
+		TargetSelector:  &policy.Spec.TargetSelector,
 		IsClusterScoped: true,
 	}
 

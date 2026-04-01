@@ -24,6 +24,7 @@ import (
 	"regexp"
 
 	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // CompiledPolicy is the optimized intermediate representation of a PanoptiumPolicy
@@ -43,7 +44,8 @@ type CompiledPolicy struct {
 	EnforcementMode v1alpha1.EnforcementMode
 
 	// TargetSelector is the label selector for target pods.
-	TargetSelector map[string]string
+	// Nil or empty selector matches all pods.
+	TargetSelector *metav1.LabelSelector
 
 	// Rules is the ordered list of compiled rules for decision tree evaluation.
 	Rules []*CompiledRule

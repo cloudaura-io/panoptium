@@ -897,11 +897,14 @@ func TestCompiler_TargetSelectorPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compile() unexpected error: %v", err)
 	}
-	if compiled.TargetSelector["app"] != "myapp" {
-		t.Errorf("TargetSelector[app] = %q, want %q", compiled.TargetSelector["app"], "myapp")
+	if compiled.TargetSelector == nil {
+		t.Fatal("TargetSelector is nil, expected non-nil")
 	}
-	if compiled.TargetSelector["tier"] != "frontend" {
-		t.Errorf("TargetSelector[tier] = %q, want %q", compiled.TargetSelector["tier"], "frontend")
+	if compiled.TargetSelector.MatchLabels["app"] != "myapp" {
+		t.Errorf("TargetSelector.MatchLabels[app] = %q, want %q", compiled.TargetSelector.MatchLabels["app"], "myapp")
+	}
+	if compiled.TargetSelector.MatchLabels["tier"] != "frontend" {
+		t.Errorf("TargetSelector.MatchLabels[tier] = %q, want %q", compiled.TargetSelector.MatchLabels["tier"], "frontend")
 	}
 }
 
