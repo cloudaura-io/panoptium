@@ -122,7 +122,7 @@ spec:
 			By("verifying 403 response with structured error")
 			Expect(statusCode).To(Equal(403), "expected 403 Forbidden for denied request")
 
-			var errorBody map[string]interface{}
+			var errorBody map[string]any
 			err = json.Unmarshal([]byte(body), &errorBody)
 			Expect(err).NotTo(HaveOccurred(), "response body should be valid JSON")
 			Expect(errorBody["error"]).To(Equal("policy_violation"))
@@ -182,14 +182,14 @@ spec:
 			By("sending requests through gateway and checking for 429")
 			// Send multiple requests; when rate limit is enforced, we expect 429
 			var got429 bool
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				statusCode, body, err := execToolCallRequest(curlPod, gwIP, "e2e-agent", "api_call", nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				if statusCode == 429 {
 					got429 = true
 					// Verify Retry-After header/body
-					var errorBody map[string]interface{}
+					var errorBody map[string]any
 					err = json.Unmarshal([]byte(body), &errorBody)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errorBody["error"]).To(Equal("rate_limited"))
