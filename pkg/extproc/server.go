@@ -30,6 +30,7 @@ import (
 	"time"
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	extprocfilterv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -201,6 +202,14 @@ func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamS
 	// Resolve agent identity from source IP via PodCache
 	agentIdentity := s.resolver.Resolve(httpHeaders)
 
+	// If no identity was resolved, use x-panoptium-agent-id header as weak ID
+	// (for escalation tracking; confidence remains low)
+	if agentIdentity.ID == "" && agentIdentity.PodName == "" {
+		if agentID := httpHeaders.Get("x-panoptium-agent-id"); agentID != "" {
+			agentIdentity.ID = agentID
+		}
+	}
+
 	// Check for un-enrolled pods (source IP not found in PodCache)
 	if agentIdentity.Confidence == eventbus.ConfidenceLow && agentIdentity.SourceIP != "" {
 		if s.enforcementMode == enforce.ModeEnforcing {
@@ -270,6 +279,10 @@ func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamS
 		Response: &extprocv3.ProcessingResponse_RequestHeaders{
 			RequestHeaders: &extprocv3.HeadersResponse{},
 		},
+		ModeOverride: &extprocfilterv3.ProcessingMode{
+			RequestBodyMode:  extprocfilterv3.ProcessingMode_BUFFERED,
+			ResponseBodyMode: extprocfilterv3.ProcessingMode_STREAMED,
+		},
 	}
 }
 
@@ -322,6 +335,8 @@ func (s *ExtProcServer) handleRequestBody(ctx context.Context, state *streamStat
 		}
 	}
 
+	// Echo original body back via StreamedBodyResponse — AgentGateway
+	// operates in streaming mode and rejects BodyMutation_Body variant.
 	return &extprocv3.ProcessingResponse{
 		Response: &extprocv3.ProcessingResponse_RequestBody{
 			RequestBody: &extprocv3.BodyResponse{
@@ -329,8 +344,8 @@ func (s *ExtProcServer) handleRequestBody(ctx context.Context, state *streamStat
 					BodyMutation: &extprocv3.BodyMutation{
 						Mutation: &extprocv3.BodyMutation_StreamedResponse{
 							StreamedResponse: &extprocv3.StreamedBodyResponse{
-								Body:        body.GetBody(),
-								EndOfStream: body.GetEndOfStream(),
+								Body:        state.requestBody,
+								EndOfStream: true,
 							},
 						},
 					},
@@ -592,10 +607,44 @@ func (s *ExtProcServer) handleEvaluationError(err error, agentIdentity eventbus.
 // enforcement action and returns an ExtProc ProcessingResponse. It also emits
 // a policy.decision event to the Event Bus. Returns nil if the decision is an
 // allow action (pass-through).
+//
+// Global enforcement mode takes precedence: if the server-level mode is "audit",
+// all decisions are treated as audit-only regardless of per-policy enforcement mode.
 func (s *ExtProcServer) applyEnforcementDecision(decision *policy.Decision, agentIdentity eventbus.AgentIdentity, requestID string) *extprocv3.ProcessingResponse {
+	// Global audit mode override: when the server is in audit mode, force all
+	// decisions to audit-only, even if the per-policy mode is "enforcing".
+	if s.enforcementMode == enforce.ModeAudit {
+		decision.AuditOnly = true
+	}
+
 	ruleRef := formatRuleReference(decision.PolicyNamespace, decision.PolicyName, decision.MatchedRuleIndex)
 	signature := decision.Action.Parameters["signature"]
 	message := decision.Action.Parameters["message"]
+
+	// Parse escalation parameters from the policy action (if present)
+	var escalationThreshold int
+	var escalationWindow time.Duration
+	var escalationAction string
+	if v, ok := decision.Action.Parameters["escalationThreshold"]; ok {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			escalationThreshold = parsed
+		}
+	}
+	if v, ok := decision.Action.Parameters["escalationWindow"]; ok {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			escalationWindow = time.Duration(parsed) * time.Second
+		}
+	}
+	if v, ok := decision.Action.Parameters["escalationAction"]; ok {
+		escalationAction = v
+	}
+
+	// Determine the action label for the event. For audit-only decisions,
+	// prefix with "audit:" to distinguish from enforced actions.
+	actionLabel := string(decision.Action.Type)
+	if decision.AuditOnly {
+		actionLabel = "audit:" + actionLabel
+	}
 
 	// Emit policy.decision event for all matched decisions
 	s.bus.Emit(&eventbus.EnforcementEvent{
@@ -605,9 +654,20 @@ func (s *ExtProcServer) applyEnforcementDecision(decision *policy.Decision, agen
 			ReqID:     requestID,
 			AgentInfo: agentIdentity,
 		},
-		Reason: fmt.Sprintf("policy rule matched: %s", ruleRef),
-		Action: string(decision.Action.Type),
+		Reason:              fmt.Sprintf("policy rule matched: %s", ruleRef),
+		Action:              actionLabel,
+		EscalationThreshold: escalationThreshold,
+		EscalationWindow:    escalationWindow,
+		EscalationAction:    escalationAction,
+		PolicyName:          decision.PolicyName,
+		PolicyNamespace:     decision.PolicyNamespace,
 	})
+
+	// Audit-only decisions: the event was emitted above, but the action is
+	// not enforced — pass through as if it were an allow.
+	if decision.AuditOnly {
+		return nil
+	}
 
 	switch decision.Action.Type {
 	case v1alpha1.ActionTypeDeny:
