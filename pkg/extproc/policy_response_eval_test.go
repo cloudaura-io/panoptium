@@ -62,7 +62,7 @@ func sendFullRequestSequence(t *testing.T, stream extprocv3.ExternalProcessor_Pr
 					"host", "api.openai.com",
 					"content-type", "application/json",
 					"x-forwarded-for", "10.0.0.50",
-					"x-panoptium-request-id", "req-resp-eval-1",
+					"x-request-id", "req-resp-eval-1",
 				),
 			},
 		},

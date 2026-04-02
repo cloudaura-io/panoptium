@@ -32,6 +32,7 @@ import (
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	extprocfilterv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	extprocv3 "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/google/uuid"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
@@ -197,18 +198,16 @@ func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamS
 
 	path := httpHeaders.Get(":path")
 	method := httpHeaders.Get(":method")
-	requestID := httpHeaders.Get("x-panoptium-request-id")
-
-	// Resolve agent identity from source IP via PodCache
-	agentIdentity := s.resolver.Resolve(httpHeaders)
-
-	// If no identity was resolved, use x-panoptium-agent-id header as weak ID
-	// (for escalation tracking; confidence remains low)
-	if agentIdentity.ID == "" && agentIdentity.PodName == "" {
-		if agentID := httpHeaders.Get("x-panoptium-agent-id"); agentID != "" {
-			agentIdentity.ID = agentID
-		}
+	// Request ID precedence: x-request-id (injected by AgentGateway) > server-generated UUID
+	requestID := httpHeaders.Get("x-request-id")
+	if requestID == "" {
+		requestID = uuid.New().String()
 	}
+
+	// Resolve agent identity from source IP via PodCache.
+	// Identity is derived exclusively from X-Forwarded-For -> PodCache lookup.
+	// No fallback to custom x-panoptium-* headers (removed per FR-2).
+	agentIdentity := s.resolver.Resolve(httpHeaders)
 
 	// Check for un-enrolled pods (source IP not found in PodCache)
 	if agentIdentity.Confidence == eventbus.ConfidenceLow && agentIdentity.SourceIP != "" {

@@ -780,7 +780,7 @@ func TestLifecycleManagerEnforcementMode(t *testing.T) {
 					":method", "POST",
 					"host", "api.openai.com",
 					"x-forwarded-for", "10.0.0.99",
-					"x-panoptium-request-id", "req-enforce-test",
+					"x-request-id", "req-enforce-test",
 				),
 			},
 		},
@@ -893,7 +893,7 @@ func TestLifecycleManagerPolicyEvaluator(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.42",
-		"x-panoptium-request-id", "req-eval-lifecycle",
+		"x-request-id", "req-eval-lifecycle",
 	}, reqBody)
 
 	// The mock evaluator returns a deny, so we should get 403

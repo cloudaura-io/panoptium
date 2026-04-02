@@ -25,12 +25,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/eventbus"
 )
 
-// Header constants for correlation headers.
-const (
-	// HeaderRequestID is the unique request correlation ID header.
-	// This is retained as a tracing header — it does not convey identity.
-	HeaderRequestID = "X-Panoptium-Request-Id"
-)
 
 // Resolver resolves agent identity from the source pod IP via the PodCache.
 // The PodCache is filtered by panoptium.io/monitored=true, so only enrolled

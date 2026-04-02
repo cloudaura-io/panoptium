@@ -109,7 +109,7 @@ func TestPolicyEvaluation_InvokedAfterObserverParsing(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.50",
-		"x-panoptium-request-id", "req-policy-eval-1",
+		"x-request-id", "req-policy-eval-1",
 	}, body)
 
 	// Verify the evaluator was called
@@ -154,7 +154,7 @@ func TestPolicyEvaluation_EventContextExtraction(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.60",
-		"x-panoptium-request-id", "req-context-1",
+		"x-request-id", "req-context-1",
 	}, body)
 
 	event := evaluator.lastEvent
@@ -237,7 +237,7 @@ func TestPolicyEvaluation_PassThroughWhenNoMatch(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.70",
-		"x-panoptium-request-id", "req-passthrough-1",
+		"x-request-id", "req-passthrough-1",
 	}, body)
 
 	// Should be a pass-through (no ImmediateResponse)
@@ -303,7 +303,7 @@ func TestPolicyEvaluation_DenyDecision(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.80",
-		"x-panoptium-request-id", "req-deny-1",
+		"x-request-id", "req-deny-1",
 	}, reqBody)
 
 	// Should receive an ImmediateResponse with 403
@@ -392,7 +392,7 @@ func TestPolicyEvaluation_ThrottleDecision(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.90",
-		"x-panoptium-request-id", "req-throttle-1",
+		"x-request-id", "req-throttle-1",
 	}, reqBody)
 
 	// Should receive an ImmediateResponse with 429
@@ -488,7 +488,7 @@ func TestPolicyEvaluation_AuditOnlyPassesThrough(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.81",
-		"x-panoptium-request-id", "req-audit-1",
+		"x-request-id", "req-audit-1",
 	}, reqBody)
 
 	// Should pass through — no ImmediateResponse despite deny action
@@ -576,7 +576,7 @@ func TestPolicyEvaluation_GlobalAuditOverridesPerPolicyEnforcing(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.82",
-		"x-panoptium-request-id", "req-global-audit-1",
+		"x-request-id", "req-global-audit-1",
 	}, reqBody)
 
 	// Should pass through — global audit mode overrides per-policy enforcing
@@ -637,7 +637,7 @@ func TestPolicyEvaluation_NilEvaluator(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.55",
-		"x-panoptium-request-id", "req-nil-eval-1",
+		"x-request-id", "req-nil-eval-1",
 	}, reqBody)
 
 	// Should pass through without blocking

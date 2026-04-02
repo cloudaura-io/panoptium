@@ -105,7 +105,7 @@ func TestFailOpen_PassThroughOnPolicyError(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.100",
-		"x-panoptium-request-id", "req-failopen-1",
+		"x-request-id", "req-failopen-1",
 	}, reqBody)
 
 	// Fail-open: should pass through (no ImmediateResponse)
@@ -154,7 +154,7 @@ func TestFailOpen_EmitsBypassEvent(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.101",
-		"x-panoptium-request-id", "req-bypass-1",
+		"x-request-id", "req-bypass-1",
 	}, reqBody)
 
 	// Verify enforcement.bypass event was emitted
@@ -204,7 +204,7 @@ func TestFailClosed_Returns503OnPolicyError(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.102",
-		"x-panoptium-request-id", "req-failclosed-1",
+		"x-request-id", "req-failclosed-1",
 	}, reqBody)
 
 	// Fail-closed: should return 503 ImmediateResponse
@@ -263,7 +263,7 @@ func TestFailClosed_EmitsUnavailableEvent(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.103",
-		"x-panoptium-request-id", "req-unavailable-1",
+		"x-request-id", "req-unavailable-1",
 	}, reqBody)
 
 	// Verify enforcement.unavailable event was emitted

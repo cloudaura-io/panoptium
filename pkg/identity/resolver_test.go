@@ -123,7 +123,7 @@ func TestResolve_HeaderBased(t *testing.T) {
 
 	headers := http.Header{}
 	headers.Set("X-Forwarded-For", "10.0.5.50")
-	headers.Set(HeaderRequestID, "req-123")
+	headers.Set("X-Request-Id", "req-123")
 
 	identity := resolver.Resolve(headers)
 

@@ -173,7 +173,7 @@ func TestPolicyEventFields_ToolCallSubcategory(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.100",
-		"x-panoptium-request-id", "req-tool-subcat-1",
+		"x-request-id", "req-tool-subcat-1",
 	}, body)
 
 	// Verify the evaluator was called with tool_call subcategory
@@ -223,7 +223,7 @@ func TestPolicyEventFields_LLMRequestSubcategory(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.101",
-		"x-panoptium-request-id", "req-notool-subcat-1",
+		"x-request-id", "req-notool-subcat-1",
 	}, body)
 
 	if evaluator.lastEvent == nil {
@@ -269,7 +269,7 @@ func TestPolicyEventFields_ToolNamePopulated(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.102",
-		"x-panoptium-request-id", "req-toolname-1",
+		"x-request-id", "req-toolname-1",
 	}, body)
 
 	if evaluator.lastEvent == nil {
@@ -318,7 +318,7 @@ func TestPolicyEventFields_ToolNamesPopulated(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.103",
-		"x-panoptium-request-id", "req-toolnames-1",
+		"x-request-id", "req-toolnames-1",
 	}, body)
 
 	if evaluator.lastEvent == nil {
@@ -373,7 +373,7 @@ func TestPolicyEventFields_ModelAndProvider(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.104",
-		"x-panoptium-request-id", "req-model-1",
+		"x-request-id", "req-model-1",
 	}, body)
 
 	if evaluator.lastEvent == nil {
@@ -428,7 +428,7 @@ func TestPolicyEventFields_HeaderNotUsedForToolName(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.105",
-		"x-panoptium-request-id", "req-header-1",
+		"x-request-id", "req-header-1",
 		"x-panoptium-tool-name", "spoofed_tool",
 	}, body)
 
@@ -496,7 +496,7 @@ func TestPolicyEventFields_DenyAfterBodyParsing(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.106",
-		"x-panoptium-request-id", "req-deny-body-1",
+		"x-request-id", "req-deny-body-1",
 	}, body)
 
 	// Should receive an ImmediateResponse with 403 from the body phase

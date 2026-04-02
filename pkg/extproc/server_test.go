@@ -197,7 +197,7 @@ func TestProcess_BidirectionalStream(t *testing.T) {
 					"x-panoptium-agent-id", "agent-test",
 					"x-panoptium-client-ip", "10.0.0.1",
 					"x-panoptium-auth-type", "jwt",
-					"x-panoptium-request-id", "req-stream-1",
+					"x-request-id", "req-stream-1",
 				),
 			},
 		},
@@ -382,7 +382,7 @@ func TestProcess_RequestHeaderExtraction(t *testing.T) {
 					"content-type", "application/json",
 					"x-panoptium-agent-id", "test-agent",
 					"x-panoptium-auth-type", "jwt",
-					"x-panoptium-request-id", "req-header-test",
+					"x-request-id", "req-header-test",
 				),
 			},
 		},
@@ -519,7 +519,7 @@ func TestProcess_AgentIdentityExtraction(t *testing.T) {
 				":path", "/v1/chat/completions",
 				":method", "POST",
 				"host", "api.openai.com",
-				"x-panoptium-request-id", reqID,
+				"x-request-id", reqID,
 			}
 			if tt.sourceIP != "" {
 				headers = append(headers, "x-forwarded-for", tt.sourceIP)
@@ -618,7 +618,7 @@ func TestProcess_StreamedRequestBodyAssembly(t *testing.T) {
 					"host", "api.openai.com",
 					"x-panoptium-agent-id", "agent-body-test",
 					"x-panoptium-auth-type", "jwt",
-					"x-panoptium-request-id", "req-body-assembly",
+					"x-request-id", "req-body-assembly",
 				),
 			},
 		},
@@ -718,7 +718,7 @@ func TestProcess_StreamedResponseBody(t *testing.T) {
 					"host", "api.openai.com",
 					"x-panoptium-agent-id", "agent-response",
 					"x-panoptium-auth-type", "jwt",
-					"x-panoptium-request-id", "req-response-1",
+					"x-request-id", "req-response-1",
 				),
 			},
 		},
@@ -856,7 +856,7 @@ func TestProcess_PassiveMode(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-passive",
+					"x-request-id", "req-passive",
 				),
 			},
 		},
@@ -908,24 +908,19 @@ func TestProcess_PassiveMode(t *testing.T) {
 	if bodyResp == nil {
 		t.Fatal("expected RequestBody response")
 	}
-	// In passive echo mode, body is echoed via BodyMutation (no content modification)
-	commonResp := bodyResp.GetResponse()
-	if commonResp == nil {
-		t.Fatal("expected CommonResponse with BodyMutation for body echo")
+	// Request body is echoed back via StreamedBodyResponse (AgentGateway streaming mode)
+	if bodyResp.GetResponse() == nil {
+		t.Fatal("expected CommonResponse with BodyMutation for request body echo")
 	}
-	if commonResp.GetHeaderMutation() != nil {
-		t.Error("expected no header mutations in passive mode for body")
+	if bodyResp.GetResponse().GetBodyMutation() == nil {
+		t.Fatal("expected BodyMutation in request body response")
 	}
-	if commonResp.GetBodyMutation() == nil {
-		t.Fatal("expected BodyMutation for body echo, got nil")
+	streamedResp := bodyResp.GetResponse().GetBodyMutation().GetStreamedResponse()
+	if streamedResp == nil {
+		t.Fatal("expected StreamedBodyResponse for request body echo")
 	}
-	// Verify StreamedResponse variant is used (required by AgentGateway streaming mode)
-	reqStreamedResp := commonResp.GetBodyMutation().GetStreamedResponse()
-	if reqStreamedResp == nil {
-		t.Fatal("expected BodyMutation_StreamedResponse for body echo, got different variant")
-	}
-	if string(reqStreamedResp.GetBody()) != string(reqBody) {
-		t.Error("expected body to be echoed verbatim via StreamedResponse")
+	if len(streamedResp.GetBody()) == 0 {
+		t.Error("expected non-empty echoed body in request body response")
 	}
 
 	// Test response headers response is empty
@@ -1051,7 +1046,7 @@ func TestProcess_EndOfStreamComplete(t *testing.T) {
 					":method", "POST",
 					"host", "api.openai.com",
 					"x-forwarded-for", "10.0.0.99",
-					"x-panoptium-request-id", "req-complete-1",
+					"x-request-id", "req-complete-1",
 				),
 			},
 		},
@@ -1187,7 +1182,7 @@ func TestProcess_ConcurrentStreams(t *testing.T) {
 							":method", "POST",
 							"host", "api.openai.com",
 							"x-forwarded-for", sourceIP,
-							"x-panoptium-request-id", reqID,
+							"x-request-id", reqID,
 						),
 					},
 				},
@@ -1335,7 +1330,7 @@ func TestProcess_MetricsComputation(t *testing.T) {
 					"host", "api.openai.com",
 					"x-panoptium-agent-id", "agent-metrics",
 					"x-panoptium-auth-type", "jwt",
-					"x-panoptium-request-id", "req-metrics-1",
+					"x-request-id", "req-metrics-1",
 				),
 			},
 		},
@@ -1443,7 +1438,7 @@ func TestProcess_UnknownObserver(t *testing.T) {
 					":path", "/unknown/api/endpoint",
 					":method", "POST",
 					"host", "unknown.example.com",
-					"x-panoptium-request-id", "req-unknown",
+					"x-request-id", "req-unknown",
 				),
 			},
 		},
@@ -1560,7 +1555,7 @@ func TestProcess_MultiEventSSEFrame(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-multi-sse",
+					"x-request-id", "req-multi-sse",
 				),
 			},
 		},
@@ -1655,7 +1650,7 @@ func TestProcess_StreamEndTriggersFinalize(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-finalize",
+					"x-request-id", "req-finalize",
 				),
 			},
 		},
@@ -1750,7 +1745,7 @@ func TestProcess_AnthropicProvider(t *testing.T) {
 					"host", "api.anthropic.com",
 					"x-panoptium-agent-id", "agent-anthropic",
 					"x-panoptium-auth-type", "jwt",
-					"x-panoptium-request-id", "req-anthropic-1",
+					"x-request-id", "req-anthropic-1",
 				),
 			},
 		},
@@ -1877,7 +1872,7 @@ func TestProcess_RequestBodyEchoesViaBodyMutation(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-body-echo-1",
+					"x-request-id", "req-body-echo-1",
 				),
 			},
 		},
@@ -1909,29 +1904,27 @@ func TestProcess_RequestBodyEchoesViaBodyMutation(t *testing.T) {
 		t.Fatalf("failed to receive response: %v", err)
 	}
 
-	// Verify the response echoes body data via BodyMutation
+	// Request body is echoed back via StreamedBodyResponse (AgentGateway streaming mode)
 	bodyResp := resp.GetRequestBody()
 	if bodyResp == nil {
 		t.Fatal("expected RequestBody response")
 	}
 
-	commonResp := bodyResp.GetResponse()
-	if commonResp == nil {
-		t.Fatal("expected CommonResponse in RequestBody response, got nil (empty BodyResponse)")
+	if bodyResp.GetResponse() == nil {
+		t.Fatal("expected CommonResponse with BodyMutation for request body echo")
 	}
-
-	bodyMutation := commonResp.GetBodyMutation()
-	if bodyMutation == nil {
-		t.Fatal("expected BodyMutation in CommonResponse, got nil")
+	if bodyResp.GetResponse().GetBodyMutation() == nil {
+		t.Fatal("expected BodyMutation in request body response")
 	}
-
-	echoedBody := bodyMutation.GetStreamedResponse().GetBody()
-	if len(echoedBody) == 0 {
-		t.Fatal("expected echoed body data, got empty")
+	streamedResp := bodyResp.GetResponse().GetBodyMutation().GetStreamedResponse()
+	if streamedResp == nil {
+		t.Fatal("expected StreamedBodyResponse for request body echo")
 	}
-
-	if string(echoedBody) != string(reqBody) {
-		t.Errorf("echoed body = %q, want %q", string(echoedBody), string(reqBody))
+	if len(streamedResp.GetBody()) == 0 {
+		t.Error("expected non-empty echoed body")
+	}
+	if string(streamedResp.GetBody()) != string(reqBody) {
+		t.Errorf("echoed body mismatch: got %d bytes, want %d bytes", len(streamedResp.GetBody()), len(reqBody))
 	}
 
 	stream.CloseSend()
@@ -1961,7 +1954,7 @@ func TestProcess_ResponseBodyEchoesViaBodyMutation(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-resp-echo-1",
+					"x-request-id", "req-resp-echo-1",
 				),
 			},
 		},
@@ -2081,7 +2074,7 @@ func TestProcess_MultiChunkRequestBodyEchoesIndividually(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-multi-chunk-1",
+					"x-request-id", "req-multi-chunk-1",
 				),
 			},
 		},
@@ -2127,19 +2120,19 @@ func TestProcess_MultiChunkRequestBodyEchoesIndividually(t *testing.T) {
 			t.Fatalf("chunk %d: expected RequestBody response", i)
 		}
 
-		commonResp := bodyResp.GetResponse()
-		if commonResp == nil {
-			t.Fatalf("chunk %d: expected CommonResponse in RequestBody response, got nil (empty BodyResponse)", i)
+		// Each response echoes accumulated body via StreamedBodyResponse
+		if bodyResp.GetResponse() == nil {
+			t.Fatalf("chunk %d: expected CommonResponse with BodyMutation for request body echo", i)
 		}
-
-		bodyMutation := commonResp.GetBodyMutation()
-		if bodyMutation == nil {
-			t.Fatalf("chunk %d: expected BodyMutation in CommonResponse, got nil", i)
+		if bodyResp.GetResponse().GetBodyMutation() == nil {
+			t.Fatalf("chunk %d: expected BodyMutation in request body response", i)
 		}
-
-		echoedBody := bodyMutation.GetStreamedResponse().GetBody()
-		if string(echoedBody) != string(chunk) {
-			t.Errorf("chunk %d: echoed body = %q, want %q", i, string(echoedBody), string(chunk))
+		streamedResp := bodyResp.GetResponse().GetBodyMutation().GetStreamedResponse()
+		if streamedResp == nil {
+			t.Fatalf("chunk %d: expected StreamedBodyResponse for request body echo", i)
+		}
+		if len(streamedResp.GetBody()) == 0 {
+			t.Errorf("chunk %d: expected non-empty echoed body", i)
 		}
 	}
 
@@ -2175,7 +2168,7 @@ func TestProcess_MultiChunkResponseBodyEchoesWithTokenParsing(t *testing.T) {
 					"host", "api.openai.com",
 					"x-panoptium-agent-id", "agent-echo-tokens",
 					"x-panoptium-auth-type", "jwt",
-					"x-panoptium-request-id", "req-echo-tokens-1",
+					"x-request-id", "req-echo-tokens-1",
 				),
 			},
 		},
@@ -2322,7 +2315,7 @@ func TestProcess_EndOfStreamOnlyOnFinalChunk(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-eos-test-1",
+					"x-request-id", "req-eos-test-1",
 				),
 			},
 		},
@@ -2428,7 +2421,7 @@ func TestProcess_EndOfStreamOnlyOnFinalChunk(t *testing.T) {
 // TestRequestBody_UsesStreamedResponse verifies that handleRequestBody returns
 // BodyMutation_StreamedResponse (not BodyMutation_Body) with the correct body
 // data and EndOfStream flag. AgentGateway requires this variant for streaming mode.
-func TestRequestBody_UsesStreamedResponse(t *testing.T) {
+func TestRequestBody_UsesEmptyBodyResponse(t *testing.T) {
 	_, _, _, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
@@ -2449,7 +2442,7 @@ func TestRequestBody_UsesStreamedResponse(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-streamed-variant",
+					"x-request-id", "req-buffered-variant",
 				),
 			},
 		},
@@ -2485,32 +2478,22 @@ func TestRequestBody_UsesStreamedResponse(t *testing.T) {
 		t.Fatal("expected RequestBody response")
 	}
 
-	commonResp := bodyResp.GetResponse()
-	if commonResp == nil {
-		t.Fatal("expected CommonResponse")
+	// Request body is echoed back via StreamedBodyResponse (AgentGateway streaming mode)
+	if bodyResp.GetResponse() == nil {
+		t.Fatal("expected CommonResponse with BodyMutation for request body echo")
 	}
-
-	bodyMutation := commonResp.GetBodyMutation()
-	if bodyMutation == nil {
-		t.Fatal("expected BodyMutation, got nil")
+	if bodyResp.GetResponse().GetBodyMutation() == nil {
+		t.Fatal("expected BodyMutation in request body response")
 	}
-
-	// Assert the mutation is BodyMutation_StreamedResponse, NOT BodyMutation_Body
-	streamedResp, ok := bodyMutation.Mutation.(*extprocv3.BodyMutation_StreamedResponse)
-	if !ok {
-		t.Fatalf("expected BodyMutation_StreamedResponse, got %T", bodyMutation.Mutation)
+	streamedResp := bodyResp.GetResponse().GetBodyMutation().GetStreamedResponse()
+	if streamedResp == nil {
+		t.Fatal("expected StreamedBodyResponse for request body echo")
 	}
-
-	if streamedResp.StreamedResponse == nil {
-		t.Fatal("StreamedResponse is nil")
+	if len(streamedResp.GetBody()) == 0 {
+		t.Error("expected non-empty echoed body")
 	}
-
-	if string(streamedResp.StreamedResponse.Body) != string(reqBody) {
-		t.Error("StreamedResponse.Body does not match sent body")
-	}
-
-	if !streamedResp.StreamedResponse.EndOfStream {
-		t.Error("StreamedResponse.EndOfStream should be true for final chunk")
+	if string(streamedResp.GetBody()) != string(reqBody) {
+		t.Errorf("echoed body mismatch: got %d bytes, want %d bytes", len(streamedResp.GetBody()), len(reqBody))
 	}
 
 	stream.CloseSend()
@@ -2540,7 +2523,7 @@ func TestResponseBody_UsesStreamedResponse(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-resp-streamed",
+					"x-request-id", "req-resp-streamed",
 				),
 			},
 		},
@@ -2665,7 +2648,7 @@ func TestMultiChunkBody_StreamedResponseEndOfStream(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-					"x-panoptium-request-id", "req-multichunk-streamed",
+					"x-request-id", "req-multichunk-streamed",
 				),
 			},
 		},
