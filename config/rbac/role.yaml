@@ -38,6 +38,7 @@ rules:
 - apiGroups:
   - panoptium.io
   resources:
+  - clusterpanoptiumpolicies
   - panoptiumagentprofiles
   - panoptiumpolicies
   - panoptiumquarantines
@@ -53,6 +54,7 @@ rules:
 - apiGroups:
   - panoptium.io
   resources:
+  - clusterpanoptiumpolicies/finalizers
   - panoptiumagentprofiles/finalizers
   - panoptiumpolicies/finalizers
   - panoptiumquarantines/finalizers
@@ -62,6 +64,7 @@ rules:
 - apiGroups:
   - panoptium.io
   resources:
+  - clusterpanoptiumpolicies/status
   - panoptiumagentprofiles/status
   - panoptiumpolicies/status
   - panoptiumquarantines/status

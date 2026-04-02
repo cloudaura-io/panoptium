@@ -20,70 +20,124 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// DetectionPattern defines a single detection pattern within a threat signature.
-type DetectionPattern struct {
-	// EventCategory is the event category to match (e.g., "syscall", "network", "llm").
+// PatternRule defines a single regex detection pattern with weight and target.
+type PatternRule struct {
+	// Regex is the regular expression pattern to match against content.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
-	EventCategory string `json:"eventCategory"`
+	Regex string `json:"regex"`
 
-	// Match is a CEL expression for pattern matching against events in this category.
+	// Weight is the score weight (0.0-1.0) for this pattern when matched.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
-	Match string `json:"match"`
+	Weight float64 `json:"weight"`
 
-	// WindowSeconds is the time window in seconds for temporal pattern matching.
-	// Events outside this window are not correlated.
+	// Target specifies where to apply this pattern.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=tool_description;tool_args;message_content;body
+	Target string `json:"target"`
+}
+
+// EntropyRule defines entropy-based detection configuration.
+type EntropyRule struct {
+	// Enabled indicates whether entropy analysis is active.
 	// +optional
-	// +kubebuilder:validation:Minimum=0
-	WindowSeconds int32 `json:"windowSeconds,omitempty"`
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// Threshold is the Shannon entropy threshold (bits per character) above which content is flagged.
+	// +optional
+	Threshold float64 `json:"threshold,omitempty"`
+
+	// Target specifies where to apply entropy analysis.
+	// +optional
+	// +kubebuilder:validation:Enum=tool_description;tool_args;message_content;body
+	Target string `json:"target,omitempty"`
+}
+
+// Base64Rule defines base64 payload detection configuration.
+type Base64Rule struct {
+	// Enabled indicates whether base64 detection is active.
+	// +optional
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// MinLength is the minimum length of base64 strings to flag.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=20
+	MinLength int `json:"minLength,omitempty"`
+
+	// Target specifies where to apply base64 detection.
+	// +optional
+	// +kubebuilder:validation:Enum=tool_description;tool_args;message_content;body
+	Target string `json:"target,omitempty"`
+}
+
+// CELRule defines a CEL expression for complex detection rules.
+type CELRule struct {
+	// Expression is the CEL expression to evaluate.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Expression string `json:"expression"`
+
+	// Weight is the score weight (0.0-1.0) for this expression when matched.
+	// +kubebuilder:validation:Required
+	Weight float64 `json:"weight"`
+}
+
+// DetectionSpec defines the detection rules within a threat signature.
+type DetectionSpec struct {
+	// Patterns is a list of regex-based detection patterns with weights.
+	// +optional
+	Patterns []PatternRule `json:"patterns,omitempty"`
+
+	// Entropy configures entropy-based anomaly detection.
+	// +optional
+	Entropy *EntropyRule `json:"entropy,omitempty"`
+
+	// Base64 configures base64 payload detection.
+	// +optional
+	Base64 *Base64Rule `json:"base64,omitempty"`
+
+	// CEL is a list of CEL expressions for complex detection rules.
+	// +optional
+	CEL []CELRule `json:"cel,omitempty"`
 }
 
 // PanoptiumThreatSignatureSpec defines the desired state of a PanoptiumThreatSignature.
 type PanoptiumThreatSignatureSpec struct {
-	// SignatureID is a unique identifier for this threat signature.
-	// Must match the pattern PAN-SIG-XXXX where X is a digit.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Pattern=`^PAN-SIG-[0-9]{4}$`
-	SignatureID string `json:"signatureID"`
+	// Protocols lists which protocols this signature applies to (empty = all).
+	// +optional
+	Protocols []string `json:"protocols,omitempty"`
 
-	// Description is a human-readable description of the threat this signature detects.
+	// Category is the attack category for grouping and policy matching
+	// (e.g., "prompt_injection", "data_exfiltration", "role_confusion").
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
-	Description string `json:"description"`
+	Category string `json:"category"`
 
 	// Severity indicates the severity level of threats matching this signature.
 	// +kubebuilder:validation:Required
 	Severity Severity `json:"severity"`
 
-	// Patterns is the list of detection patterns that define how to identify this threat.
+	// MitreAtlas is the optional MITRE ATLAS reference (e.g., "AML.T0051.001").
+	// +optional
+	MitreAtlas string `json:"mitreAtlas,omitempty"`
+
+	// Detection defines the detection rules for this signature.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinItems=1
-	Patterns []DetectionPattern `json:"patterns"`
+	Detection DetectionSpec `json:"detection"`
 
-	// DetectionPoints lists the detection layers that can identify this threat.
-	// Valid values: L1-extproc, L2-network, L3-ebpf, L4-behavioral.
-	// +optional
-	DetectionPoints []string `json:"detectionPoints,omitempty"`
-
-	// Enabled indicates whether this signature is active for detection.
-	// +optional
-	// +kubebuilder:default=true
-	Enabled bool `json:"enabled"`
-
-	// MITRETactic is the MITRE ATT&CK tactic reference for this threat.
-	// +optional
-	MITRETactic string `json:"mitreTactic,omitempty"`
-
-	// MITRETechnique is the MITRE ATT&CK technique reference for this threat.
-	// +optional
-	MITRETechnique string `json:"mitreTechnique,omitempty"`
+	// Description is a human-readable description of what this signature detects.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Description string `json:"description"`
 }
 
 // PanoptiumThreatSignatureStatus defines the observed state of a PanoptiumThreatSignature.
 type PanoptiumThreatSignatureStatus struct {
 	// Conditions represent the latest available observations of the signature's state.
-	// Supported condition types: Ready, Active, Degraded.
+	// Supported condition types: Ready, Invalid.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
@@ -91,31 +145,28 @@ type PanoptiumThreatSignatureStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// DetectionCount is the total number of times this signature has matched.
+	// CompiledPatterns is the number of successfully compiled regex patterns.
 	// +optional
-	DetectionCount int64 `json:"detectionCount,omitempty"`
+	CompiledPatterns int32 `json:"compiledPatterns,omitempty"`
 
-	// LastDetection is the timestamp of the last time this signature matched.
+	// CompiledCEL is the number of successfully compiled CEL expressions.
 	// +optional
-	LastDetection *metav1.Time `json:"lastDetection,omitempty"`
-
-	// FalsePositiveRate is the estimated false positive percentage for this signature.
-	// +optional
-	FalsePositiveRate string `json:"falsePositiveRate,omitempty"`
+	CompiledCEL int32 `json:"compiledCEL,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="SignatureID",type=string,JSONPath=`.spec.signatureID`,description="Signature identifier"
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:printcolumn:name="Category",type=string,JSONPath=`.spec.category`,description="Attack category"
 // +kubebuilder:printcolumn:name="Severity",type=string,JSONPath=`.spec.severity`,description="Threat severity"
-// +kubebuilder:printcolumn:name="Enabled",type=boolean,JSONPath=`.spec.enabled`,description="Whether signature is active"
-// +kubebuilder:printcolumn:name="Detections",type=integer,JSONPath=`.status.detectionCount`,description="Total detections"
+// +kubebuilder:printcolumn:name="Patterns",type=integer,JSONPath=`.status.compiledPatterns`,description="Compiled patterns"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`,description="Ready status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // PanoptiumThreatSignature is the Schema for the panoptiumthreatsignatures API.
 // It defines threat detection patterns that identify specific attack techniques
-// or suspicious behaviors in monitored AI agent traffic and kernel activity.
+// or suspicious behaviors in monitored AI agent traffic. Signatures are cluster-scoped
+// and consumed by protocol parsers via the ThreatMatcher interface.
 type PanoptiumThreatSignature struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

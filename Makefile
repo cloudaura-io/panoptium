@@ -45,7 +45,7 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd:allowDangerousTypes=true webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -91,6 +91,22 @@ test-e2e-full: ## Run the full E2E pipeline on a kind cluster (creates cluster, 
 		exit 1; \
 	}
 	./test/e2e/run-e2e.sh
+
+.PHONY: test-e2e-crd
+test-e2e-crd: ## Run CRD lifecycle E2E tests on existing Kind cluster.
+	@command -v kind >/dev/null 2>&1 || { echo "Kind is not installed."; exit 1; }
+	go test ./test/e2e/ -v -ginkgo.v -timeout 300s -ginkgo.label-filter="e2e-crd"
+
+.PHONY: test-e2e-helm
+test-e2e-helm: ## Run Helm deployment + webhook E2E tests on existing Kind cluster.
+	@command -v kind >/dev/null 2>&1 || { echo "Kind is not installed."; exit 1; }
+	@command -v helm >/dev/null 2>&1 || { echo "Helm is not installed."; exit 1; }
+	go test ./test/e2e/ -v -ginkgo.v -timeout 300s -ginkgo.label-filter="e2e-helm"
+
+.PHONY: test-e2e-all
+test-e2e-all: ## Run all E2E test suites (extproc + crd + helm).
+	@command -v kind >/dev/null 2>&1 || { echo "Kind is not installed."; exit 1; }
+	go test ./test/e2e/ -v -ginkgo.v -timeout 900s
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

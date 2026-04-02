@@ -48,6 +48,7 @@ import (
 	"github.com/panoptium/panoptium/pkg/observer/llm"
 	"github.com/panoptium/panoptium/pkg/policy"
 	"github.com/panoptium/panoptium/pkg/policy/predicate"
+	"github.com/panoptium/panoptium/pkg/threat"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -201,10 +202,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	threatRegistry := threat.NewCompiledSignatureRegistry()
 	if err := (&controller.PanoptiumThreatSignatureReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("panoptiumthreatsignature-controller"),
+		Registry: threatRegistry,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PanoptiumThreatSignature")
 		os.Exit(1)

@@ -37,7 +37,7 @@ webhooks:
       name: panoptium-webhook-service
       namespace: system
       path: /mutate--v1-pod
-  failurePolicy: Ignore
+  failurePolicy: Fail
   name: mpod.kb.io
   namespaceSelector:
     matchExpressions:
@@ -45,6 +45,7 @@ webhooks:
       operator: NotIn
       values:
       - kube-system
+      - panoptium-system
   rules:
   - apiGroups:
     - ""
@@ -52,6 +53,39 @@ webhooks:
     - v1
     operations:
     - CREATE
+    - UPDATE
+    resources:
+    - pods
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: panoptium-pod-validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: panoptium-webhook-service
+      namespace: system
+      path: /validate--v1-pod
+  failurePolicy: Fail
+  name: vpod-label.panoptium.io
+  namespaceSelector:
+    matchExpressions:
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - kube-system
+      - panoptium-system
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - UPDATE
     resources:
     - pods
   sideEffects: None

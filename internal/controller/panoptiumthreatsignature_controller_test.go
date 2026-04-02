@@ -35,30 +35,31 @@ var _ = Describe("PanoptiumThreatSignature Controller", func() {
 	)
 
 	Context("When creating a PanoptiumThreatSignature", func() {
-		It("Should set Ready and Active conditions to True for enabled signature", func() {
+		It("Should set Ready condition to True for valid signature", func() {
 			sig := &panoptiumiov1alpha1.PanoptiumThreatSignature{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-sig-ready",
-					Namespace: "default",
+					Name: "test-sig-ready",
 				},
 				Spec: panoptiumiov1alpha1.PanoptiumThreatSignatureSpec{
-					SignatureID: "PAN-SIG-0001",
-					Description: "Detect unauthorized file access",
+					Protocols:   []string{"mcp"},
+					Category:    "prompt_injection",
 					Severity:    panoptiumiov1alpha1.SeverityHigh,
-					Enabled:     true,
-					Patterns: []panoptiumiov1alpha1.DetectionPattern{
-						{
-							EventCategory: "syscall",
-							Match:         "event.syscall == 'openat' && event.path.startsWith('/etc/shadow')",
+					Description: "Detect prompt injection attempts",
+					Detection: panoptiumiov1alpha1.DetectionSpec{
+						Patterns: []panoptiumiov1alpha1.PatternRule{
+							{
+								Regex:  `(?i)ignore\s+previous\s+instructions`,
+								Weight: 0.9,
+								Target: "tool_description",
+							},
 						},
 					},
-					DetectionPoints: []string{"L3-ebpf"},
 				},
 			}
 
 			Expect(k8sClient.Create(ctx, sig)).Should(Succeed())
 
-			lookupKey := types.NamespacedName{Name: "test-sig-ready", Namespace: "default"}
+			lookupKey := types.NamespacedName{Name: "test-sig-ready"}
 			createdSig := &panoptiumiov1alpha1.PanoptiumThreatSignature{}
 
 			Eventually(func() bool {
@@ -66,35 +67,34 @@ var _ = Describe("PanoptiumThreatSignature Controller", func() {
 				if err != nil {
 					return false
 				}
-				readyFound := false
-				activeFound := false
 				for _, c := range createdSig.Status.Conditions {
 					if c.Type == "Ready" && c.Status == metav1.ConditionTrue {
-						readyFound = true
-					}
-					if c.Type == "Active" && c.Status == metav1.ConditionTrue {
-						activeFound = true
+						return true
 					}
 				}
-				return readyFound && activeFound
+				return false
 			}, timeout, interval).Should(BeTrue())
+
+			Expect(createdSig.Status.CompiledPatterns).Should(Equal(int32(1)))
 		})
 
-		It("Should set Active to False when disabled", func() {
+		It("Should set Ready to False for invalid regex", func() {
 			sig := &panoptiumiov1alpha1.PanoptiumThreatSignature{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-sig-disabled",
-					Namespace: "default",
+					Name: "test-sig-invalid-regex",
 				},
 				Spec: panoptiumiov1alpha1.PanoptiumThreatSignatureSpec{
-					SignatureID: "PAN-SIG-0002",
-					Description: "Disabled signature",
+					Protocols:   []string{"mcp"},
+					Category:    "prompt_injection",
 					Severity:    panoptiumiov1alpha1.SeverityMedium,
-					Enabled:     false,
-					Patterns: []panoptiumiov1alpha1.DetectionPattern{
-						{
-							EventCategory: "network",
-							Match:         "event.dst_port == 443",
+					Description: "Invalid regex signature",
+					Detection: panoptiumiov1alpha1.DetectionSpec{
+						Patterns: []panoptiumiov1alpha1.PatternRule{
+							{
+								Regex:  `(?i)ignore\s+(`,
+								Weight: 0.9,
+								Target: "tool_description",
+							},
 						},
 					},
 				},
@@ -102,7 +102,7 @@ var _ = Describe("PanoptiumThreatSignature Controller", func() {
 
 			Expect(k8sClient.Create(ctx, sig)).Should(Succeed())
 
-			lookupKey := types.NamespacedName{Name: "test-sig-disabled", Namespace: "default"}
+			lookupKey := types.NamespacedName{Name: "test-sig-invalid-regex"}
 			createdSig := &panoptiumiov1alpha1.PanoptiumThreatSignature{}
 
 			Eventually(func() bool {
@@ -111,7 +111,7 @@ var _ = Describe("PanoptiumThreatSignature Controller", func() {
 					return false
 				}
 				for _, c := range createdSig.Status.Conditions {
-					if c.Type == "Active" && c.Status == metav1.ConditionFalse {
+					if c.Type == "Ready" && c.Status == metav1.ConditionFalse && c.Reason == "CompilationFailed" {
 						return true
 					}
 				}
@@ -119,21 +119,23 @@ var _ = Describe("PanoptiumThreatSignature Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 
-		It("Should initialize detectionCount to 0", func() {
+		It("Should track ObservedGeneration", func() {
 			sig := &panoptiumiov1alpha1.PanoptiumThreatSignature{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-sig-count",
-					Namespace: "default",
+					Name: "test-sig-generation",
 				},
 				Spec: panoptiumiov1alpha1.PanoptiumThreatSignatureSpec{
-					SignatureID: "PAN-SIG-0003",
-					Description: "Count test signature",
+					Protocols:   []string{"mcp"},
+					Category:    "data_exfiltration",
 					Severity:    panoptiumiov1alpha1.SeverityLow,
-					Enabled:     true,
-					Patterns: []panoptiumiov1alpha1.DetectionPattern{
-						{
-							EventCategory: "llm",
-							Match:         "event.tokens > 1000",
+					Description: "Generation test signature",
+					Detection: panoptiumiov1alpha1.DetectionSpec{
+						Patterns: []panoptiumiov1alpha1.PatternRule{
+							{
+								Regex:  `(?i)exfiltrate`,
+								Weight: 0.8,
+								Target: "body",
+							},
 						},
 					},
 				},
@@ -141,7 +143,7 @@ var _ = Describe("PanoptiumThreatSignature Controller", func() {
 
 			Expect(k8sClient.Create(ctx, sig)).Should(Succeed())
 
-			lookupKey := types.NamespacedName{Name: "test-sig-count", Namespace: "default"}
+			lookupKey := types.NamespacedName{Name: "test-sig-generation"}
 			createdSig := &panoptiumiov1alpha1.PanoptiumThreatSignature{}
 
 			Eventually(func() bool {
@@ -151,25 +153,25 @@ var _ = Describe("PanoptiumThreatSignature Controller", func() {
 				}
 				return createdSig.Status.ObservedGeneration > 0
 			}, timeout, interval).Should(BeTrue())
-
-			Expect(createdSig.Status.DetectionCount).Should(Equal(int64(0)))
 		})
 
 		It("Should handle deletion cleanly", func() {
 			sig := &panoptiumiov1alpha1.PanoptiumThreatSignature{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-sig-delete",
-					Namespace: "default",
+					Name: "test-sig-delete",
 				},
 				Spec: panoptiumiov1alpha1.PanoptiumThreatSignatureSpec{
-					SignatureID: "PAN-SIG-0004",
-					Description: "Delete test signature",
+					Protocols:   []string{"mcp"},
+					Category:    "prompt_injection",
 					Severity:    panoptiumiov1alpha1.SeverityInfo,
-					Enabled:     true,
-					Patterns: []panoptiumiov1alpha1.DetectionPattern{
-						{
-							EventCategory: "syscall",
-							Match:         "true",
+					Description: "Delete test signature",
+					Detection: panoptiumiov1alpha1.DetectionSpec{
+						Patterns: []panoptiumiov1alpha1.PatternRule{
+							{
+								Regex:  `(?i)test`,
+								Weight: 0.5,
+								Target: "body",
+							},
 						},
 					},
 				},
@@ -177,7 +179,7 @@ var _ = Describe("PanoptiumThreatSignature Controller", func() {
 
 			Expect(k8sClient.Create(ctx, sig)).Should(Succeed())
 
-			lookupKey := types.NamespacedName{Name: "test-sig-delete", Namespace: "default"}
+			lookupKey := types.NamespacedName{Name: "test-sig-delete"}
 			createdSig := &panoptiumiov1alpha1.PanoptiumThreatSignature{}
 
 			Eventually(func() bool {

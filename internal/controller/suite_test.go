@@ -34,6 +34,7 @@ import (
 
 	panoptiumiov1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
 	"github.com/panoptium/panoptium/pkg/policy"
+	"github.com/panoptium/panoptium/pkg/threat"
 )
 
 var (
@@ -104,6 +105,7 @@ var _ = BeforeSuite(func() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("panoptiumthreatsignature-controller"),
+		Registry: threat.NewCompiledSignatureRegistry(),
 	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 

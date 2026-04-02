@@ -12,24 +12,20 @@ spec:
     listKind: PanoptiumThreatSignatureList
     plural: panoptiumthreatsignatures
     singular: panoptiumthreatsignature
-  scope: Namespaced
+  scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - description: Signature identifier
-      jsonPath: .spec.signatureID
-      name: SignatureID
+    - description: Attack category
+      jsonPath: .spec.category
+      name: Category
       type: string
     - description: Threat severity
       jsonPath: .spec.severity
       name: Severity
       type: string
-    - description: Whether signature is active
-      jsonPath: .spec.enabled
-      name: Enabled
-      type: boolean
-    - description: Total detections
-      jsonPath: .status.detectionCount
-      name: Detections
+    - description: Compiled patterns
+      jsonPath: .status.compiledPatterns
+      name: Patterns
       type: integer
     - description: Ready status
       jsonPath: .status.conditions[?(@.type=="Ready")].status
@@ -44,7 +40,8 @@ spec:
         description: |-
           PanoptiumThreatSignature is the Schema for the panoptiumthreatsignatures API.
           It defines threat detection patterns that identify specific attack techniques
-          or suspicious behaviors in monitored AI agent traffic and kernel activity.
+          or suspicious behaviors in monitored AI agent traffic. Signatures are cluster-scoped
+          and consumed by protocol parsers via the ThreatMatcher interface.
         properties:
           apiVersion:
             description: |-
@@ -66,60 +63,124 @@ spec:
           spec:
             description: Spec defines the desired threat signature configuration.
             properties:
-              description:
-                description: Description is a human-readable description of the threat
-                  this signature detects.
+              category:
+                description: |-
+                  Category is the attack category for grouping and policy matching
+                  (e.g., "prompt_injection", "data_exfiltration", "role_confusion").
                 minLength: 1
                 type: string
-              detectionPoints:
-                description: |-
-                  DetectionPoints lists the detection layers that can identify this threat.
-                  Valid values: L1-extproc, L2-network, L3-ebpf, L4-behavioral.
+              description:
+                description: Description is a human-readable description of what this
+                  signature detects.
+                minLength: 1
+                type: string
+              detection:
+                description: Detection defines the detection rules for this signature.
+                properties:
+                  base64:
+                    description: Base64 configures base64 payload detection.
+                    properties:
+                      enabled:
+                        default: false
+                        description: Enabled indicates whether base64 detection is
+                          active.
+                        type: boolean
+                      minLength:
+                        default: 20
+                        description: MinLength is the minimum length of base64 strings
+                          to flag.
+                        minimum: 1
+                        type: integer
+                      target:
+                        description: Target specifies where to apply base64 detection.
+                        enum:
+                        - tool_description
+                        - tool_args
+                        - message_content
+                        - body
+                        type: string
+                    type: object
+                  cel:
+                    description: CEL is a list of CEL expressions for complex detection
+                      rules.
+                    items:
+                      description: CELRule defines a CEL expression for complex detection
+                        rules.
+                      properties:
+                        expression:
+                          description: Expression is the CEL expression to evaluate.
+                          minLength: 1
+                          type: string
+                        weight:
+                          description: Weight is the score weight (0.0-1.0) for this
+                            expression when matched.
+                          type: number
+                      required:
+                      - expression
+                      - weight
+                      type: object
+                    type: array
+                  entropy:
+                    description: Entropy configures entropy-based anomaly detection.
+                    properties:
+                      enabled:
+                        default: false
+                        description: Enabled indicates whether entropy analysis is
+                          active.
+                        type: boolean
+                      target:
+                        description: Target specifies where to apply entropy analysis.
+                        enum:
+                        - tool_description
+                        - tool_args
+                        - message_content
+                        - body
+                        type: string
+                      threshold:
+                        description: Threshold is the Shannon entropy threshold (bits
+                          per character) above which content is flagged.
+                        type: number
+                    type: object
+                  patterns:
+                    description: Patterns is a list of regex-based detection patterns
+                      with weights.
+                    items:
+                      description: PatternRule defines a single regex detection pattern
+                        with weight and target.
+                      properties:
+                        regex:
+                          description: Regex is the regular expression pattern to
+                            match against content.
+                          minLength: 1
+                          type: string
+                        target:
+                          description: Target specifies where to apply this pattern.
+                          enum:
+                          - tool_description
+                          - tool_args
+                          - message_content
+                          - body
+                          type: string
+                        weight:
+                          description: Weight is the score weight (0.0-1.0) for this
+                            pattern when matched.
+                          type: number
+                      required:
+                      - regex
+                      - target
+                      - weight
+                      type: object
+                    type: array
+                type: object
+              mitreAtlas:
+                description: MitreAtlas is the optional MITRE ATLAS reference (e.g.,
+                  "AML.T0051.001").
+                type: string
+              protocols:
+                description: Protocols lists which protocols this signature applies
+                  to (empty = all).
                 items:
                   type: string
-                type: array
-              enabled:
-                default: true
-                description: Enabled indicates whether this signature is active for
-                  detection.
-                type: boolean
-              mitreTactic:
-                description: MITRETactic is the MITRE ATT&CK tactic reference for
-                  this threat.
-                type: string
-              mitreTechnique:
-                description: MITRETechnique is the MITRE ATT&CK technique reference
-                  for this threat.
-                type: string
-              patterns:
-                description: Patterns is the list of detection patterns that define
-                  how to identify this threat.
-                items:
-                  description: DetectionPattern defines a single detection pattern
-                    within a threat signature.
-                  properties:
-                    eventCategory:
-                      description: EventCategory is the event category to match (e.g.,
-                        "syscall", "network", "llm").
-                      minLength: 1
-                      type: string
-                    match:
-                      description: Match is a CEL expression for pattern matching
-                        against events in this category.
-                      minLength: 1
-                      type: string
-                    windowSeconds:
-                      description: |-
-                        WindowSeconds is the time window in seconds for temporal pattern matching.
-                        Events outside this window are not correlated.
-                      format: int32
-                      minimum: 0
-                      type: integer
-                  required:
-                  - eventCategory
-                  - match
-                  type: object
-                minItems: 1
                 type: array
               severity:
                 description: Severity indicates the severity level of threats matching
@@ -131,25 +192,29 @@ spec:
                 - HIGH
                 - CRITICAL
                 type: string
-              signatureID:
-                description: |-
-                  SignatureID is a unique identifier for this threat signature.
-                  Must match the pattern PAN-SIG-XXXX where X is a digit.
-                pattern: ^PAN-SIG-[0-9]{4}$
-                type: string
             required:
+            - category
             - description
-            - patterns
+            - detection
             - severity
-            - signatureID
             type: object
           status:
             description: Status reflects the observed state of the threat signature.
             properties:
+              compiledCEL:
+                description: CompiledCEL is the number of successfully compiled CEL
+                  expressions.
+                format: int32
+                type: integer
+              compiledPatterns:
+                description: CompiledPatterns is the number of successfully compiled
+                  regex patterns.
+                format: int32
+                type: integer
               conditions:
                 description: |-
                   Conditions represent the latest available observations of the signature's state.
-                  Supported condition types: Ready, Active, Degraded.
+                  Supported condition types: Ready, Invalid.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -205,20 +270,6 @@ spec:
                   - type
                   type: object
                 type: array
-              detectionCount:
-                description: DetectionCount is the total number of times this signature
-                  has matched.
-                format: int64
-                type: integer
-              falsePositiveRate:
-                description: FalsePositiveRate is the estimated false positive percentage
-                  for this signature.
-                type: string
-              lastDetection:
-                description: LastDetection is the timestamp of the last time this
-                  signature matched.
-                format: date-time
-                type: string
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
                   by the controller.
