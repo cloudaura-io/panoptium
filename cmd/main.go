@@ -222,34 +222,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.EnrollmentReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("enrollment-reconciler"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "EnrollmentReconciler")
-		os.Exit(1)
-	}
-
 	// Set up webhooks
 	if err := (&panoptiumwebhook.PanoptiumPolicyValidator{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "PanoptiumPolicy")
 		os.Exit(1)
 	}
 
-	if err := (&panoptiumwebhook.PodMutator{
-		Client: mgr.GetClient(),
-	}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "PodMutator")
-		os.Exit(1)
-	}
-
-	if err := (&panoptiumwebhook.PodLabelValidator{
-		Client: mgr.GetClient(),
-	}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "PodLabelValidator")
-		os.Exit(1)
-	}
 
 	// +kubebuilder:scaffold:builder
 

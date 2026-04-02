@@ -66,7 +66,6 @@ var _ = BeforeSuite(func() {
 	failPolicy := admissionv1.Fail
 	sideEffects := admissionv1.SideEffectClassNone
 	webhookPath := "/validate-panoptium-io-v1alpha1-panoptiumpolicy"
-	mutatingPath := "/mutate--v1-pod"
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
@@ -105,39 +104,6 @@ var _ = BeforeSuite(func() {
 					},
 				},
 			},
-			MutatingWebhooks: []*admissionv1.MutatingWebhookConfiguration{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "panoptium-mutating-webhook-configuration",
-					},
-					Webhooks: []admissionv1.MutatingWebhook{
-						{
-							Name:                    "mpod.kb.io",
-							AdmissionReviewVersions: []string{"v1"},
-							SideEffects:             &sideEffects,
-							FailurePolicy:           &failPolicy,
-							ClientConfig: admissionv1.WebhookClientConfig{
-								Service: &admissionv1.ServiceReference{
-									Path: &mutatingPath,
-								},
-							},
-							Rules: []admissionv1.RuleWithOperations{
-								{
-									Operations: []admissionv1.OperationType{
-										admissionv1.Create,
-										admissionv1.Update,
-									},
-									Rule: admissionv1.Rule{
-										APIGroups:   []string{""},
-										APIVersions: []string{"v1"},
-										Resources:   []string{"pods"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
 		},
 	}
 
@@ -164,15 +130,8 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	// Register the validating webhook
+	// Register the validating webhook (PanoptiumPolicy validator only)
 	err = (&PanoptiumPolicyValidator{}).SetupWebhookWithManager(mgr)
-	Expect(err).NotTo(HaveOccurred())
-
-	// Register the mutating webhook
-	err = (&PodMutator{
-		Client:             mgr.GetClient(),
-		ExcludedNamespaces: []string{"kube-system"},
-	}).SetupWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	go func() {

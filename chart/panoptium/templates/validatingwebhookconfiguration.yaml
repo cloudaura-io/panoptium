@@ -22,26 +22,4 @@ webhooks:
         operations: [CREATE, UPDATE]
         resources: [panoptiumpolicies]
     sideEffects: None
-  - name: vpod-label.panoptium.io
-    admissionReviewVersions: [v1]
-    clientConfig:
-      service:
-        name: {{ include "panoptium.fullname" . }}-webhook
-        namespace: {{ .Release.Namespace }}
-        path: /validate--v1-pod
-    failurePolicy: Fail
-    namespaceSelector:
-      matchExpressions:
-        - key: kubernetes.io/metadata.name
-          operator: NotIn
-          values:
-            {{- range .Values.excludedNamespaces }}
-            - {{ . | quote }}
-            {{- end }}
-    rules:
-      - apiGroups: [""]
-        apiVersions: [v1]
-        operations: [UPDATE]
-        resources: [pods]
-    sideEffects: None
 {{- end }}
