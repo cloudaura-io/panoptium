@@ -26,16 +26,28 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/panoptium/panoptium/pkg/observer/protocol"
+	"github.com/panoptium/panoptium/pkg/threat"
 )
 
 // GeminiParser implements protocol.ProtocolParser for Google Gemini API messages.
-type GeminiParser struct{}
+type GeminiParser struct {
+	mu            sync.RWMutex
+	threatMatcher threat.ThreatMatcher
+}
 
 // NewGeminiParser creates a new Gemini parser.
 func NewGeminiParser() *GeminiParser {
 	return &GeminiParser{}
+}
+
+// SetThreatMatcher sets the CRD-driven ThreatMatcher for threat detection.
+func (p *GeminiParser) SetThreatMatcher(matcher threat.ThreatMatcher) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.threatMatcher = matcher
 }
 
 // Name returns the parser name.
@@ -134,7 +146,7 @@ type usageMetadata struct {
 }
 
 // ProcessRequest parses a Gemini generateContent request.
-func (p *GeminiParser) ProcessRequest(_ context.Context, headers map[string]string, body []byte) (*protocol.ParsedRequest, error) {
+func (p *GeminiParser) ProcessRequest(ctx context.Context, headers map[string]string, body []byte) (*protocol.ParsedRequest, error) {
 	if len(body) == 0 {
 		return nil, errors.New("empty request body")
 	}
@@ -174,6 +186,34 @@ func (p *GeminiParser) ProcessRequest(_ context.Context, headers map[string]stri
 			if pt.FunctionResponse != nil {
 				result.Metadata["function_response_name"] = pt.FunctionResponse.Name
 				result.Metadata["function_response"] = pt.FunctionResponse.Response
+			}
+		}
+	}
+
+	// Evaluate ThreatMatcher if set
+	p.mu.RLock()
+	matcher := p.threatMatcher
+	p.mu.RUnlock()
+
+	if matcher != nil {
+		// Build content from all text parts for threat evaluation
+		var allText string
+		for _, c := range req.Contents {
+			for _, pt := range c.Parts {
+				if pt.Text != "" {
+					allText += pt.Text + " "
+				}
+			}
+		}
+		if allText != "" {
+			matches, err := matcher.Match(ctx, threat.MatchInput{
+				Protocol: "gemini",
+				Target:   "message_content",
+				Content:  allText,
+				Metadata: map[string]any{"model": req.Model},
+			})
+			if err == nil && len(matches) > 0 {
+				result.Metadata["threat_matches"] = matches
 			}
 		}
 	}

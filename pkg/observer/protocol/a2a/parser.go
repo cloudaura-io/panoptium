@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/panoptium/panoptium/pkg/observer/protocol"
+	"github.com/panoptium/panoptium/pkg/threat"
 )
 
 // AgentCard represents a parsed A2A Agent Card.
@@ -62,8 +63,9 @@ type TaskRequest struct {
 
 // A2AParser implements protocol.ProtocolParser for A2A JSON-RPC 2.0 messages.
 type A2AParser struct {
-	mu         sync.RWMutex
-	pendingIDs map[string]string // JSON-RPC id -> method name
+	mu            sync.RWMutex
+	pendingIDs    map[string]string // JSON-RPC id -> method name
+	threatMatcher threat.ThreatMatcher
 }
 
 // NewA2AParser creates a new A2A parser.
@@ -71,6 +73,13 @@ func NewA2AParser() *A2AParser {
 	return &A2AParser{
 		pendingIDs: make(map[string]string),
 	}
+}
+
+// SetThreatMatcher sets the CRD-driven ThreatMatcher for threat detection.
+func (p *A2AParser) SetThreatMatcher(matcher threat.ThreatMatcher) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.threatMatcher = matcher
 }
 
 // Name returns the parser name.
@@ -118,7 +127,7 @@ func idToString(raw json.RawMessage) string {
 }
 
 // ProcessRequest parses an A2A request.
-func (p *A2AParser) ProcessRequest(_ context.Context, headers map[string]string, body []byte) (*protocol.ParsedRequest, error) {
+func (p *A2AParser) ProcessRequest(ctx context.Context, headers map[string]string, body []byte) (*protocol.ParsedRequest, error) {
 	if len(body) == 0 {
 		return nil, errors.New("empty request body")
 	}
@@ -165,6 +174,31 @@ func (p *A2AParser) ProcessRequest(_ context.Context, headers map[string]string,
 	}
 
 	result.Metadata["jsonrpc_id"] = id
+
+	// Evaluate ThreatMatcher if set
+	p.mu.RLock()
+	matcher := p.threatMatcher
+	p.mu.RUnlock()
+
+	if matcher != nil {
+		// Build content from task description for threat evaluation
+		var content string
+		if desc, ok := result.Metadata["description"].(string); ok {
+			content = desc
+		}
+		if content != "" {
+			matches, err := matcher.Match(ctx, threat.MatchInput{
+				Protocol: "a2a",
+				Target:   "message_content",
+				Content:  content,
+				Metadata: map[string]any{"method": msg.Method},
+			})
+			if err == nil && len(matches) > 0 {
+				result.Metadata["threat_matches"] = matches
+			}
+		}
+	}
+
 	return result, nil
 }
 
