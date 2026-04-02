@@ -17,12 +17,15 @@ limitations under the License.
 package mcp
 
 import (
+	"context"
 	"encoding/base64"
 	"math"
 	"regexp"
 	"strings"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/panoptium/panoptium/pkg/threat"
 )
 
 // Sensitivity levels for tool poisoning detection.
@@ -94,12 +97,15 @@ var knownInjectionPatterns = []injectionPattern{
 
 // ToolPoisoningDetector analyzes MCP tool descriptions for poisoning indicators
 // including injection patterns, high entropy, base64 payloads, and description
-// deviations from known-good metadata.
+// deviations from known-good metadata. When a ThreatMatcher is set, it delegates
+// detection to CRD-driven signatures while maintaining backward compatibility.
 type ToolPoisoningDetector struct {
 	sensitivity string
 
-	mu        sync.RWMutex
-	knownGood map[string]string // tool name -> known-good description
+	mu               sync.RWMutex
+	knownGood        map[string]string // tool name -> known-good description
+	threatMatcher    threat.ThreatMatcher
+	lastMatchResults []threat.MatchResult
 }
 
 // NewToolPoisoningDetector creates a new detector with the given sensitivity level.
@@ -113,6 +119,23 @@ func NewToolPoisoningDetector(sensitivity string) *ToolPoisoningDetector {
 	}
 }
 
+// SetThreatMatcher sets the CRD-driven ThreatMatcher for delegation.
+// When set, Analyze delegates to the ThreatMatcher for primary detection.
+func (d *ToolPoisoningDetector) SetThreatMatcher(matcher threat.ThreatMatcher) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.threatMatcher = matcher
+}
+
+// LastMatchResults returns the MatchResults from the most recent Analyze call
+// when a ThreatMatcher is configured. Returns nil if no ThreatMatcher is set
+// or no match occurred.
+func (d *ToolPoisoningDetector) LastMatchResults() []threat.MatchResult {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.lastMatchResults
+}
+
 // SetKnownGood registers a known-good description for a tool (from ConfigMap).
 func (d *ToolPoisoningDetector) SetKnownGood(toolName, description string) {
 	d.mu.Lock()
@@ -122,7 +145,60 @@ func (d *ToolPoisoningDetector) SetKnownGood(toolName, description string) {
 
 // Analyze performs composite poisoning analysis on a tool description.
 // Returns a PoisoningResult with a score (0.0-1.0) and matched indicators.
+// When a ThreatMatcher is set, delegates to CRD-driven signatures.
 func (d *ToolPoisoningDetector) Analyze(toolName, description string) PoisoningResult {
+	d.mu.RLock()
+	matcher := d.threatMatcher
+	d.mu.RUnlock()
+
+	// Delegate to ThreatMatcher when available
+	if matcher != nil {
+		return d.analyzeWithThreatMatcher(matcher, toolName, description)
+	}
+
+	return d.analyzeWithHardcoded(toolName, description)
+}
+
+// analyzeWithThreatMatcher delegates detection to the CRD-driven ThreatMatcher.
+func (d *ToolPoisoningDetector) analyzeWithThreatMatcher(matcher threat.ThreatMatcher, toolName, description string) PoisoningResult {
+	results, err := matcher.Match(context.Background(), threat.MatchInput{
+		Protocol: "mcp",
+		Target:   "tool_description",
+		Content:  description,
+		Metadata: map[string]any{"tool_name": toolName},
+	})
+	if err != nil {
+		// Fall back to hardcoded on error
+		return d.analyzeWithHardcoded(toolName, description)
+	}
+
+	// Store match results for later retrieval
+	d.mu.Lock()
+	d.lastMatchResults = results
+	d.mu.Unlock()
+
+	if len(results) == 0 {
+		return PoisoningResult{Score: 0}
+	}
+
+	// Convert MatchResults to PoisoningResult (backward-compatible)
+	var indicators []string
+	var maxScore float64
+	for _, r := range results {
+		indicators = append(indicators, r.Indicators...)
+		if r.Score > maxScore {
+			maxScore = r.Score
+		}
+	}
+
+	return PoisoningResult{
+		Score:      float32(maxScore),
+		Indicators: indicators,
+	}
+}
+
+// analyzeWithHardcoded performs the original hardcoded pattern detection.
+func (d *ToolPoisoningDetector) analyzeWithHardcoded(toolName, description string) PoisoningResult {
 	var indicators []string
 	var scores []float32
 
