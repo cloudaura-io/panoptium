@@ -17,7 +17,9 @@ limitations under the License.
 package protocol
 
 import (
+	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 )
 
@@ -146,9 +148,126 @@ func (d *ProtocolDetector) Parsers() []string {
 //   - annotations: pod annotations (may be nil)
 //   - body: request body for JSON-RPC inspection (may be nil)
 func (d *ProtocolDetector) Detect(headers map[string]string, path string, method string, annotations map[string]string, body []byte) DetectionResult {
-	// TODO: implement detection cascade
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	// Level 1: Explicit pod annotation (confidence 1.0)
+	if annotations != nil {
+		if protoName, ok := annotations["panoptium.io/protocol"]; ok {
+			if parser, exists := d.parsers[protoName]; exists {
+				return DetectionResult{
+					Parser:     parser,
+					Confidence: ConfidenceAnnotation,
+					Method:     DetectionMethodAnnotation,
+				}
+			}
+			// Annotation refers to unknown parser — fall through
+		}
+	}
+
+	// Level 2: Path matching (confidence 0.9)
+	for prefix, parserName := range d.pathPatterns {
+		if strings.HasPrefix(path, prefix) {
+			if parser, exists := d.parsers[parserName]; exists {
+				return DetectionResult{
+					Parser:     parser,
+					Confidence: ConfidencePath,
+					Method:     DetectionMethodPath,
+				}
+			}
+		}
+	}
+
+	// Level 3: Content-Type inspection (confidence 0.7)
+	if ct, ok := headers["Content-Type"]; ok {
+		if parserName, exists := d.contentTypes[ct]; exists {
+			if parser, exists := d.parsers[parserName]; exists {
+				return DetectionResult{
+					Parser:     parser,
+					Confidence: ConfidenceContentType,
+					Method:     DetectionMethodContentType,
+				}
+			}
+		}
+	}
+
+	// Level 4: JSON-RPC method inspection (confidence 0.6)
+	if len(body) > 0 {
+		if result, ok := d.detectJSONRPC(body); ok {
+			return result
+		}
+	}
+
+	// Level 5: Ask each parser's own Detect method — pick highest confidence
+	var bestParser ProtocolParser
+	var bestConfidence float32
+	for _, parser := range d.parsers {
+		canHandle, confidence := parser.Detect(headers, path, method)
+		if canHandle && confidence > bestConfidence {
+			bestParser = parser
+			bestConfidence = confidence
+		}
+	}
+	if bestParser != nil {
+		return DetectionResult{
+			Parser:     bestParser,
+			Confidence: bestConfidence,
+			Method:     DetectionMethodParserDetect,
+		}
+	}
+
+	// Level 6: Fallback (confidence 0.1)
 	return DetectionResult{
 		Confidence: ConfidenceFallback,
 		Method:     DetectionMethodFallback,
 	}
+}
+
+// jsonrpcRequest is a minimal struct for JSON-RPC 2.0 method detection.
+type jsonrpcRequest struct {
+	JSONRPC string `json:"jsonrpc"`
+	Method  string `json:"method"`
+}
+
+// detectJSONRPC attempts to parse the body as JSON-RPC 2.0 and match the method
+// field against registered JSON-RPC methods. Supports both single requests and
+// batched requests (JSON array).
+func (d *ProtocolDetector) detectJSONRPC(body []byte) (DetectionResult, bool) {
+	// Try single request first
+	var single jsonrpcRequest
+	if err := json.Unmarshal(body, &single); err == nil {
+		if single.JSONRPC == "2.0" && single.Method != "" {
+			if parserName, exists := d.jsonrpcMethods[single.Method]; exists {
+				if parser, exists := d.parsers[parserName]; exists {
+					return DetectionResult{
+						Parser:     parser,
+						Confidence: ConfidenceJSONRPC,
+						Method:     DetectionMethodJSONRPC,
+					}, true
+				}
+			}
+		}
+		return DetectionResult{}, false
+	}
+
+	// Try batched request (JSON array)
+	var batch []jsonrpcRequest
+	if err := json.Unmarshal(body, &batch); err == nil && len(batch) > 0 {
+		// Match on the first request in the batch
+		for _, req := range batch {
+			if req.JSONRPC == "2.0" && req.Method != "" {
+				if parserName, exists := d.jsonrpcMethods[req.Method]; exists {
+					if parser, exists := d.parsers[parserName]; exists {
+						return DetectionResult{
+							Parser:     parser,
+							Confidence: ConfidenceJSONRPC,
+							Method:     DetectionMethodJSONRPC,
+						}, true
+					}
+				}
+			}
+		}
+	}
+
+	return DetectionResult{}, false
 }
