@@ -242,6 +242,28 @@ func (r *CompiledSignatureRegistry) Match(_ context.Context, input MatchInput) (
 			}
 		}
 
+		// Evaluate entropy detection
+		if sig.def.Entropy != nil && sig.def.Entropy.Enabled {
+			ed := NewEntropyDetector(sig.def.Entropy.Threshold, sig.def.Entropy.Target)
+			result := ed.Evaluate(input.Target, input.Content)
+			if result.Flagged {
+				indicators = append(indicators, "high_entropy")
+				// Scale entropy score based on how far above threshold
+				entropyScore := math.Min((result.Entropy-sig.def.Entropy.Threshold)/2.0, 1.0)
+				scores = append(scores, entropyScore)
+			}
+		}
+
+		// Evaluate base64 detection
+		if sig.def.Base64 != nil && sig.def.Base64.Enabled {
+			bd := NewBase64Detector(sig.def.Base64.MinLength, sig.def.Base64.Target)
+			result := bd.Evaluate(input.Target, input.Content)
+			if result.Flagged {
+				indicators = append(indicators, "base64_payload")
+				scores = append(scores, 0.6) // Standard weight for base64 detection
+			}
+		}
+
 		// Only produce a result if at least one indicator matched
 		if len(indicators) == 0 {
 			continue
