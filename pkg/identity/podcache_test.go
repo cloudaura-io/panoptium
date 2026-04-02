@@ -134,7 +134,7 @@ func TestPodCacheInformer_AddEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod",
 			Namespace: "test-ns",
-			Labels:    map[string]string{"app": "agent", "panoptium.io/monitored": "true"},
+			Labels:    map[string]string{"app": "agent"},
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: "agent-sa",
@@ -184,7 +184,7 @@ func TestPodCacheInformer_DeleteEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "delete-me",
 			Namespace: "test-ns",
-			Labels:    map[string]string{"panoptium.io/monitored": "true"},
+			Labels:    map[string]string{"app": "agent"},
 		},
 		Status: corev1.PodStatus{
 			PodIP: "10.0.2.2",
@@ -235,7 +235,7 @@ func TestPodCacheInformer_UpdateEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "update-pod",
 			Namespace: "test-ns",
-			Labels:    map[string]string{"version": "v1", "panoptium.io/monitored": "true"},
+			Labels:    map[string]string{"version": "v1"},
 		},
 		Status: corev1.PodStatus{
 			PodIP: "10.0.3.3",
@@ -280,7 +280,7 @@ func TestPodCacheInformer_UpdateEvent(t *testing.T) {
 // After this refactor, the informer must use NewSharedInformerFactory (unfiltered)
 // instead of NewFilteredSharedInformerFactory with a label selector.
 func TestPodCacheInformer_UnfilteredFactory(t *testing.T) {
-	// Create a pod WITHOUT the panoptium.io/monitored label
+	// Create a pod with standard app labels (no special monitoring label needed)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "unlabeled-pod",
@@ -308,8 +308,7 @@ func TestPodCacheInformer_UnfilteredFactory(t *testing.T) {
 		t.Fatal("Informer failed to sync")
 	}
 
-	// The unfiltered informer should cache the pod even without
-	// panoptium.io/monitored label
+	// The unfiltered informer should cache all pods
 	got, ok := cache.Get("10.0.4.1")
 	if !ok {
 		t.Fatal("Get() returned false for pod without monitored label; " +
@@ -329,23 +328,22 @@ func TestPodCacheInformer_UnfilteredFactory(t *testing.T) {
 	}
 }
 
-// TestPodCacheInformer_CachesPodsWithoutMonitoredLabel verifies that pods
-// without the panoptium.io/monitored=true label are cached alongside pods
-// that do have the label. This confirms the informer is fully unfiltered.
-func TestPodCacheInformer_CachesPodsWithoutMonitoredLabel(t *testing.T) {
-	// Pod WITH monitored label
+// TestPodCacheInformer_CachesAllPods verifies that pods with different label
+// sets are all cached by the unfiltered informer.
+func TestPodCacheInformer_CachesAllPods(t *testing.T) {
+	// Pod with app label
 	podLabeled := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "labeled-pod",
 			Namespace: "default",
-			Labels:    map[string]string{"app": "agent", "panoptium.io/monitored": "true"},
+			Labels:    map[string]string{"app": "agent"},
 		},
 		Status: corev1.PodStatus{
 			PodIP: "10.0.5.1",
 		},
 	}
 
-	// Pod WITHOUT monitored label
+	// Pod with different labels
 	podUnlabeled := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "bare-pod",
@@ -386,7 +384,7 @@ func TestPodCacheInformer_PodWithNoIP(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pending-pod",
 			Namespace: "test-ns",
-			Labels:    map[string]string{"panoptium.io/monitored": "true"},
+			Labels:    map[string]string{"app": "agent"},
 		},
 		Status: corev1.PodStatus{
 			PodIP: "", // No IP assigned yet

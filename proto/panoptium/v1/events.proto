@@ -67,7 +67,7 @@ message AgentIdentity {
   // confidence indicates the reliability of the identity resolution.
   // "high" = resolved from PodCache with full metadata (enrolled pod)
   // "medium" = partially resolved
-  // "low" = unknown / unenrolled pod
+  // "low" = unknown source pod
   string confidence = 7;
 
   // pod_uid is the Kubernetes pod UID for unambiguous pod identification.

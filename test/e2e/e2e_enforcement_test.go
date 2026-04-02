@@ -90,14 +90,14 @@ metadata:
 spec:
   targetSelector:
     matchLabels:
-      app: e2e-enforcement
+      app: e2e-agent
   enforcementMode: enforcing
   priority: 100
   rules:
     - name: deny-dangerous-exec
       trigger:
         eventCategory: protocol
-        eventSubcategory: llm_request
+        eventSubcategory: tool_call
       predicates:
         - cel: "event.path == '/v1/chat/completions'"
       action:
@@ -127,9 +127,9 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "response body should be valid JSON")
 			Expect(errorBody["error"]).To(Equal("policy_violation"))
 
-			By("verifying operator logs contain policy decision")
-			logs := getOperatorLogs("policy rule matched")
-			Expect(logs).NotTo(BeEmpty(), "operator logs should contain policy decision")
+			By("verifying response body contains policy violation details")
+			Expect(errorBody["signature"]).To(Equal("PAN-SIG-E2E-001"))
+			Expect(errorBody["message"]).To(Equal("request denied by enforcement policy"))
 		})
 	})
 
@@ -153,21 +153,20 @@ metadata:
 spec:
   targetSelector:
     matchLabels:
-      app: e2e-enforcement
+      app: e2e-agent
   enforcementMode: enforcing
   priority: 100
   rules:
     - name: rate-limit-api
       trigger:
         eventCategory: protocol
-        eventSubcategory: llm_request
+        eventSubcategory: tool_call
       predicates:
         - cel: "event.path == '/v1/chat/completions'"
       action:
-        type: rate_limit
+        type: rateLimit
         parameters:
-          maxRequests: "5"
-          windowSeconds: "60"
+          burstSize: "5"
           retryAfter: "30"
       severity: MEDIUM
 `, policyName, namespace)
@@ -264,4 +263,3 @@ spec:
 		})
 	})
 })
-

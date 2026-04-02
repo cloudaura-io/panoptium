@@ -71,7 +71,7 @@ func TestIdentityResolution_EnrolledPod(t *testing.T) {
 		Name:      "agent-pod-1",
 		Namespace: "production",
 		UID:       "uid-abc-123",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -301,7 +301,7 @@ func TestIdentityResolution_PodUIDCorrelation(t *testing.T) {
 		Name:      "correlation-pod",
 		Namespace: "test-ns",
 		UID:       "uid-xyz-789",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)

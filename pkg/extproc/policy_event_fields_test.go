@@ -151,7 +151,7 @@ func TestPolicyEventFields_ToolCallSubcategory(t *testing.T) {
 		Name:      "tool-pod",
 		Namespace: "default",
 		UID:       "uid-tool-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -173,7 +173,6 @@ func TestPolicyEventFields_ToolCallSubcategory(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.100",
-
 	}, body)
 
 	// Verify the evaluator was called with tool_call subcategory
@@ -201,7 +200,7 @@ func TestPolicyEventFields_LLMRequestSubcategory(t *testing.T) {
 		Name:      "notool-pod",
 		Namespace: "default",
 		UID:       "uid-notool-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -223,7 +222,6 @@ func TestPolicyEventFields_LLMRequestSubcategory(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.101",
-
 	}, body)
 
 	if evaluator.lastEvent == nil {
@@ -247,7 +245,7 @@ func TestPolicyEventFields_ToolNamePopulated(t *testing.T) {
 		Name:      "toolname-pod",
 		Namespace: "default",
 		UID:       "uid-toolname-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -269,7 +267,6 @@ func TestPolicyEventFields_ToolNamePopulated(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.102",
-
 	}, body)
 
 	if evaluator.lastEvent == nil {
@@ -296,7 +293,7 @@ func TestPolicyEventFields_ToolNamesPopulated(t *testing.T) {
 		Name:      "toolnames-pod",
 		Namespace: "default",
 		UID:       "uid-toolnames-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -318,7 +315,6 @@ func TestPolicyEventFields_ToolNamesPopulated(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.103",
-
 	}, body)
 
 	if evaluator.lastEvent == nil {
@@ -351,7 +347,7 @@ func TestPolicyEventFields_ModelAndProvider(t *testing.T) {
 		Name:      "model-pod",
 		Namespace: "default",
 		UID:       "uid-model-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -373,7 +369,6 @@ func TestPolicyEventFields_ModelAndProvider(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.104",
-
 	}, body)
 
 	if evaluator.lastEvent == nil {
@@ -405,7 +400,7 @@ func TestPolicyEventFields_HeaderNotUsedForToolName(t *testing.T) {
 		Name:      "header-pod",
 		Namespace: "default",
 		UID:       "uid-header-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -474,7 +469,7 @@ func TestPolicyEventFields_DenyAfterBodyParsing(t *testing.T) {
 		Name:      "deny-body-pod",
 		Namespace: "production",
 		UID:       "uid-deny-body-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -496,7 +491,6 @@ func TestPolicyEventFields_DenyAfterBodyParsing(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.106",
-
 	}, body)
 
 	// Should receive an ImmediateResponse with 403 from the body phase

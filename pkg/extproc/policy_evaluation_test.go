@@ -87,7 +87,7 @@ func TestPolicyEvaluation_InvokedAfterObserverParsing(t *testing.T) {
 		Name:      "agent-pod-1",
 		Namespace: "production",
 		UID:       "uid-abc-123",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -109,7 +109,6 @@ func TestPolicyEvaluation_InvokedAfterObserverParsing(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.50",
-
 	}, body)
 
 	// Verify the evaluator was called
@@ -132,7 +131,7 @@ func TestPolicyEvaluation_EventContextExtraction(t *testing.T) {
 		Name:      "test-agent",
 		Namespace: "staging",
 		UID:       "uid-def-456",
-		Labels:    map[string]string{"panoptium.io/monitored": "true", "app": "agent"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -154,7 +153,6 @@ func TestPolicyEvaluation_EventContextExtraction(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.60",
-
 	}, body)
 
 	event := evaluator.lastEvent
@@ -215,7 +213,7 @@ func TestPolicyEvaluation_PassThroughWhenNoMatch(t *testing.T) {
 		Name:      "pass-pod",
 		Namespace: "default",
 		UID:       "uid-pass-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -237,7 +235,6 @@ func TestPolicyEvaluation_PassThroughWhenNoMatch(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.70",
-
 	}, body)
 
 	// Should be a pass-through (no ImmediateResponse)
@@ -277,7 +274,7 @@ func TestPolicyEvaluation_DenyDecision(t *testing.T) {
 		Name:      "deny-pod",
 		Namespace: "production",
 		UID:       "uid-deny-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	// Subscribe to policy decision events
@@ -303,7 +300,6 @@ func TestPolicyEvaluation_DenyDecision(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.80",
-
 	}, reqBody)
 
 	// Should receive an ImmediateResponse with 403
@@ -370,7 +366,7 @@ func TestPolicyEvaluation_ThrottleDecision(t *testing.T) {
 		Name:      "throttle-pod",
 		Namespace: "production",
 		UID:       "uid-throttle-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -392,7 +388,6 @@ func TestPolicyEvaluation_ThrottleDecision(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.90",
-
 	}, reqBody)
 
 	// Should receive an ImmediateResponse with 429
@@ -462,7 +457,7 @@ func TestPolicyEvaluation_AuditOnlyPassesThrough(t *testing.T) {
 		Name:      "audit-pod",
 		Namespace: "staging",
 		UID:       "uid-audit-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	// Subscribe to policy decision events to verify emission
@@ -488,7 +483,6 @@ func TestPolicyEvaluation_AuditOnlyPassesThrough(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.81",
-
 	}, reqBody)
 
 	// Should pass through — no ImmediateResponse despite deny action
@@ -550,7 +544,7 @@ func TestPolicyEvaluation_GlobalAuditOverridesPerPolicyEnforcing(t *testing.T) {
 		Name:      "global-audit-pod",
 		Namespace: "production",
 		UID:       "uid-gaud-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	// Subscribe to policy decision events to verify emission
@@ -576,7 +570,6 @@ func TestPolicyEvaluation_GlobalAuditOverridesPerPolicyEnforcing(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.82",
-
 	}, reqBody)
 
 	// Should pass through — global audit mode overrides per-policy enforcing
@@ -615,7 +608,7 @@ func TestPolicyEvaluation_NilEvaluator(t *testing.T) {
 		Name:      "no-eval-pod",
 		Namespace: "default",
 		UID:       "uid-noeval-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -637,7 +630,6 @@ func TestPolicyEvaluation_NilEvaluator(t *testing.T) {
 		"host", "api.openai.com",
 		"content-type", "application/json",
 		"x-forwarded-for", "10.0.0.55",
-
 	}, reqBody)
 
 	// Should pass through without blocking

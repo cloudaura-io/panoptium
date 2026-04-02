@@ -209,6 +209,7 @@ var _ = Describe("Manager", Ordered, func() {
 			By("creating the curl-metrics pod to access the metrics endpoint")
 			cmd = exec.Command("kubectl", "run", "curl-metrics", "--restart=Never",
 				"--namespace", namespace,
+				"--labels=app=e2e-agent",
 				"--image=curlimages/curl:7.78.0",
 				"--", "/bin/sh", "-c", fmt.Sprintf(
 					"curl -v -k -H 'Authorization: Bearer %s' https://%s.%s.svc.cluster.local:8443/metrics",

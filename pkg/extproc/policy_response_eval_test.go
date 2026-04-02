@@ -62,7 +62,6 @@ func sendFullRequestSequence(t *testing.T, stream extprocv3.ExternalProcessor_Pr
 					"host", "api.openai.com",
 					"content-type", "application/json",
 					"x-forwarded-for", "10.0.0.50",
-	
 				),
 			},
 		},
@@ -131,7 +130,7 @@ func TestResponsePolicyEvaluation_BufferedBody(t *testing.T) {
 		Name:      "resp-eval-pod",
 		Namespace: "default",
 		UID:       "uid-resp-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -194,7 +193,7 @@ func TestResponsePolicyEvaluation_SSEStreamChunks(t *testing.T) {
 		Name:      "sse-eval-pod",
 		Namespace: "default",
 		UID:       "uid-sse-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)
@@ -268,7 +267,7 @@ func TestResponsePolicyEvaluation_MidStreamEnforcement(t *testing.T) {
 		Name:      "midstream-pod",
 		Namespace: "default",
 		UID:       "uid-midstream-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	sub := bus.Subscribe(eventbus.EventTypePolicyDecision)
@@ -351,7 +350,7 @@ func TestResponsePolicyEvaluation_PassThroughNoMatch(t *testing.T) {
 		Name:      "pass-resp-pod",
 		Namespace: "default",
 		UID:       "uid-pass-resp-1",
-		Labels:    map[string]string{"panoptium.io/monitored": "true"},
+		Labels:    map[string]string{"app": "agent"},
 	})
 
 	client, cleanup := startTestServer(t, srv)

@@ -135,6 +135,7 @@ func createPersistentCurlPodWithName(podName, ns string) string {
 	cmd := exec.Command("kubectl", "run", podName,
 		"--restart=Never",
 		"--namespace", ns,
+		"--labels=app=e2e-agent",
 		"--image=curlimages/curl:7.78.0",
 		"--", "sleep", "3600")
 	_, err := utils.Run(cmd)
@@ -176,7 +177,6 @@ func buildCurlExecArgs(podName, gwIP, agentID, toolName string, extraHeaders map
 		"-X", "POST",
 		fmt.Sprintf("http://%s:8080/v1/chat/completions", gwIP),
 		"-H", "Content-Type: application/json",
-		"-H", fmt.Sprintf("x-panoptium-agent-id: %s", agentID),
 	}
 
 	for k, v := range extraHeaders {

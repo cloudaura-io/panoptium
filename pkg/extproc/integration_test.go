@@ -343,8 +343,6 @@ func TestIntegration_OpenAIMultiEventSSEFrame(t *testing.T) {
 					":path", "/v1/chat/completions",
 					":method", "POST",
 					"host", "api.openai.com",
-	
-	
 				),
 			},
 		},
@@ -465,8 +463,6 @@ func TestIntegration_AnthropicStreamingRequest(t *testing.T) {
 					":method", "POST",
 					"host", "api.anthropic.com",
 					"content-type", "application/json",
-	
-	
 				),
 			},
 		},
@@ -593,7 +589,7 @@ func TestIntegration_EnrolledPodIdentityWithPodCache(t *testing.T) {
 	defer cleanup()
 
 	// Pre-populate the pod IP cache (simulating a Kubernetes Informer having
-	// observed the pod with panoptium.io/monitored=true)
+	// observed the pod)
 	podCache.Set("10.0.5.42", identity.PodInfo{
 		Name:           "agent-pod-abc",
 		Namespace:      "ml-workloads",
@@ -622,7 +618,6 @@ func TestIntegration_EnrolledPodIdentityWithPodCache(t *testing.T) {
 					":method", "POST",
 					"host", "api.openai.com",
 					"x-forwarded-for", "10.0.5.42",
-	
 				),
 			},
 		},

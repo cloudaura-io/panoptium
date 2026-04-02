@@ -439,7 +439,7 @@ func TestLifecycleManagerWithPodCacheInformer(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-agent",
 			Namespace: "default",
-			Labels:    map[string]string{"app": "agent", "panoptium.io/monitored": "true"},
+			Labels:    map[string]string{"app": "agent"},
 		},
 		Status: corev1.PodStatus{
 			PodIP: "10.0.0.1",
@@ -833,7 +833,7 @@ func TestLifecycleManagerPolicyEvaluator(t *testing.T) {
 	podCache := identity.NewPodCache()
 	podCache.Set("10.0.0.42", identity.PodInfo{
 		Name: "eval-pod", Namespace: "default", UID: "uid-42",
-		Labels: map[string]string{"panoptium.io/monitored": "true"},
+		Labels: map[string]string{"app": "agent"},
 	})
 	resolver := identity.NewResolver(podCache)
 
