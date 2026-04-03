@@ -2020,10 +2020,12 @@ func TestProcess_ResponseBodyEchoesViaBodyMutation(t *testing.T) {
 	stream.CloseSend()
 }
 
-// TestProcess_MultiChunkRequestBodyEchoesIndividually verifies that when the
-// request body arrives in multiple chunks, each chunk is echoed individually
-// via BodyMutation.
-func TestProcess_MultiChunkRequestBodyEchoesIndividually(t *testing.T) {
+// TestProcess_MultiChunkRequestBodyBuffersUntilFinal verifies the always-buffer
+// semantics: when the request body arrives in multiple chunks, intermediate
+// chunks produce empty StreamedBodyResponse bodies (EndOfStream=false), and only
+// the final chunk (EndOfStream=true) sends the full accumulated body. This
+// prevents corruption when tool stripping modifies the body on the final chunk.
+func TestProcess_MultiChunkRequestBodyBuffersUntilFinal(t *testing.T) {
 	_, _, _, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
@@ -2089,19 +2091,33 @@ func TestProcess_MultiChunkRequestBodyEchoesIndividually(t *testing.T) {
 			t.Fatalf("chunk %d: expected RequestBody response", i)
 		}
 
-		// Each response echoes accumulated body via StreamedBodyResponse
 		if bodyResp.GetResponse() == nil {
-			t.Fatalf("chunk %d: expected CommonResponse with BodyMutation for request body echo", i)
+			t.Fatalf("chunk %d: expected CommonResponse with BodyMutation", i)
 		}
 		if bodyResp.GetResponse().GetBodyMutation() == nil {
 			t.Fatalf("chunk %d: expected BodyMutation in request body response", i)
 		}
 		streamedResp := bodyResp.GetResponse().GetBodyMutation().GetStreamedResponse()
 		if streamedResp == nil {
-			t.Fatalf("chunk %d: expected StreamedBodyResponse for request body echo", i)
+			t.Fatalf("chunk %d: expected StreamedBodyResponse", i)
 		}
-		if len(streamedResp.GetBody()) == 0 {
-			t.Errorf("chunk %d: expected non-empty echoed body", i)
+
+		if isLast {
+			// Final chunk: must contain the full accumulated body
+			if len(streamedResp.GetBody()) == 0 {
+				t.Errorf("final chunk %d: expected non-empty body with full accumulated content", i)
+			}
+			if !streamedResp.GetEndOfStream() {
+				t.Errorf("final chunk %d: expected EndOfStream=true", i)
+			}
+		} else {
+			// Intermediate chunk: body must be empty (buffered for final)
+			if len(streamedResp.GetBody()) != 0 {
+				t.Errorf("intermediate chunk %d: expected empty body (always-buffer semantics), got %d bytes", i, len(streamedResp.GetBody()))
+			}
+			if streamedResp.GetEndOfStream() {
+				t.Errorf("intermediate chunk %d: expected EndOfStream=false", i)
+			}
 		}
 	}
 
