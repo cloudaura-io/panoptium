@@ -7,7 +7,8 @@ set -euo pipefail
 CONTEXT="kind-panoptium-e2e"
 GATEWAY_NS="panoptium-system"
 KAGENT_NS="kagent"
-KAGENT_PORT=8083
+KAGENT_CTRL_PORT=8083
+KAGENT_AGENT_PORT=8080
 DEMO_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 BOLD='\033[1m'
@@ -46,81 +47,48 @@ show_panoptium_logs() {
 
 kagent_invoke() {
   local prompt="$1"
-  local agent_id="kagent__NS__demo_k8s_agent"
+  local msg_id="msg-$(date +%s%N)"
 
-  info "Sending task to Kagent agent..."
+  info "Sending task to Kagent agent (A2A)..."
   echo -e "  ${BOLD}Prompt:${RESET} $prompt"
   echo ""
 
-  # Create a session if we don't have one yet
-  if [[ -z "${KAGENT_SESSION_ID:-}" ]]; then
-    local sess_resp
-    sess_resp=$(curl -s --max-time 10 \
-      "http://localhost:${KAGENT_PORT}/api/sessions" \
-      -X POST -H "Content-Type: application/json" \
-      -d "$(jq -n --arg ref "$agent_id" '{agent_ref: $ref}')")
-    KAGENT_SESSION_ID=$(echo "$sess_resp" | jq -r '.data.id // empty')
-    if [[ -z "$KAGENT_SESSION_ID" ]]; then
-      err "Failed to create Kagent session: $sess_resp"
-      return 1
-    fi
-    info "Session: $KAGENT_SESSION_ID"
-  fi
-
-  # Send task via A2A message format
   local response
-  response=$(curl -s -w "\n%{http_code}" --max-time 120 \
-    "http://localhost:${KAGENT_PORT}/api/tasks" \
+  response=$(curl -s --max-time 120 \
+    "http://localhost:${KAGENT_AGENT_PORT}/" \
     -X POST -H "Content-Type: application/json" \
     -d "$(jq -n \
-      --arg ctx "$KAGENT_SESSION_ID" \
+      --arg mid "$msg_id" \
       --arg msg "$prompt" \
       '{
-        contextId: $ctx,
-        message: {role: "user", parts: [{type: "text", text: $msg}]}
+        jsonrpc: "2.0",
+        id: "1",
+        method: "message/send",
+        params: {
+          message: {
+            role: "user",
+            messageId: $mid,
+            parts: [{type: "text", text: $msg}]
+          }
+        }
       }')")
 
-  local http_code
-  http_code=$(echo "$response" | tail -1)
-  local body
-  body=$(echo "$response" | sed '$d')
+  local state
+  state=$(echo "$response" | jq -r '.result.status.state // .error.message // "unknown"')
+  echo -e "${BOLD}Task state: ${state}${RESET}"
 
-  local task_id
-  task_id=$(echo "$body" | jq -r '.data.id // empty')
-
-  if [[ -z "$task_id" ]]; then
-    echo -e "${BOLD}Kagent response (HTTP ${http_code}):${RESET}"
-    echo "$body" | jq . 2>/dev/null || echo "$body"
-    return 1
-  fi
-
-  info "Task created: $task_id — waiting for completion..."
-
-  # Poll task status until completed or failed
-  local state=""
-  local result=""
-  for _ in $(seq 1 60); do
-    result=$(curl -s --max-time 10 \
-      "http://localhost:${KAGENT_PORT}/api/tasks/${task_id}")
-    state=$(echo "$result" | jq -r '.data.status.state // empty')
-    case "$state" in
-      completed|failed|canceled)
-        break ;;
-    esac
-    sleep 2
-  done
-
-  echo -e "${BOLD}Task state: ${state:-unknown}${RESET}"
-  # Show the agent's response message
+  # Show agent response
   local agent_msg
-  agent_msg=$(echo "$result" | jq -r '
-    .data.status.message.parts[]?.text //
-    .data.artifacts[]?.parts[]?.text //
-    empty' 2>/dev/null | head -20)
+  agent_msg=$(echo "$response" | jq -r '
+    [.result.history[]? | select(.role=="agent") | .parts[]?.text] | last // empty
+  ' 2>/dev/null)
+
   if [[ -n "$agent_msg" ]]; then
-    echo -e "${CYAN}Agent:${RESET} $agent_msg"
+    echo -e "${CYAN}Agent:${RESET}"
+    echo "$agent_msg" | head -30
   else
-    echo "$result" | jq '.data.status' 2>/dev/null || echo "$result"
+    # Show error or raw result
+    echo "$response" | jq '.error // .result.status' 2>/dev/null || echo "$response"
   fi
   echo ""
 }
@@ -230,31 +198,23 @@ deploy_demo_resources() {
 }
 
 port_forward_start() {
-  info "Setting up port-forwards..."
+  info "Setting up port-forward to agent..."
 
   # Kill any existing port-forwards
-  pkill -f "kubectl.*port-forward.*${KAGENT_PORT}" 2>/dev/null || true
+  pkill -f "kubectl.*port-forward.*demo-k8s-agent" 2>/dev/null || true
   sleep 1
 
-  # Kagent API
-  $K port-forward -n "$KAGENT_NS" svc/kagent "${KAGENT_PORT}:${KAGENT_PORT}" &>/dev/null &
+  # Direct A2A to agent service
+  $K port-forward -n "$KAGENT_NS" svc/demo-k8s-agent "${KAGENT_AGENT_PORT}:${KAGENT_AGENT_PORT}" &>/dev/null &
   KAGENT_PF_PID=$!
   sleep 2
 
   if kill -0 "$KAGENT_PF_PID" 2>/dev/null; then
-    info "Kagent API port-forward active on localhost:${KAGENT_PORT}"
+    info "Agent A2A port-forward active on localhost:${KAGENT_AGENT_PORT}"
   else
-    warn "Kagent port-forward failed — trying alternative service name..."
-    $K port-forward -n "$KAGENT_NS" svc/kagent-controller "${KAGENT_PORT}:${KAGENT_PORT}" &>/dev/null &
-    KAGENT_PF_PID=$!
-    sleep 2
-    if kill -0 "$KAGENT_PF_PID" 2>/dev/null; then
-      info "Kagent API port-forward active on localhost:${KAGENT_PORT}"
-    else
-      err "Could not port-forward to Kagent API."
-      err "Check: kubectl get svc -n $KAGENT_NS"
-      exit 1
-    fi
+    err "Could not port-forward to agent service."
+    err "Check: kubectl get svc demo-k8s-agent -n $KAGENT_NS"
+    exit 1
   fi
 }
 

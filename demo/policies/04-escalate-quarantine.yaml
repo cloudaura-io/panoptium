@@ -1,6 +1,7 @@
 ---
-# Escalation policy: 3 denied requests within 60 seconds triggers quarantine.
+# Escalation policy: 3 denied tool_call requests within 60 seconds triggers quarantine.
 # Shows how Panoptium automatically isolates a persistently misbehaving agent.
+# Works together with 02-deny-bash-tool.yaml — repeated bash attempts trigger this.
 apiVersion: panoptium.io/v1alpha1
 kind: AgentPolicy
 metadata:
@@ -8,19 +9,22 @@ metadata:
   namespace: panoptium-system
 spec:
   enforcementMode: enforcing
-  priority: 50
+  priority: 100
   targetSelector:
     matchLabels:
       gateway.networking.k8s.io/gateway-name: e2e-gateway
   rules:
-    - name: quarantine-on-repeated-denials
+    - name: deny-and-escalate-bash
       severity: CRITICAL
       trigger:
-        eventCategory: llm
-        eventSubcategory: "request.denied"
+        eventCategory: protocol
+        eventSubcategory: tool_call
       predicates:
-        - cel: >-
-            event.metadata.deny_count >= 3 &&
-            event.metadata.window_seconds <= 60
+        - cel: "event.toolName == 'bash' || event.toolName == 'shell_exec' || event.toolName == 'run_command'"
       action:
-        type: quarantine
+        type: deny
+        parameters:
+          message: "dangerous tool blocked — repeated violations will quarantine this agent"
+          escalationThreshold: "3"
+          escalationWindow: "60"
+          escalationAction: "quarantine"

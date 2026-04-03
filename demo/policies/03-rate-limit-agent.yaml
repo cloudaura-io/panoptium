@@ -16,8 +16,8 @@ spec:
     - name: rate-limit-llm-requests
       severity: MEDIUM
       trigger:
-        eventCategory: llm
-        eventSubcategory: "request.start"
+        eventCategory: protocol
+        eventSubcategory: llm_request
       action:
         type: rateLimit
         parameters:
