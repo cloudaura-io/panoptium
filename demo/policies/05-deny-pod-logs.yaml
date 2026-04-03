@@ -18,7 +18,7 @@ spec:
         eventCategory: protocol
         eventSubcategory: tool_call
       predicates:
-        - cel: "event.toolName == 'k8s_get_pod_logs'"
+        - cel: "event.toolNames.contains('k8s_get_pod_logs')"
       action:
         type: deny
         parameters:
