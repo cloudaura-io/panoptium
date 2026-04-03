@@ -132,7 +132,7 @@ install_kagent() {
       --kube-context "$CONTEXT"
   fi
 
-  if helm list -n "$KAGENT_NS" --kube-context "$CONTEXT" 2>/dev/null | grep -q kagent; then
+  if helm status kagent -n "$KAGENT_NS" --kube-context "$CONTEXT" &>/dev/null; then
     info "Kagent already installed."
   else
     info "Installing Kagent..."
