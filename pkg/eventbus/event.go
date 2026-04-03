@@ -31,11 +31,6 @@ const (
 	// EventTypeLLMRequestComplete is emitted when the response stream ends.
 	EventTypeLLMRequestComplete = "llm.request.complete"
 
-	// EventTypeEnforcementUnknownSource is emitted when a request from an unknown
-	// source pod (not found in PodCache) is observed in audit mode (passed through
-	// with warning).
-	EventTypeEnforcementUnknownSource = "enforcement.unknown_source"
-
 	// EventTypeEnforcementBypass is emitted when the policy engine is unavailable
 	// and fail-open mode passes traffic through.
 	EventTypeEnforcementBypass = "enforcement.bypass"
@@ -117,7 +112,7 @@ type AgentIdentity struct {
 	// Confidence indicates the reliability of the identity resolution.
 	// "high" = resolved from PodCache with full metadata
 	// "medium" = partially resolved
-	// "low" = unknown source pod
+	// "low" = source IP not found in PodCache (degraded identity)
 	Confidence string
 
 	// PodName is the resolved Kubernetes pod name.
@@ -226,7 +221,7 @@ type LLMRequestCompleteEvent struct {
 }
 
 // EnforcementEvent is emitted for enforcement-related occurrences such as
-// unknown source pod access, policy bypass, and policy decisions.
+// policy bypass, policy engine unavailability, and policy decisions.
 type EnforcementEvent struct {
 	BaseEvent
 

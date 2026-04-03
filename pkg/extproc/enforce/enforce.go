@@ -96,15 +96,6 @@ func NewDenyResponse(rule, signature, message string) *extprocv3.ProcessingRespo
 	})
 }
 
-// NewUnknownSourceDenyResponse creates a 403 Forbidden response for unknown
-// source pods (not found in PodCache) in enforcing mode.
-func NewUnknownSourceDenyResponse(sourceIP string) *extprocv3.ProcessingResponse {
-	return NewImmediateResponse(typev3.StatusCode_Forbidden, &ErrorResponse{
-		Error:   "unknown_source",
-		Message: "request from unknown source (source IP: " + sourceIP + ")",
-	})
-}
-
 // NewServiceUnavailableResponse creates a 503 Service Unavailable
 // ImmediateResponse for fail-closed mode when the policy engine is
 // unavailable.

@@ -90,26 +90,6 @@ func TestNewDenyResponse(t *testing.T) {
 	}
 }
 
-func TestNewUnknownSourceDenyResponse(t *testing.T) {
-	resp := NewUnknownSourceDenyResponse("10.0.0.99")
-
-	ir := resp.GetImmediateResponse()
-	if ir == nil {
-		t.Fatal("expected ImmediateResponse, got nil")
-	}
-	if ir.Status.Code != typev3.StatusCode_Forbidden {
-		t.Errorf("expected 403, got %d", ir.Status.Code)
-	}
-
-	var body ErrorResponse
-	if err := json.Unmarshal(ir.Body, &body); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
-	if body.Error != "unknown_source" {
-		t.Errorf("expected 'unknown_source', got %q", body.Error)
-	}
-}
-
 func TestEnforcementModeConstants(t *testing.T) {
 	if ModeEnforcing != "enforcing" {
 		t.Errorf("expected ModeEnforcing='enforcing', got %q", ModeEnforcing)
