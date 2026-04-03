@@ -10,7 +10,7 @@ metadata:
 spec:
   provider: OpenAI
   model: gpt-4
-  apiKeySecretRef: openai-api-key
+  apiKeySecret: openai-api-key
   apiKeySecretKey: Authorization
   openAI:
     baseUrl: "http://e2e-gateway.panoptium-system.svc.cluster.local:8080"
