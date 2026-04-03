@@ -17,7 +17,7 @@ spec:
         eventCategory: protocol
         eventSubcategory: tool_call
       predicates:
-        - cel: "event.toolNames.contains('bash') || event.toolNames.contains('shell_exec') || event.toolNames.contains('run_command') || event.toolNames.contains('execute')"
+        - cel: "event.toolName == 'bash' || event.toolName == 'shell_exec' || event.toolName == 'run_command' || event.toolName == 'execute'"
       action:
         type: deny
         parameters:
