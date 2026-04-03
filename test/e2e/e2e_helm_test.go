@@ -92,8 +92,8 @@ spec:
   rules:
     - name: invalid-rule
       trigger:
-        eventCategory: syscall
-        eventSubcategory: execve
+        eventCategory: kernel
+        eventSubcategory: process_exec
       action:
         type: alert
       severity: LOW
@@ -127,8 +127,8 @@ spec:
   rules:
     - name: valid-rule
       trigger:
-        eventCategory: syscall
-        eventSubcategory: execve
+        eventCategory: kernel
+        eventSubcategory: process_exec
       action:
         type: alert
       severity: LOW
@@ -165,6 +165,15 @@ spec:
 					"--reuse-values",
 					"--set", "replicaCount=1")
 				_, _ = utils.Run(cmd)
+
+				// Wait for the deployment to stabilize after scaling back to 1 replica.
+				// Without this, subsequent tests (e.g., GE-1) may hit a broken ExtProc
+				// gRPC connection and receive a transient 503 instead of the expected 403.
+				waitCmd := exec.Command("kubectl", "wait", "deployment/panoptium-controller-manager",
+					"-n", namespace,
+					"--for=condition=Available",
+					"--timeout=120s")
+				_, _ = utils.Run(waitCmd)
 			})
 
 			By("verifying the deployment has 2 ready replicas")
