@@ -134,9 +134,6 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 				deletePersistentCurlPod(podName, namespace)
 			})
 
-			By("waiting for PodCache informer to sync")
-			time.Sleep(5 * time.Second)
-
 			By("sending a streaming /v1/chat/completions request through AgentGateway")
 			curlCmd := exec.Command("kubectl", "exec", podName,
 				"-n", namespace,
@@ -168,9 +165,6 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 			DeferCleanup(func() {
 				deletePersistentCurlPod(podName, namespace)
 			})
-
-			By("waiting for PodCache informer to sync")
-			time.Sleep(5 * time.Second)
 
 			By("sending a second streaming /v1/chat/completions request with a different agent ID")
 			curlCmd := exec.Command("kubectl", "exec", podName,
@@ -280,7 +274,7 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 				deletePersistentCurlPod(podName, namespace)
 			})
 
-			statusCode, _, err := execToolCallRequest(podName, gwIP, "", "test-identity-tool", nil)
+			statusCode, _, err := execToolCallRequest(podName, gwIP, "test-identity-tool", nil)
 			Expect(err).NotTo(HaveOccurred(), "request via persistent pod should succeed")
 			Expect(statusCode).To(Or(Equal(200), Equal(0)),
 				"enrolled pod request should not be rejected")
@@ -318,9 +312,6 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 			DeferCleanup(func() {
 				deletePersistentCurlPod(podName, namespace)
 			})
-
-			By("waiting for PodCache informer to sync")
-			time.Sleep(5 * time.Second)
 
 			agentIDs := []string{"agent-alpha", "agent-beta", "agent-gamma"}
 
