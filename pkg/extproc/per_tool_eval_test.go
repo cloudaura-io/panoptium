@@ -66,6 +66,20 @@ func (m *perToolMockEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.Deci
 	return policy.DefaultAllowDecision(), nil
 }
 
+func (m *perToolMockEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.EvaluationResult, error) {
+	d, err := m.Evaluate(event)
+	if err != nil {
+		return nil, err
+	}
+	result := &policy.EvaluationResult{}
+	if d != nil && d.Matched {
+		result.Decisions = []*policy.Decision{d}
+	} else {
+		result.DefaultAllow = true
+	}
+	return result, nil
+}
+
 // setupPerToolTestComponents creates test infrastructure with a perToolMockEvaluator.
 func setupPerToolTestComponents(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()

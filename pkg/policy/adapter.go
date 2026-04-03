@@ -43,3 +43,11 @@ func (a *EvaluatorAdapter) Evaluate(event *PolicyEvent) (*Decision, error) {
 	policies := a.cache.GetPolicies()
 	return a.resolver.Evaluate(policies, event)
 }
+
+// EvaluateAll evaluates a PolicyEvent against ALL policies in the current
+// compiled policy set and returns an EvaluationResult containing decisions
+// from all matching policies across all priority tiers.
+func (a *EvaluatorAdapter) EvaluateAll(event *PolicyEvent) (*EvaluationResult, error) {
+	policies := a.cache.GetPolicies()
+	return a.resolver.EvaluateAll(policies, event)
+}

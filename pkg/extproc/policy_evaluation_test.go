@@ -45,6 +45,20 @@ func (m *mockPolicyEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.Decis
 	return m.decision, m.err
 }
 
+func (m *mockPolicyEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.EvaluationResult, error) {
+	d, err := m.Evaluate(event)
+	if err != nil {
+		return nil, err
+	}
+	result := &policy.EvaluationResult{}
+	if d != nil && d.Matched {
+		result.Decisions = []*policy.Decision{d}
+	} else {
+		result.DefaultAllow = true
+	}
+	return result, nil
+}
+
 // setupPolicyEvalTestComponents creates test infrastructure with a mock PolicyEvaluator.
 func setupPolicyEvalTestComponents(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()

@@ -61,6 +61,20 @@ func (m *responseToolEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.Dec
 	return policy.DefaultAllowDecision(), nil
 }
 
+func (m *responseToolEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.EvaluationResult, error) {
+	d, err := m.Evaluate(event)
+	if err != nil {
+		return nil, err
+	}
+	result := &policy.EvaluationResult{}
+	if d != nil && d.Matched {
+		result.Decisions = []*policy.Decision{d}
+	} else {
+		result.DefaultAllow = true
+	}
+	return result, nil
+}
+
 func setupResponseToolTestComponents(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
 

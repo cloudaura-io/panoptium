@@ -70,6 +70,10 @@ func (e *errorPolicyEvaluator) Evaluate(_ *policy.PolicyEvent) (*policy.Decision
 	return nil, e.err
 }
 
+func (e *errorPolicyEvaluator) EvaluateAll(_ *policy.PolicyEvent) (*policy.EvaluationResult, error) {
+	return nil, e.err
+}
+
 // --- Fail-Open Tests ---
 
 // TestFailOpen_PassThroughOnPolicyError verifies that in fail-open mode,

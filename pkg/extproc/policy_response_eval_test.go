@@ -46,6 +46,20 @@ func (m *conditionalPolicyEvaluator) Evaluate(event *policy.PolicyEvent) (*polic
 	return m.requestDecision, nil
 }
 
+func (m *conditionalPolicyEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.EvaluationResult, error) {
+	d, err := m.Evaluate(event)
+	if err != nil {
+		return nil, err
+	}
+	result := &policy.EvaluationResult{}
+	if d != nil && d.Matched {
+		result.Decisions = []*policy.Decision{d}
+	} else {
+		result.DefaultAllow = true
+	}
+	return result, nil
+}
+
 // sendFullRequestSequence sends request headers and body to establish a stream
 // and returns after receiving the body response. This helper sets up the stream
 // so response-path tests can send response headers/body.

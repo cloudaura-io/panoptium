@@ -395,6 +395,20 @@ func (m *denyLLMRequestEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.D
 	return policy.DefaultAllowDecision(), nil
 }
 
+func (m *denyLLMRequestEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.EvaluationResult, error) {
+	d, err := m.Evaluate(event)
+	if err != nil {
+		return nil, err
+	}
+	result := &policy.EvaluationResult{}
+	if d != nil && d.Matched {
+		result.Decisions = []*policy.Decision{d}
+	} else {
+		result.DefaultAllow = true
+	}
+	return result, nil
+}
+
 // TestNonToolDeny_StillBlocks verifies that deny on llm_request subcategory
 // (non-tool requests) still returns 403, not tool stripping.
 func TestNonToolDeny_StillBlocks(t *testing.T) {

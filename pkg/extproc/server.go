@@ -51,6 +51,11 @@ type PolicyEvaluator interface {
 	// Evaluate evaluates a PolicyEvent against the active policy set and
 	// returns a Decision indicating the action to take.
 	Evaluate(event *policy.PolicyEvent) (*policy.Decision, error)
+
+	// EvaluateAll evaluates a PolicyEvent against ALL active policies and
+	// returns an EvaluationResult containing decisions from all matching
+	// policies across all priority tiers.
+	EvaluateAll(event *policy.PolicyEvent) (*policy.EvaluationResult, error)
 }
 
 // ExtProcServer implements the Envoy ExternalProcessor gRPC service.
