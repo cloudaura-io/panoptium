@@ -1,0 +1,26 @@
+---
+# Escalation policy: 3 denied requests within 60 seconds triggers quarantine.
+# Shows how Panoptium automatically isolates a persistently misbehaving agent.
+apiVersion: panoptium.io/v1alpha1
+kind: AgentPolicy
+metadata:
+  name: demo-escalate-quarantine
+  namespace: panoptium-system
+spec:
+  enforcementMode: enforcing
+  priority: 50
+  targetSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: e2e-gateway
+  rules:
+    - name: quarantine-on-repeated-denials
+      severity: CRITICAL
+      trigger:
+        eventCategory: llm
+        eventSubcategory: "request.denied"
+      predicates:
+        - cel: >-
+            event.metadata.deny_count >= 3 &&
+            event.metadata.window_seconds <= 60
+      action:
+        type: quarantine

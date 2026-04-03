@@ -1,0 +1,23 @@
+---
+# Baseline audit policy: observe all LLM traffic without blocking.
+# This captures every request/response flowing through the AgentGateway
+# so operators have full visibility into agent behaviour.
+apiVersion: panoptium.io/v1alpha1
+kind: AgentPolicy
+metadata:
+  name: demo-audit-baseline
+  namespace: panoptium-system
+spec:
+  enforcementMode: audit
+  priority: 500
+  targetSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: e2e-gateway
+  rules:
+    - name: audit-all-llm-requests
+      severity: INFO
+      trigger:
+        eventCategory: llm
+        eventSubcategory: "*"
+      action:
+        type: alert

@@ -1,0 +1,28 @@
+---
+# Allow safe Kubernetes read-only tools.
+# These are the tools the demo agent is expected to use for normal operations.
+apiVersion: panoptium.io/v1alpha1
+kind: AgentPolicy
+metadata:
+  name: demo-allow-safe-tools
+  namespace: panoptium-system
+spec:
+  enforcementMode: enforcing
+  priority: 200
+  targetSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: e2e-gateway
+  rules:
+    - name: allow-k8s-read-tools
+      severity: INFO
+      trigger:
+        eventCategory: llm
+        eventSubcategory: "tool_call"
+      predicates:
+        - cel: >-
+            event.metadata.tool_name == "k8s_get_resources" ||
+            event.metadata.tool_name == "k8s_get_resource" ||
+            event.metadata.tool_name == "k8s_get_resource_status" ||
+            event.metadata.tool_name == "fetch"
+      action:
+        type: allow

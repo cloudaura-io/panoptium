@@ -1,0 +1,17 @@
+---
+# ModelConfig: Routes Kagent through AgentGateway (Panoptium-monitored)
+# Uses the OpenAI provider via the e2e-gateway service in panoptium-system.
+# The gateway's ExtProc filter inspects all LLM traffic for policy enforcement.
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: demo-model-config
+  namespace: kagent
+spec:
+  provider: OpenAI
+  model: gpt-4
+  apiKeySecret: openai-api-key
+  apiKeySecretKey: Authorization
+  openai:
+    baseUrl: "http://e2e-gateway.panoptium-system.svc.cluster.local:8080"
+    maxTokens: 1024

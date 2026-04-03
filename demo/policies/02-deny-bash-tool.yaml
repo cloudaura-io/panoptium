@@ -1,0 +1,28 @@
+---
+# Deny dangerous shell/bash execution tools.
+# Prevents the agent from breaking out of its sandbox via arbitrary command execution.
+apiVersion: panoptium.io/v1alpha1
+kind: AgentPolicy
+metadata:
+  name: demo-deny-bash
+  namespace: panoptium-system
+spec:
+  enforcementMode: enforcing
+  priority: 100
+  targetSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: e2e-gateway
+  rules:
+    - name: deny-shell-exec
+      severity: HIGH
+      trigger:
+        eventCategory: llm
+        eventSubcategory: "tool_call"
+      predicates:
+        - cel: >-
+            event.metadata.tool_name == "bash" ||
+            event.metadata.tool_name == "shell_exec" ||
+            event.metadata.tool_name == "run_command" ||
+            event.metadata.tool_name == "execute"
+      action:
+        type: deny
