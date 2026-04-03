@@ -28,8 +28,8 @@ import (
 
 // Resolver resolves agent identity from the source pod IP via the PodCache.
 // The PodCache watches all pods, so any pod with a known IP is resolvable.
-// Unknown source IPs (not found in PodCache) receive a degraded identity
-// with low confidence.
+// IPs not found in PodCache receive a degraded identity with low confidence;
+// network admission of such requests is delegated to Kubernetes NetworkPolicy.
 type Resolver struct {
 	cache *PodCache
 }
@@ -76,8 +76,9 @@ func (r *Resolver) ResolveFromIP(sourceIP string) eventbus.AgentIdentity {
 		}
 	}
 
-	// Source IP not in PodCache — unknown source
-	recordResolution("ip", "unknown_source")
+	// Source IP not in PodCache — proceed with degraded identity.
+	// Network admission is delegated to Kubernetes NetworkPolicy.
+	recordResolution("ip", "not_found")
 	return eventbus.AgentIdentity{
 		SourceIP:   sourceIP,
 		Confidence: eventbus.ConfidenceLow,
