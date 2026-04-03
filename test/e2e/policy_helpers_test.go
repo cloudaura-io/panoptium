@@ -165,7 +165,7 @@ func deletePersistentCurlPod(podName, ns string) {
 // buildCurlExecArgs constructs the kubectl exec arguments for sending a tool
 // call request through an existing persistent curl pod. This is a pure function
 // that does not execute any commands, making it testable without a cluster.
-func buildCurlExecArgs(podName, gwIP, agentID, toolName string, extraHeaders map[string]string) []string {
+func buildCurlExecArgs(podName, gwIP, toolName string, extraHeaders map[string]string) []string {
 	payload := fmt.Sprintf(`{"model":"gpt-4","messages":[{"role":"user","content":"call tool"}],"tools":[{"type":"function","function":{"name":"%s","parameters":{}}}],"stream":false}`, toolName)
 
 	args := []string{
@@ -273,8 +273,8 @@ func parseExecResponse(output string) (statusCode int, body string, err error) {
 // Tool name identification is derived from the request body (tools[].function.name),
 // not from HTTP headers. The x-panoptium-tool-name header is NOT sent because
 // policy decisions must use trusted body-parsed data only (NFR-3: Security).
-func execToolCallRequest(podName, gwIP, agentID, toolName string, extraHeaders map[string]string) (statusCode int, body string, err error) {
-	args := buildCurlExecArgs(podName, gwIP, agentID, toolName, extraHeaders)
+func execToolCallRequest(podName, gwIP, toolName string, extraHeaders map[string]string) (statusCode int, body string, err error) {
+	args := buildCurlExecArgs(podName, gwIP, toolName, extraHeaders)
 	cmd := exec.Command("kubectl", args...)
 	output, execErr := utils.Run(cmd)
 	if execErr != nil {
@@ -435,6 +435,47 @@ func uniqueName(prefix string) string {
 }
 
 // ---------------------------------------------------------------------------
+// ExtProc Readiness Probe Helpers
+// ---------------------------------------------------------------------------
+
+// waitForExtProcReadyWithProbe is the testable core of the ExtProc readiness
+// probe. It calls probeFn repeatedly until it returns a non-503 status code,
+// or until the timeout expires. This allows unit tests to inject fake probes
+// without requiring a live Kubernetes cluster.
+func waitForExtProcReadyWithProbe(probeFn func() (int, error), timeout, interval time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		statusCode, err := probeFn()
+		if err == nil && statusCode != 503 {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			if err != nil {
+				return fmt.Errorf("waitForExtProcReady timed out after %v: last error: %w", timeout, err)
+			}
+			return fmt.Errorf("waitForExtProcReady timed out after %v: last status %d (expected non-503)", timeout, statusCode)
+		}
+		time.Sleep(interval)
+	}
+}
+
+// waitForExtProcReady sends probe requests through the gateway via the
+// persistent curl pod until the ExtProc gRPC path is ready (non-503 response).
+// This should be called after kubectl wait --for=condition=Available to ensure
+// the full gateway->ExtProc data path is established, not just the Kubernetes
+// deployment status.
+func waitForExtProcReady(curlPod, gwIP string) {
+	By("probing gateway for ExtProc readiness (waiting for non-503)")
+	probeFn := func() (int, error) {
+		statusCode, _, err := execNoToolRequest(curlPod, gwIP, nil)
+		return statusCode, err
+	}
+	err := waitForExtProcReadyWithProbe(probeFn, 60*time.Second, 2*time.Second)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(),
+		"ExtProc gRPC path did not become ready within 60s")
+}
+
+// ---------------------------------------------------------------------------
 // Unit Tests for Helper Functions
 // ---------------------------------------------------------------------------
 
@@ -546,6 +587,53 @@ func TestUniqueName(t *testing.T) {
 	// Names should have the prefix
 	if !strings.HasPrefix(name2, "test-policy-") {
 		t.Errorf("expected name to start with 'test-policy-', got %q", name2)
+	}
+}
+
+// TestWaitForExtProcReady_Timeout verifies that waitForExtProcReadyWithTimeout
+// returns an error when the probe function consistently returns 503 (indicating
+// the ExtProc gRPC connection is not yet established).
+func TestWaitForExtProcReady_Timeout(t *testing.T) {
+	callCount := 0
+	// Fake probe that always returns 503 (gateway not ready).
+	fakeProbe := func() (int, error) {
+		callCount++
+		return 503, nil
+	}
+
+	// Use a very short timeout so the test completes quickly.
+	err := waitForExtProcReadyWithProbe(fakeProbe, 200*time.Millisecond, 50*time.Millisecond)
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("expected error to contain 'timed out', got %q", err.Error())
+	}
+	if callCount < 2 {
+		t.Errorf("expected at least 2 probe calls, got %d", callCount)
+	}
+}
+
+// TestWaitForExtProcReady_SuccessAfterRetry verifies that
+// waitForExtProcReadyWithTimeout returns nil once the probe returns a non-503
+// status code, even after initial 503 responses.
+func TestWaitForExtProcReady_SuccessAfterRetry(t *testing.T) {
+	callCount := 0
+	// Returns 503 twice, then 200 on the third call.
+	fakeProbe := func() (int, error) {
+		callCount++
+		if callCount <= 2 {
+			return 503, nil
+		}
+		return 200, nil
+	}
+
+	err := waitForExtProcReadyWithProbe(fakeProbe, 5*time.Second, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("expected success after retry, got error: %v", err)
+	}
+	if callCount != 3 {
+		t.Errorf("expected 3 probe calls, got %d", callCount)
 	}
 }
 
