@@ -146,14 +146,19 @@ func TestPerToolEval_FiresOneEventPerTool(t *testing.T) {
 		"x-forwarded-for", "10.0.0.200",
 	}, body)
 
-	// Should have received 3 PolicyEvents — one per tool
-	if len(evaluator.events) != 3 {
-		t.Fatalf("expected 3 PolicyEvents (one per tool), got %d", len(evaluator.events))
+	// FR-2: 1 llm_request + 3 tool_call events = 4 total
+	if len(evaluator.events) != 4 {
+		t.Fatalf("expected 4 PolicyEvents (1 llm_request + 3 tool_call), got %d", len(evaluator.events))
 	}
 
-	// Each event should have a different toolName
+	// First event is llm_request
+	if evaluator.events[0].Subcategory != "llm_request" {
+		t.Errorf("expected first event Subcategory='llm_request', got %q", evaluator.events[0].Subcategory)
+	}
+
+	// Remaining 3 events should have a different toolName each
 	seenTools := make(map[string]bool)
-	for _, evt := range evaluator.events {
+	for _, evt := range evaluator.events[1:] {
 		toolName := evt.GetStringField("toolName")
 		if toolName == "" {
 			t.Error("expected non-empty toolName in PolicyEvent")

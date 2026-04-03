@@ -33,6 +33,37 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
+// toolOnlyDenyEvaluator denies tool_call events but allows llm_request events.
+// This is needed because FR-2 dual emission evaluates llm_request first.
+type toolOnlyDenyEvaluator struct {
+	denyDecision   *policy.Decision
+	lastToolEvent  *policy.PolicyEvent
+	lastEvent      *policy.PolicyEvent
+}
+
+func (m *toolOnlyDenyEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.Decision, error) {
+	m.lastEvent = event
+	if event.Subcategory == "tool_call" {
+		m.lastToolEvent = event
+		return m.denyDecision, nil
+	}
+	return policy.DefaultAllowDecision(), nil
+}
+
+func (m *toolOnlyDenyEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.EvaluationResult, error) {
+	d, err := m.Evaluate(event)
+	if err != nil {
+		return nil, err
+	}
+	result := &policy.EvaluationResult{}
+	if d != nil && d.Matched {
+		result.Decisions = []*policy.Decision{d}
+	} else {
+		result.DefaultAllow = true
+	}
+	return result, nil
+}
+
 // setupPolicyEventFieldsTest creates test infrastructure for policy event field tests.
 func setupPolicyEventFieldsTest(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
@@ -270,21 +301,26 @@ func TestPolicyEventFields_ToolNamePopulated(t *testing.T) {
 		"x-forwarded-for", "10.0.0.102",
 	}, body)
 
-	// Per-tool evaluation: one PolicyEvent per tool
-	if len(evaluator.allEvents) != 2 {
-		t.Fatalf("expected 2 PolicyEvents (one per tool), got %d", len(evaluator.allEvents))
+	// FR-2 dual emission: 1 llm_request + 2 tool_call events = 3 total
+	if len(evaluator.allEvents) != 3 {
+		t.Fatalf("expected 3 PolicyEvents (1 llm_request + 2 tool_call), got %d", len(evaluator.allEvents))
 	}
 
-	// First event should have toolName = "dangerous_exec"
-	toolName := evaluator.allEvents[0].GetStringField("toolName")
+	// First event should be llm_request (FR-2)
+	if evaluator.allEvents[0].Subcategory != "llm_request" {
+		t.Errorf("expected first event Subcategory='llm_request', got %q", evaluator.allEvents[0].Subcategory)
+	}
+
+	// Second event should have toolName = "dangerous_exec"
+	toolName := evaluator.allEvents[1].GetStringField("toolName")
 	if toolName != "dangerous_exec" {
-		t.Errorf("expected first event Fields[toolName]='dangerous_exec', got %q", toolName)
+		t.Errorf("expected second event Fields[toolName]='dangerous_exec', got %q", toolName)
 	}
 
-	// Second event should have toolName = "read_file"
-	toolName = evaluator.allEvents[1].GetStringField("toolName")
+	// Third event should have toolName = "read_file"
+	toolName = evaluator.allEvents[2].GetStringField("toolName")
 	if toolName != "read_file" {
-		t.Errorf("expected second event Fields[toolName]='read_file', got %q", toolName)
+		t.Errorf("expected third event Fields[toolName]='read_file', got %q", toolName)
 	}
 }
 
@@ -456,8 +492,10 @@ func TestPolicyEventFields_HeaderNotUsedForToolName(t *testing.T) {
 // from the request body rather than blocking the entire request. When ALL
 // tools are denied, the tools and tool_choice keys are removed.
 func TestPolicyEventFields_DenyAfterBodyParsing(t *testing.T) {
-	evaluator := &mockPolicyEvaluator{
-		decision: &policy.Decision{
+	// Use a tool-only deny evaluator: denies tool_call events, allows llm_request.
+	// With FR-2 dual emission, llm_request is evaluated first and must allow.
+	evaluator := &toolOnlyDenyEvaluator{
+		denyDecision: &policy.Decision{
 			Action: policy.CompiledAction{
 				Type: "deny",
 				Parameters: map[string]string{
@@ -530,13 +568,13 @@ func TestPolicyEventFields_DenyAfterBodyParsing(t *testing.T) {
 	}
 
 	// Verify the evaluator received tool_call subcategory
-	if evaluator.lastEvent == nil {
-		t.Fatal("policy evaluator was not invoked")
+	if evaluator.lastToolEvent == nil {
+		t.Fatal("policy evaluator was not invoked for tool_call")
 	}
-	if evaluator.lastEvent.Subcategory != "tool_call" {
-		t.Errorf("expected Subcategory 'tool_call', got %q", evaluator.lastEvent.Subcategory)
+	if evaluator.lastToolEvent.Subcategory != "tool_call" {
+		t.Errorf("expected Subcategory 'tool_call', got %q", evaluator.lastToolEvent.Subcategory)
 	}
-	if evaluator.lastEvent.GetStringField("toolName") != "dangerous_exec" {
-		t.Errorf("expected toolName 'dangerous_exec', got %q", evaluator.lastEvent.GetStringField("toolName"))
+	if evaluator.lastToolEvent.GetStringField("toolName") != "dangerous_exec" {
+		t.Errorf("expected toolName 'dangerous_exec', got %q", evaluator.lastToolEvent.GetStringField("toolName"))
 	}
 }

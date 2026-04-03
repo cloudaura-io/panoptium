@@ -545,14 +545,19 @@ func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interfa
 	}
 	baseFields["host"] = host
 
-	// For requests with tool declarations, evaluate per-tool
-	if len(sc.ToolNames) > 0 {
-		return s.evaluatePerToolPolicy(state, baseFields, logger)
+	// FR-2: Dual event emission. Always evaluate llm_request first,
+	// even when tools are present. This enables per-agent/per-model
+	// policies (e.g., rate limiting) to apply to all requests.
+	llmFields := make(map[string]interface{}, len(baseFields)+2)
+	for k, v := range baseFields {
+		llmFields[k] = v
 	}
-
-	// Non-tool request: single evaluation with llm_request subcategory
-	baseFields["toolName"] = ""
-	baseFields["toolNames"] = ""
+	llmFields["toolName"] = ""
+	if len(sc.ToolNames) > 0 {
+		llmFields["toolNames"] = strings.Join(sc.ToolNames, ",")
+	} else {
+		llmFields["toolNames"] = ""
+	}
 
 	policyEvent := &policy.PolicyEvent{
 		Category:    "protocol",
@@ -561,7 +566,7 @@ func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interfa
 		Namespace:   agentIdentity.Namespace,
 		PodName:     agentIdentity.PodName,
 		PodLabels:   agentIdentity.Labels,
-		Fields:      baseFields,
+		Fields:      llmFields,
 	}
 
 	decision, err := s.policyEvaluator.Evaluate(policyEvent)
@@ -570,30 +575,36 @@ func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interfa
 		if resp != nil {
 			return resp
 		}
-		return nil
-	}
-
-	if decision != nil && decision.Matched {
+		// fail-open: continue
+	} else if decision != nil && decision.Matched {
 		resp := s.applyEnforcementDecision(decision, agentIdentity, requestID)
 		if resp != nil {
+			// Terminal deny/rateLimit on llm_request — block entire request.
 			return resp
 		}
+	}
+
+	// If request has tools, proceed to per-tool evaluation (FR-2 step 2).
+	if len(sc.ToolNames) > 0 {
+		return s.evaluatePerToolPolicy(state, baseFields, logger)
 	}
 
 	return nil
 }
 
 // evaluatePerToolPolicy evaluates policy for each tool declared in the request
-// independently. Tools that receive a deny decision (in enforcing mode) are
-// collected and stripped from the request body. Audit-only denials are logged
-// but do not strip. Non-deny decisions (throttle, etc.) are applied immediately.
+// independently. ALL tools are evaluated without short-circuiting (FR-4).
+// Deny decisions collect tools for stripping. Non-deny decisions (rateLimit,
+// alert) are collected and applied after all tools are evaluated.
 func (s *ExtProcServer) evaluatePerToolPolicy(state *streamState, baseFields map[string]interface{}, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
 	sc := state.streamCtx
 	agentIdentity := sc.AgentIdentity
 	requestID := sc.RequestID
 
 	var bannedTools []string
+	var nonDenyDecisions []*policy.Decision // collected for post-loop processing
 
+	// FR-4: evaluate ALL tools without short-circuiting
 	for _, toolName := range sc.ToolNames {
 		// Build per-tool fields (copy base fields and set tool-specific ones)
 		fields := make(map[string]interface{}, len(baseFields)+2)
@@ -681,7 +692,15 @@ func (s *ExtProcServer) evaluatePerToolPolicy(state *streamState, baseFields map
 			continue
 		}
 
-		// For non-deny actions (throttle, etc.): apply immediately
+		// FR-4: Non-deny actions (rateLimit, alert) are collected, NOT
+		// applied immediately. This prevents rateLimit on tool A from
+		// short-circuiting deny evaluation of tool B.
+		nonDenyDecisions = append(nonDenyDecisions, decision)
+	}
+
+	// Post-loop: apply collected non-deny decisions.
+	// Process in order: terminal first (rateLimit), then non-terminal (alert).
+	for _, decision := range nonDenyDecisions {
 		resp := s.applyEnforcementDecision(decision, agentIdentity, requestID)
 		if resp != nil {
 			return resp
