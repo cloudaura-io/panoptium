@@ -203,9 +203,17 @@ func (m *LifecycleManager) Start(ctx context.Context) error {
 
 	logger.Info("ExtProc server starting", "address", m.listener.Addr().String())
 
-	// Start the pod cache Informer if configured
+	// Start the pod cache Informer if configured and wait for its cache to
+	// sync before accepting gRPC requests. Without this, early requests hit
+	// an empty PodCache, producing degraded identity (empty Namespace/Labels)
+	// that causes namespace-scoped policies to be filtered out.
 	if m.informer != nil {
 		go m.informer.Run(ctx)
+		logger.Info("waiting for PodCache informer to sync")
+		if !m.informer.WaitForSync(ctx) {
+			return fmt.Errorf("PodCache informer failed to sync")
+		}
+		logger.Info("PodCache informer synced")
 	}
 
 	// Signal that we are ready

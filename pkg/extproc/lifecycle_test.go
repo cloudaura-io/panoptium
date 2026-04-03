@@ -914,6 +914,76 @@ func TestLifecycleManagerPolicyEvaluator(t *testing.T) {
 	}
 }
 
+// TestLifecycleManagerWaitForSyncBeforeReady verifies that Start() blocks on
+// informer.WaitForSync() before signaling ready, so the PodCache is fully
+// populated the instant WaitForReady returns — with no sleep workaround needed.
+func TestLifecycleManagerWaitForSyncBeforeReady(t *testing.T) {
+	bus := eventbus.NewSimpleBus()
+	defer bus.Close()
+
+	registry := observer.NewObserverRegistry()
+
+	// Create a fake Kubernetes client with a test pod
+	fakeClient := fake.NewSimpleClientset(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sync-agent",
+			Namespace: "default",
+			Labels:    map[string]string{"app": "agent"},
+		},
+		Status: corev1.PodStatus{
+			PodIP: "10.0.0.50",
+		},
+	})
+
+	podCache := identity.NewPodCache()
+	informer := identity.NewPodCacheInformer(fakeClient, podCache)
+	resolver := identity.NewResolver(podCache)
+
+	cfg := LifecycleConfig{
+		Port:    0,
+		Enabled: true,
+	}
+
+	mgr := NewLifecycleManager(cfg, registry, resolver, bus)
+	mgr.SetPodCacheInformer(informer)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- mgr.Start(ctx)
+	}()
+
+	if !mgr.WaitForReady(10 * time.Second) {
+		t.Fatal("lifecycle manager did not become ready in time")
+	}
+
+	// CRITICAL: immediately after WaitForReady, with NO sleep, the pod cache
+	// must already be populated. This fails if Start() does not call
+	// informer.WaitForSync() before close(m.readyCh).
+	info, ok := podCache.Get("10.0.0.50")
+	if !ok {
+		t.Fatal("PodCache must contain 10.0.0.50 immediately after WaitForReady (no sleep) — WaitForSync not called before readyCh")
+	}
+	if info.Name != "sync-agent" {
+		t.Errorf("expected pod name 'sync-agent', got %q", info.Name)
+	}
+	if info.Namespace != "default" {
+		t.Errorf("expected namespace 'default', got %q", info.Namespace)
+	}
+
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("lifecycle manager returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("lifecycle manager did not stop in time")
+	}
+}
+
 // TestLifecycleManagerListenAddress verifies that the listen address uses the
 // correct host and port format.
 func TestLifecycleManagerListenAddress(t *testing.T) {
