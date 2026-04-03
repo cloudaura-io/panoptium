@@ -3,6 +3,10 @@ apiVersion: panoptium.io/v1alpha1
 kind: ThreatSignature
 metadata:
   name: mcp-output-exfiltration
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-delete-policy": before-hook-creation
+    "helm.sh/hook-weight": "10"
   labels:
     {{- include "panoptium.labels" . | nindent 4 }}
     panoptium.io/managed-by: helm
