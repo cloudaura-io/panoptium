@@ -66,13 +66,21 @@ Everything is configured through Kubernetes Custom Resources:
 
 ## Quick start
 
+**Prerequisites:** [AgentGateway](https://github.com/agentgateway/agentgateway) installed with a Gateway resource created. Panoptium attaches to the gateway as an ExtProc filter.
+
 ```bash
-# Helm
+# Install Panoptium (targets a gateway named "agentgateway" by default)
 helm install panoptium chart/panoptium -n panoptium-system --create-namespace
 
-# or kustomize
-make deploy IMG=ghcr.io/panoptium/panoptium:latest
+# If your gateway has a different name:
+helm install panoptium chart/panoptium -n panoptium-system --create-namespace \
+  --set gateway.extProcPolicy.gatewayName=my-gateway \
+  --set gateway.identityPolicy.gatewayName=my-gateway
 ```
+
+Panoptium automatically creates two `AgentgatewayPolicy` resources:
+- **ExtProc policy** — routes all LLM traffic through Panoptium for observation and enforcement
+- **Identity policy** — injects `X-Forwarded-For` so Panoptium can resolve agent pod identity
 
 Apply a policy:
 
