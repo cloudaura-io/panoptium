@@ -1,0 +1,29 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openai-backend
+  namespace: panoptium-system
+spec:
+  ai:
+    provider:
+      openai:
+        model: gpt-4o-mini
+  policies:
+    auth:
+      secretRef:
+        name: openai-api-key
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: anthropic-backend
+  namespace: panoptium-system
+spec:
+  ai:
+    provider:
+      anthropic:
+        model: claude-sonnet-4-20250514
+  policies:
+    auth:
+      secretRef:
+        name: anthropic-api-key

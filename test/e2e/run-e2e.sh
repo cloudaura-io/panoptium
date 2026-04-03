@@ -260,7 +260,7 @@ export CERT_MANAGER_INSTALL_SKIP=true
 cd "${PROJECT_ROOT}"
 
 if [[ "${DEPLOY_METHOD}" == "helm" ]]; then
-    E2E_LABEL_FILTER="${E2E_LABEL_FILTER:-e2e-helm}"
+    E2E_LABEL_FILTER="${E2E_LABEL_FILTER:-e2e-helm || e2e-extproc || e2e-crd || e2e-policy || e2e-enforcement || e2e-threat-sig}"
 else
     E2E_LABEL_FILTER="${E2E_LABEL_FILTER:-e2e-extproc || e2e-crd || e2e-policy || e2e-enforcement || e2e-threat-sig}"
 fi
