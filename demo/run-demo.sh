@@ -388,8 +388,8 @@ scenario_c() {
     2>/dev/null)
 
   local http_code http_body
-  if echo "$output" | grep -q "---HTTP_STATUS:"; then
-    http_code=$(echo "$output" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+  if echo "$output" | grep -qF "HTTP_STATUS:"; then
+    http_code=$(echo "$output" | grep -oE 'HTTP_STATUS:[0-9]+' | cut -d: -f2)
     http_body=$(echo "$output" | sed 's/---HTTP_STATUS:[0-9]*---//')
   else
     http_code="N/A"
