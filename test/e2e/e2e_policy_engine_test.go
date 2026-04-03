@@ -501,7 +501,7 @@ spec:
 			DeferCleanup(func() {
 				deleteAgentPolicy(policyName, namespace)
 				// Clean up any quarantine resources
-				cmd := exec.Command("kubectl", "delete", "panoptiumquarantine",
+				cmd := exec.Command("kubectl", "delete", "agentquarantine",
 					"--all", "-n", namespace, "--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
@@ -518,7 +518,7 @@ spec:
 
 			By("verifying AgentQuarantine was created")
 			verifyQuarantine := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumquarantine",
+				cmd := exec.Command("kubectl", "get", "agentquarantine",
 					"-n", namespace,
 					"-o", "jsonpath={.items[*].metadata.name}")
 				output, err := utils.Run(cmd)

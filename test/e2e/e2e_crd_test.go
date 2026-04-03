@@ -76,14 +76,14 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "Failed to apply AgentPolicy")
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "panoptiumpolicy", policyName,
+				cmd := exec.Command("kubectl", "delete", "agentpolicy", policyName,
 					"-n", namespace, "--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
 
 			By("waiting for Ready=True status condition")
 			verifyReady := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumpolicy", policyName,
+				cmd := exec.Command("kubectl", "get", "agentpolicy", policyName,
 					"-n", namespace,
 					"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 				output, err := utils.Run(cmd)
@@ -125,14 +125,14 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "Failed to apply AgentClusterPolicy")
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "clusterpanoptiumpolicy", clusterPolicyName,
+				cmd := exec.Command("kubectl", "delete", "agentclusterpolicy", clusterPolicyName,
 					"--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
 
 			By("waiting for Ready=True status condition")
 			verifyReady := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "clusterpanoptiumpolicy", clusterPolicyName,
+				cmd := exec.Command("kubectl", "get", "agentclusterpolicy", clusterPolicyName,
 					"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -165,14 +165,14 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "Failed to apply AgentQuarantine")
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "panoptiumquarantine", quarantineName,
+				cmd := exec.Command("kubectl", "delete", "agentquarantine", quarantineName,
 					"-n", namespace, "--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
 
 			By("waiting for the quarantine-cleanup finalizer to be added")
 			verifyFinalizer := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumquarantine", quarantineName,
+				cmd := exec.Command("kubectl", "get", "agentquarantine", quarantineName,
 					"-n", namespace,
 					"-o", "jsonpath={.metadata.finalizers}")
 				output, err := utils.Run(cmd)
@@ -184,7 +184,7 @@ spec:
 
 			By("waiting for Contained=True status condition")
 			verifyContained := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumquarantine", quarantineName,
+				cmd := exec.Command("kubectl", "get", "agentquarantine", quarantineName,
 					"-n", namespace,
 					"-o", "jsonpath={.status.conditions[?(@.type==\"Contained\")].status}")
 				output, err := utils.Run(cmd)
@@ -194,14 +194,14 @@ spec:
 			Eventually(verifyContained, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 			By("deleting the AgentQuarantine resource")
-			cmd = exec.Command("kubectl", "delete", "panoptiumquarantine", quarantineName,
+			cmd = exec.Command("kubectl", "delete", "agentquarantine", quarantineName,
 				"-n", namespace)
 			_, err = utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete AgentQuarantine")
 
 			By("waiting for the resource to be fully removed")
 			verifyGone := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumquarantine", quarantineName,
+				cmd := exec.Command("kubectl", "get", "agentquarantine", quarantineName,
 					"-n", namespace)
 				_, err := utils.Run(cmd)
 				g.Expect(err).To(HaveOccurred(), "AgentQuarantine should no longer exist")

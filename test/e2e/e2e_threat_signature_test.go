@@ -101,7 +101,7 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "Failed to apply ThreatSignature")
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "delete", "threatsignature", sigName,
 					"--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
@@ -139,13 +139,13 @@ spec:
 			waitForThreatSignatureReady(sigName, 2*time.Minute)
 
 			By("deleting the ThreatSignature resource")
-			cmd = exec.Command("kubectl", "delete", "panoptiumthreatsignature", sigName)
+			cmd = exec.Command("kubectl", "delete", "threatsignature", sigName)
 			_, err = utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete ThreatSignature")
 
 			By("waiting for the resource to be fully removed")
 			verifyGone := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName)
+				cmd := exec.Command("kubectl", "get", "threatsignature", sigName)
 				_, err := utils.Run(cmd)
 				g.Expect(err).To(HaveOccurred(), "ThreatSignature should no longer exist")
 			}
@@ -178,7 +178,7 @@ spec:
 			Expect(err).NotTo(HaveOccurred())
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "delete", "threatsignature", sigName,
 					"--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
@@ -214,7 +214,7 @@ spec:
 
 			By("waiting for Ready=True with updated observedGeneration")
 			verifyUpdated := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "get", "threatsignature", sigName,
 					"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -262,20 +262,20 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "CRD should accept the resource (webhook not wired)")
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "delete", "threatsignature", sigName,
 					"--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
 
 			By("waiting for Ready=False with CompilationFailed reason")
 			verifyNotReady := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "get", "threatsignature", sigName,
 					"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("False"), "Should have Ready=False for invalid regex")
 
-				cmd = exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName,
+				cmd = exec.Command("kubectl", "get", "threatsignature", sigName,
 					"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].reason}")
 				reason, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -422,7 +422,7 @@ var _ = Describe("Default Helm ThreatSignature E2E", Label("e2e-threat-sig"), Or
 		It("should have all default ThreatSignature resources deployed", func() {
 			By("verifying all expected default signatures exist")
 			for _, sigName := range expectedDefaultSignatures {
-				cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName)
+				cmd := exec.Command("kubectl", "get", "threatsignature", sigName)
 				_, err := utils.Run(cmd)
 				Expect(err).NotTo(HaveOccurred(),
 					fmt.Sprintf("Default signature %q should exist", sigName))
@@ -433,7 +433,7 @@ var _ = Describe("Default Helm ThreatSignature E2E", Label("e2e-threat-sig"), Or
 			By("verifying each default signature has Ready=True")
 			for _, sigName := range expectedDefaultSignatures {
 				verifyReady := func(g Gomega) {
-					cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName,
+					cmd := exec.Command("kubectl", "get", "threatsignature", sigName,
 						"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 					output, err := utils.Run(cmd)
 					g.Expect(err).NotTo(HaveOccurred())
@@ -454,7 +454,7 @@ var _ = Describe("Default Helm ThreatSignature E2E", Label("e2e-threat-sig"), Or
 			By("collecting categories from each default signature")
 			categories := make(map[string]bool)
 			for _, sigName := range expectedDefaultSignatures {
-				cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "get", "threatsignature", sigName,
 					"-o", "jsonpath={.spec.category}")
 				output, err := utils.Run(cmd)
 				Expect(err).NotTo(HaveOccurred(),
@@ -537,7 +537,7 @@ spec:
 			Expect(err).NotTo(HaveOccurred())
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "delete", "threatsignature", sigName,
 					"--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
@@ -547,7 +547,7 @@ spec:
 
 			By("verifying the compiledPatterns count in status")
 			verifyPatternCount := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "get", "threatsignature", sigName,
 					"-o", "jsonpath={.status.compiledPatterns}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -583,13 +583,13 @@ spec:
 			waitForThreatSignatureReady(sigName, 2*time.Minute)
 
 			By("deleting the ThreatSignature")
-			cmd = exec.Command("kubectl", "delete", "panoptiumthreatsignature", sigName)
+			cmd = exec.Command("kubectl", "delete", "threatsignature", sigName)
 			_, err = utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying the resource is removed within 5 seconds")
 			verifyRemoved := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName)
+				cmd := exec.Command("kubectl", "get", "threatsignature", sigName)
 				_, err := utils.Run(cmd)
 				g.Expect(err).To(HaveOccurred(), "ThreatSignature should be gone after deletion")
 			}
@@ -622,7 +622,7 @@ spec:
 			Expect(err).NotTo(HaveOccurred())
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "delete", "threatsignature", sigName,
 					"--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
@@ -659,13 +659,13 @@ spec:
 
 			By("verifying reconciler picks up update and compiles both patterns")
 			verifyUpdated := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "get", "threatsignature", sigName,
 					"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("True"))
 
-				cmd = exec.Command("kubectl", "get", "panoptiumthreatsignature", sigName,
+				cmd = exec.Command("kubectl", "get", "threatsignature", sigName,
 					"-o", "jsonpath={.status.compiledPatterns}")
 				count, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -747,7 +747,7 @@ spec:
 			waitForThreatSignatureReady(sigName, 2*time.Minute)
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "panoptiumthreatsignature", sigName,
+				cmd := exec.Command("kubectl", "delete", "threatsignature", sigName,
 					"--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
@@ -884,7 +884,7 @@ spec:
 func waitForThreatSignatureReady(name string, timeout time.Duration) {
 	By(fmt.Sprintf("waiting for ThreatSignature %s to be Ready=True", name))
 	verifyReady := func(g Gomega) {
-		cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", name,
+		cmd := exec.Command("kubectl", "get", "threatsignature", name,
 			"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 		output, err := utils.Run(cmd)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -897,7 +897,7 @@ func waitForThreatSignatureReady(name string, timeout time.Duration) {
 // getThreatSignatureObservedGeneration returns the observedGeneration from the
 // ThreatSignature status.
 func getThreatSignatureObservedGeneration(name string) int64 {
-	cmd := exec.Command("kubectl", "get", "panoptiumthreatsignature", name,
+	cmd := exec.Command("kubectl", "get", "threatsignature", name,
 		"-o", "jsonpath={.status.observedGeneration}")
 	output, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred())

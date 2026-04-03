@@ -140,7 +140,7 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "kubectl apply should succeed for valid AgentPolicy")
 
 			DeferCleanup(func() {
-				cmd := exec.Command("kubectl", "delete", "panoptiumpolicy", validPolicyName,
+				cmd := exec.Command("kubectl", "delete", "agentpolicy", validPolicyName,
 					"-n", namespace, "--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})

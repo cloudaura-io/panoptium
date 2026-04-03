@@ -56,14 +56,14 @@ func applyAgentClusterPolicy(yamlSpec string) error {
 // deleteAgentPolicy deletes a namespaced AgentPolicy by name.
 // Uses --ignore-not-found=true so it is safe to call on already-deleted resources.
 func deleteAgentPolicy(name, ns string) {
-	cmd := exec.Command("kubectl", "delete", "panoptiumpolicy", name,
+	cmd := exec.Command("kubectl", "delete", "agentpolicy", name,
 		"-n", ns, "--ignore-not-found=true")
 	_, _ = utils.Run(cmd)
 }
 
 // deleteAgentClusterPolicy deletes a cluster-scoped AgentClusterPolicy by name.
 func deleteAgentClusterPolicy(name string) {
-	cmd := exec.Command("kubectl", "delete", "clusterpanoptiumpolicy", name,
+	cmd := exec.Command("kubectl", "delete", "agentclusterpolicy", name,
 		"--ignore-not-found=true")
 	_, _ = utils.Run(cmd)
 }
@@ -77,7 +77,7 @@ func deleteAgentClusterPolicy(name string) {
 func waitForPolicyReady(name, ns string, timeout time.Duration) {
 	By(fmt.Sprintf("waiting for AgentPolicy %s/%s to be Ready=True", ns, name))
 	verifyReady := func(g Gomega) {
-		cmd := exec.Command("kubectl", "get", "panoptiumpolicy", name,
+		cmd := exec.Command("kubectl", "get", "agentpolicy", name,
 			"-n", ns,
 			"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 		output, err := utils.Run(cmd)
@@ -92,7 +92,7 @@ func waitForPolicyReady(name, ns string, timeout time.Duration) {
 func waitForClusterPolicyReady(name string, timeout time.Duration) {
 	By(fmt.Sprintf("waiting for AgentClusterPolicy %s to be Ready=True", name))
 	verifyReady := func(g Gomega) {
-		cmd := exec.Command("kubectl", "get", "clusterpanoptiumpolicy", name,
+		cmd := exec.Command("kubectl", "get", "agentclusterpolicy", name,
 			"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 		output, err := utils.Run(cmd)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -306,7 +306,7 @@ func getOperatorRestartCount() (int, error) {
 
 // getPolicyRuleCount returns the ruleCount from the AgentPolicy status.
 func getPolicyRuleCount(name, ns string) (int32, error) {
-	cmd := exec.Command("kubectl", "get", "panoptiumpolicy", name,
+	cmd := exec.Command("kubectl", "get", "agentpolicy", name,
 		"-n", ns,
 		"-o", "jsonpath={.status.ruleCount}")
 	output, err := utils.Run(cmd)
@@ -326,7 +326,7 @@ func getPolicyRuleCount(name, ns string) (int32, error) {
 
 // getPolicyObservedGeneration returns the observedGeneration from the AgentPolicy status.
 func getPolicyObservedGeneration(name, ns string) (int64, error) {
-	cmd := exec.Command("kubectl", "get", "panoptiumpolicy", name,
+	cmd := exec.Command("kubectl", "get", "agentpolicy", name,
 		"-n", ns,
 		"-o", "jsonpath={.status.observedGeneration}")
 	output, err := utils.Run(cmd)
