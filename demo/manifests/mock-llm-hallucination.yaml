@@ -1,0 +1,103 @@
+---
+# Mock LLM that always returns a tool_call for k8s_get_pod_logs.
+# Used by Scenario E to demonstrate response-path defense-in-depth:
+# even after Panoptium strips the tool from the request, the mock LLM
+# "hallucinates" a tool_call for it, and Panoptium catches it mid-stream.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-llm-hallucination
+  namespace: panoptium-system
+  labels:
+    app: mock-llm-hallucination
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-llm-hallucination
+  template:
+    metadata:
+      labels:
+        app: mock-llm-hallucination
+    spec:
+      containers:
+      - name: mock-llm
+        image: example.com/mock-llm:e2e
+        env:
+        - name: FORCE_TOOL_CALL
+          value: "k8s_get_pod_logs"
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-llm-hallucination
+  namespace: panoptium-system
+  labels:
+    app: mock-llm-hallucination
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: mock-llm-hallucination
+---
+# Backend pointing to the hallucinating mock LLM.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mock-llm-hallucination-backend
+  namespace: panoptium-system
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: mock-hallucination
+        openai: {}
+        host: mock-llm-hallucination.panoptium-system.svc.cluster.local
+        port: 8080
+---
+# Temporary route override: sends all gateway traffic to the hallucinating
+# mock LLM instead of real OpenAI. Applied only during Scenario E.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: demo-hallucination-route
+  namespace: panoptium-system
+spec:
+  parentRefs:
+  - name: e2e-gateway
+    namespace: panoptium-system
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: mock-llm-hallucination-backend

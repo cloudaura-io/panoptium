@@ -413,8 +413,9 @@ scenario_c() {
   # ── Cleanup ──
   echo ""
   info "Cleaning up: restoring routes, removing mock LLM..."
-  $K apply -f "${DEMO_DIR}/manifests/agentgateway-openai-backend.yaml"
+  $K delete httproute demo-hallucination-route -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
   $K apply -f "$(dirname "$DEMO_DIR")/test/e2e/manifests/agentgateway-route.yaml" 2>/dev/null || true
+  $K apply -f "${DEMO_DIR}/manifests/agentgateway-openai-backend.yaml"
   $K delete deployment mock-llm-hallucination -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
   $K delete service mock-llm-hallucination -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
   $K delete agentgatewaybackend mock-llm-hallucination-backend -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
