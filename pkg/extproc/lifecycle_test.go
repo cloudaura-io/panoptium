@@ -470,10 +470,8 @@ func TestLifecycleManagerWithPodCacheInformer(t *testing.T) {
 		t.Fatal("lifecycle manager did not become ready in time")
 	}
 
-	// Wait for informer cache to sync
-	time.Sleep(500 * time.Millisecond)
-
-	// Verify the pod cache was populated by the informer
+	// Verify the pod cache was populated by the informer — no sleep needed
+	// because WaitForSync is now called before readyCh is closed
 	info, ok := podCache.Get("10.0.0.1")
 	if !ok {
 		t.Fatal("expected pod cache to contain 10.0.0.1 after informer start")
