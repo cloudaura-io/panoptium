@@ -233,7 +233,8 @@ func TestPolicyEventFields_LLMRequestSubcategory(t *testing.T) {
 }
 
 // TestPolicyEventFields_ToolNamePopulated verifies that Fields["toolName"]
-// is populated from the first parsed tool name in the request body.
+// is populated per-tool — one PolicyEvent per declared tool, each with the
+// individual tool name.
 func TestPolicyEventFields_ToolNamePopulated(t *testing.T) {
 	evaluator := &mockPolicyEvaluator{
 		decision: policy.DefaultAllowDecision(),
@@ -269,14 +270,21 @@ func TestPolicyEventFields_ToolNamePopulated(t *testing.T) {
 		"x-forwarded-for", "10.0.0.102",
 	}, body)
 
-	if evaluator.lastEvent == nil {
-		t.Fatal("policy evaluator was not invoked")
+	// Per-tool evaluation: one PolicyEvent per tool
+	if len(evaluator.allEvents) != 2 {
+		t.Fatalf("expected 2 PolicyEvents (one per tool), got %d", len(evaluator.allEvents))
 	}
 
-	// Fields["toolName"] should be the first tool name
-	toolName := evaluator.lastEvent.GetStringField("toolName")
+	// First event should have toolName = "dangerous_exec"
+	toolName := evaluator.allEvents[0].GetStringField("toolName")
 	if toolName != "dangerous_exec" {
-		t.Errorf("expected Fields[toolName]='dangerous_exec', got %q", toolName)
+		t.Errorf("expected first event Fields[toolName]='dangerous_exec', got %q", toolName)
+	}
+
+	// Second event should have toolName = "read_file"
+	toolName = evaluator.allEvents[1].GetStringField("toolName")
+	if toolName != "read_file" {
+		t.Errorf("expected second event Fields[toolName]='read_file', got %q", toolName)
 	}
 }
 
@@ -444,7 +452,9 @@ func TestPolicyEventFields_HeaderNotUsedForToolName(t *testing.T) {
 }
 
 // TestPolicyEventFields_DenyAfterBodyParsing verifies that a deny decision
-// returned during body-phase evaluation produces an ImmediateResponse with 403.
+// for a tool_call subcategory during body-phase evaluation strips the tool
+// from the request body rather than blocking the entire request. When ALL
+// tools are denied, the tools and tool_choice keys are removed.
 func TestPolicyEventFields_DenyAfterBodyParsing(t *testing.T) {
 	evaluator := &mockPolicyEvaluator{
 		decision: &policy.Decision{
@@ -493,13 +503,30 @@ func TestPolicyEventFields_DenyAfterBodyParsing(t *testing.T) {
 		"x-forwarded-for", "10.0.0.106",
 	}, body)
 
-	// Should receive an ImmediateResponse with 403 from the body phase
-	ir := resp.GetImmediateResponse()
-	if ir == nil {
-		t.Fatal("expected ImmediateResponse for deny decision after body parsing")
+	// Tool deny now strips instead of 403 — request should pass through
+	if resp.GetImmediateResponse() != nil {
+		t.Fatal("expected pass-through with tool stripping, got ImmediateResponse")
 	}
-	if ir.Status.Code != 403 {
-		t.Errorf("expected status 403, got %d", ir.Status.Code)
+
+	// Verify the forwarded body has the tool stripped (all tools denied
+	// means tools key is removed entirely)
+	bodyResp := resp.GetRequestBody()
+	if bodyResp == nil {
+		t.Fatal("expected RequestBody response")
+	}
+	streamedResp := bodyResp.GetResponse().GetBodyMutation().GetStreamedResponse()
+	if streamedResp == nil {
+		t.Fatal("expected StreamedResponse in body mutation")
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(streamedResp.Body, &parsed); err != nil {
+		t.Fatalf("forwarded body is not valid JSON: %v", err)
+	}
+
+	// All tools denied → tools key should be removed
+	if _, exists := parsed["tools"]; exists {
+		t.Error("expected 'tools' key to be removed when all tools are denied")
 	}
 
 	// Verify the evaluator received tool_call subcategory

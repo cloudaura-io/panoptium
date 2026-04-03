@@ -475,9 +475,14 @@ func (s *ExtProcServer) emitRequestStartEvent(state *streamState) {
 	})
 }
 
-// evaluateRequestPolicy builds a PolicyEvent from the parsed StreamContext
-// and evaluates it against active policies. Returns an ImmediateResponse
-// if the decision requires blocking (deny/throttle), nil for pass-through.
+// evaluateRequestPolicy builds PolicyEvents from the parsed StreamContext
+// and evaluates them against active policies. For requests with tool
+// declarations, each tool is evaluated independently — deny decisions
+// result in tool stripping (removing banned tools from the request body)
+// rather than blocking the entire request.
+//
+// Returns an ImmediateResponse if a non-tool-call decision requires
+// blocking (deny/throttle on llm_request subcategory), nil for pass-through.
 //
 // The PolicyEvent is populated with body-derived fields (model, provider,
 // toolName, toolNames) rather than agent-controlled headers, ensuring
@@ -487,14 +492,8 @@ func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interfa
 	agentIdentity := sc.AgentIdentity
 	requestID := sc.RequestID
 
-	// Determine subcategory based on parsed tool names
-	subcategory := "llm_request"
-	if len(sc.ToolNames) > 0 {
-		subcategory = "tool_call"
-	}
-
-	// Build fields from trusted body-parsed data
-	fields := map[string]interface{}{
+	// Build common fields from trusted body-parsed data
+	baseFields := map[string]interface{}{
 		"path":      state.obsCtx.Path,
 		"method":    state.obsCtx.Method,
 		"requestID": requestID,
@@ -508,22 +507,25 @@ func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interfa
 	if host == "" {
 		host = state.obsCtx.Headers.Get(":authority")
 	}
-	fields["host"] = host
+	baseFields["host"] = host
 
-	// Tool names from body parsing (trusted)
+	// For requests with tool declarations, evaluate per-tool
 	if len(sc.ToolNames) > 0 {
-		fields["toolName"] = sc.ToolNames[0]
-		fields["toolNames"] = strings.Join(sc.ToolNames, ",")
+		return s.evaluatePerToolPolicy(state, baseFields, logger)
 	}
+
+	// Non-tool request: single evaluation with llm_request subcategory
+	baseFields["toolName"] = ""
+	baseFields["toolNames"] = ""
 
 	policyEvent := &policy.PolicyEvent{
 		Category:    "protocol",
-		Subcategory: subcategory,
+		Subcategory: "llm_request",
 		Timestamp:   time.Now(),
 		Namespace:   agentIdentity.Namespace,
 		PodName:     agentIdentity.PodName,
 		PodLabels:   agentIdentity.Labels,
-		Fields:      fields,
+		Fields:      baseFields,
 	}
 
 	decision, err := s.policyEvaluator.Evaluate(policyEvent)
@@ -532,7 +534,6 @@ func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interfa
 		if resp != nil {
 			return resp
 		}
-		// fail-open: fall through to pass-through
 		return nil
 	}
 
@@ -544,6 +545,139 @@ func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interfa
 	}
 
 	return nil
+}
+
+// evaluatePerToolPolicy evaluates policy for each tool declared in the request
+// independently. Tools that receive a deny decision (in enforcing mode) are
+// collected and stripped from the request body. Audit-only denials are logged
+// but do not strip. Non-deny decisions (throttle, etc.) are applied immediately.
+func (s *ExtProcServer) evaluatePerToolPolicy(state *streamState, baseFields map[string]interface{}, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
+	sc := state.streamCtx
+	agentIdentity := sc.AgentIdentity
+	requestID := sc.RequestID
+
+	var bannedTools []string
+
+	for _, toolName := range sc.ToolNames {
+		// Build per-tool fields (copy base fields and set tool-specific ones)
+		fields := make(map[string]interface{}, len(baseFields)+2)
+		for k, v := range baseFields {
+			fields[k] = v
+		}
+		fields["toolName"] = toolName
+		fields["toolNames"] = strings.Join(sc.ToolNames, ",")
+
+		policyEvent := &policy.PolicyEvent{
+			Category:    "protocol",
+			Subcategory: "tool_call",
+			Timestamp:   time.Now(),
+			Namespace:   agentIdentity.Namespace,
+			PodName:     agentIdentity.PodName,
+			PodLabels:   agentIdentity.Labels,
+			Fields:      fields,
+		}
+
+		decision, err := s.policyEvaluator.Evaluate(policyEvent)
+		if err != nil {
+			resp := s.handleEvaluationError(err, agentIdentity, requestID, logger)
+			if resp != nil {
+				return resp
+			}
+			// fail-open: continue to next tool
+			continue
+		}
+
+		if decision == nil || !decision.Matched {
+			continue
+		}
+
+		// Apply global audit mode override
+		if s.enforcementMode == enforce.ModeAudit {
+			decision.AuditOnly = true
+		}
+
+		// For deny actions: collect for stripping (only in enforcing mode)
+		if decision.Action.Type == v1alpha1.ActionTypeDeny {
+			// Emit the policy decision event (for both audit and enforcing)
+			s.emitPerToolDecisionEvent(decision, agentIdentity, requestID, toolName)
+
+			if !decision.AuditOnly {
+				bannedTools = append(bannedTools, toolName)
+				if l, ok := logger.(interface {
+					Info(string, ...interface{})
+				}); ok {
+					l.Info("tool stripped by policy",
+						"tool", toolName,
+						"policy", decision.PolicyName,
+						"rule", decision.MatchedRule,
+						"requestID", requestID,
+					)
+				}
+			} else {
+				if l, ok := logger.(interface {
+					Info(string, ...interface{})
+				}); ok {
+					l.Info("tool deny (audit-only, not stripped)",
+						"tool", toolName,
+						"policy", decision.PolicyName,
+						"rule", decision.MatchedRule,
+						"requestID", requestID,
+					)
+				}
+			}
+			continue
+		}
+
+		// For non-deny actions (throttle, etc.): apply immediately
+		resp := s.applyEnforcementDecision(decision, agentIdentity, requestID)
+		if resp != nil {
+			return resp
+		}
+	}
+
+	// Strip banned tools from the request body
+	if len(bannedTools) > 0 {
+		modified, err := stripToolsFromBody(state.requestBody, bannedTools)
+		if err != nil {
+			if l, ok := logger.(interface {
+				Info(string, ...interface{})
+			}); ok {
+				l.Info("failed to strip tools from request body",
+					"error", err,
+					"requestID", requestID,
+				)
+			}
+			// On strip failure, forward original body
+			return nil
+		}
+		state.requestBody = modified
+	}
+
+	return nil
+}
+
+// emitPerToolDecisionEvent emits a policy.decision event for a per-tool
+// deny decision, including tool name in the reason.
+func (s *ExtProcServer) emitPerToolDecisionEvent(decision *policy.Decision, agentIdentity eventbus.AgentIdentity, requestID, toolName string) {
+	ruleRef := formatRuleReference(decision.PolicyNamespace, decision.PolicyName, decision.MatchedRuleIndex)
+
+	actionLabel := string(decision.Action.Type)
+	if decision.AuditOnly {
+		actionLabel = "audit:" + actionLabel
+	}
+
+	s.bus.Emit(&eventbus.EnforcementEvent{
+		BaseEvent: eventbus.BaseEvent{
+			Type:      eventbus.EventTypePolicyDecision,
+			Time:      time.Now(),
+			ReqID:     requestID,
+			AgentInfo: agentIdentity,
+		},
+		Reason:          fmt.Sprintf("tool %q stripped by policy rule: %s", toolName, ruleRef),
+		Action:          actionLabel,
+		PolicyName:      decision.PolicyName,
+		PolicyNamespace: decision.PolicyNamespace,
+	})
 }
 
 // handleEvaluationError handles policy evaluation errors based on the
@@ -657,6 +791,13 @@ func (s *ExtProcServer) applyEnforcementDecision(decision *policy.Decision, agen
 	// Audit-only decisions: the event was emitted above, but the action is
 	// not enforced — pass through as if it were an allow.
 	if decision.AuditOnly {
+		log.Log.Info("policy decision (audit-only, not enforced)",
+			"action", string(decision.Action.Type),
+			"rule", ruleRef,
+			"agent", agentIdentity.PodName,
+			"namespace", agentIdentity.Namespace,
+			"requestID", requestID,
+		)
 		return nil
 	}
 

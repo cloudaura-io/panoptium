@@ -36,10 +36,12 @@ type mockPolicyEvaluator struct {
 	decision  *policy.Decision
 	err       error
 	lastEvent *policy.PolicyEvent
+	allEvents []*policy.PolicyEvent
 }
 
 func (m *mockPolicyEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.Decision, error) {
 	m.lastEvent = event
+	m.allEvents = append(m.allEvents, event)
 	return m.decision, m.err
 }
 
