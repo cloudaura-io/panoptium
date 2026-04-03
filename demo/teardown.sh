@@ -33,6 +33,10 @@ $K delete modelconfig demo-model-config -n "$KAGENT_NS" --ignore-not-found 2>/de
 info "Removing API key secret..."
 $K delete secret openai-api-key -n "$KAGENT_NS" --ignore-not-found 2>/dev/null || true
 
+info "Removing AgentGateway demo backend + route..."
+$K delete agentgatewaybackend openai-backend -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+$K delete httproute demo-openai-route -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+
 # Remove Panoptium policies
 info "Removing Panoptium policies..."
 for policy in demo-audit-baseline demo-allow-safe-tools demo-deny-bash demo-rate-limit demo-escalate-quarantine; do

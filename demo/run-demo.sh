@@ -167,11 +167,22 @@ deploy_demo_resources() {
   $K apply -f "${DEMO_DIR}/policies/"
 
   if ! $K get secret openai-api-key -n "$KAGENT_NS" &>/dev/null; then
-    info "Creating dummy API key secret (gateway handles routing, no real key needed)..."
+    if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+      err "OPENAI_API_KEY env var is required (demo uses real OpenAI API)."
+      err ""
+      err "  export OPENAI_API_KEY=sk-..."
+      err "  ./demo/run-demo.sh"
+      err ""
+      exit 1
+    fi
+    info "Creating API key secret..."
     $K create secret generic openai-api-key \
       -n "$KAGENT_NS" \
-      --from-literal=Authorization="Bearer not-used"
+      --from-literal=api-key="${OPENAI_API_KEY}"
   fi
+
+  info "Deploying AgentGateway OpenAI backend + route..."
+  $K apply -f "${DEMO_DIR}/manifests/agentgateway-openai-backend.yaml"
 
   info "Applying Kagent Agent + ModelConfig..."
   $K apply -f "${DEMO_DIR}/manifests/kagent-model-config.yaml"
@@ -294,7 +305,7 @@ echo "flows through AgentGateway. Panoptium's ExtProc filter"
 echo "observes and enforces security policies on that traffic."
 echo ""
 echo "Architecture:"
-echo "  Kagent Agent  -->  AgentGateway  -->  LLM Backend"
+echo "  Kagent Agent  -->  AgentGateway  -->  OpenAI API"
 echo "                        |"
 echo "                   Panoptium ExtProc"
 echo "                   (policy enforcement)"
