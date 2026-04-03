@@ -126,6 +126,11 @@ type streamState struct {
 	// requestBodyComplete indicates the request body has been fully received.
 	requestBodyComplete bool
 
+	// requestBodyModified indicates the request body was modified (e.g., tools stripped).
+	// When true, intermediate chunks are echoed as empty and the full modified body
+	// is sent on the final chunk.
+	requestBodyModified bool
+
 	// startEventEmitted indicates the LLMRequestStart event has been emitted.
 	startEventEmitted bool
 
@@ -333,33 +338,27 @@ func (s *ExtProcServer) handleRequestBody(ctx context.Context, state *streamStat
 	// Echo body back via StreamedBodyResponse — AgentGateway operates in
 	// streaming mode and rejects BodyMutation_Body variant.
 	//
-	// For intermediate chunks (EndOfStream=false): echo the raw chunk as-is
-	// to preserve the streaming protocol. Sending EndOfStream=true on an
-	// intermediate chunk causes AgentGateway to drop the remaining body.
+	// AgentGateway concatenates Body bytes from ALL chunk responses into the
+	// final request body. Two cases:
 	//
-	// For the final chunk: echo the full (possibly modified) accumulated body
-	// if tools were stripped, or just the raw chunk if body was unmodified.
-	if !state.requestBodyComplete {
-		// Intermediate chunk — pass through as-is
-		return &extprocv3.ProcessingResponse{
-			Response: &extprocv3.ProcessingResponse_RequestBody{
-				RequestBody: &extprocv3.BodyResponse{
-					Response: &extprocv3.CommonResponse{
-						BodyMutation: &extprocv3.BodyMutation{
-							Mutation: &extprocv3.BodyMutation_StreamedResponse{
-								StreamedResponse: &extprocv3.StreamedBodyResponse{
-									Body:        body.GetBody(),
-									EndOfStream: false,
-								},
-							},
-						},
-					},
-				},
-			},
+	// 1. Body NOT modified (no tool stripping): echo each raw chunk as-is.
+	// 2. Body WAS modified (tools stripped): send empty bytes for intermediate
+	//    chunks, then send the full modified body on the final chunk.
+	var echoBody []byte
+	eos := body.GetEndOfStream()
+
+	if state.requestBodyModified {
+		// Body was modified by tool stripping — hold intermediate chunks,
+		// send full modified body only on the final chunk.
+		if eos {
+			echoBody = state.requestBody
 		}
+		// else: empty body for intermediate chunks
+	} else {
+		// Body unmodified — echo each raw chunk as-is.
+		echoBody = body.GetBody()
 	}
 
-	// Final chunk — send full accumulated body (may have been modified by tool stripping)
 	return &extprocv3.ProcessingResponse{
 		Response: &extprocv3.ProcessingResponse_RequestBody{
 			RequestBody: &extprocv3.BodyResponse{
@@ -367,8 +366,8 @@ func (s *ExtProcServer) handleRequestBody(ctx context.Context, state *streamStat
 					BodyMutation: &extprocv3.BodyMutation{
 						Mutation: &extprocv3.BodyMutation_StreamedResponse{
 							StreamedResponse: &extprocv3.StreamedBodyResponse{
-								Body:        state.requestBody,
-								EndOfStream: true,
+								Body:        echoBody,
+								EndOfStream: eos,
 							},
 						},
 					},
@@ -709,6 +708,7 @@ func (s *ExtProcServer) evaluatePerToolPolicy(state *streamState, baseFields map
 			return nil
 		}
 		state.requestBody = modified
+		state.requestBodyModified = true
 	}
 
 	return nil
