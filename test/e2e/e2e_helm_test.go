@@ -174,6 +174,17 @@ spec:
 					"--for=condition=Available",
 					"--timeout=120s")
 				_, _ = utils.Run(waitCmd)
+
+				// Probe the full gateway→ExtProc gRPC path to ensure it is
+				// re-established after the scale-down. The kubectl wait above
+				// only checks the Kubernetes deployment condition, not the
+				// actual data-path readiness through AgentGateway.
+				gwIP := gatewayServiceIP()
+				if gwIP != "" {
+					probePod := createPersistentCurlPod(namespace)
+					waitForExtProcReady(probePod, gwIP)
+					deletePersistentCurlPod(probePod, namespace)
+				}
 			})
 
 			By("verifying the deployment has 2 ready replicas")
