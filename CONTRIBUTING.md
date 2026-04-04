@@ -71,7 +71,7 @@ This takes a few minutes. For faster iteration, run unit tests with `make test`.
 ## Where to help
 
 - Check [open issues](https://github.com/panoptium/panoptium/issues) for bugs or feature requests.
-- Look at [conductor/tracks.md](conductor/tracks.md) for the roadmap — tracks marked `[ ]` are open for work.
+- Look at the [issues](https://github.com/panoptium/panoptium/issues) for bugs, feature requests, and roadmap items.
 - Protocol parsers (MCP, A2A, Gemini) are implemented but not wired — integration help is welcome.
 - Documentation, examples, and Helm chart improvements are always appreciated.
 
