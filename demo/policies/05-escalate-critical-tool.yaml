@@ -1,0 +1,41 @@
+---
+# NOTE: AgentGateway v1.0.1 does not support ExtProc ImmediateResponse.
+# Deny actions (HTTP 403) and rateLimit actions (HTTP 429) will cause the
+# gateway to return 503 instead of the expected status code. This is an
+# AgentGateway limitation, not a Panoptium bug. Tool stripping (deny on
+# tool_call) works correctly. Track: agentgateway/agentgateway#TBD
+#
+# Demo escalation policy: deny 'critical_tool' with CRITICAL severity.
+# One CRITICAL deny event (100 risk pts) meets the threshold=100 → immediate
+# quarantine. The EscalationManager creates an AgentQuarantine CRD targeting
+# the offending agent pod.
+#
+# Used by Scenario E to demonstrate the full escalation flow:
+#   1. Agent sends request containing critical_tool
+#   2. Panoptium strips critical_tool from tools[] (deny action)
+#   3. CRITICAL severity event (100 pts) triggers escalation threshold
+#   4. EscalationManager creates AgentQuarantine resource
+#   5. Quarantine controller reconciles → sets Contained=True
+apiVersion: panoptium.io/v1alpha1
+kind: AgentClusterPolicy
+metadata:
+  name: demo-escalate-critical-tool
+spec:
+  targetSelector: {}
+  enforcementMode: enforcing
+  priority: 100
+  rules:
+    - name: deny-critical-tool
+      severity: CRITICAL
+      trigger:
+        eventCategory: protocol
+        eventSubcategory: tool_call
+      predicates:
+        - cel: "event.toolName == 'critical_tool'"
+      action:
+        type: deny
+        parameters:
+          message: "critical tool blocked — immediate quarantine escalation"
+          escalationThreshold: "100"
+          escalationWindow: "300"
+          escalationAction: "quarantine"
