@@ -20,8 +20,6 @@ import (
 	"testing"
 )
 
-// --- ProtocolDetector Tests ---
-
 // TestProtocolDetector_NewProtocolDetector verifies creation of a new detector.
 func TestProtocolDetector_NewProtocolDetector(t *testing.T) {
 	detector := NewProtocolDetector()
@@ -64,8 +62,6 @@ func TestProtocolDetector_Register_Duplicate(t *testing.T) {
 		t.Fatal("Second Register() expected error for duplicate name, got nil")
 	}
 }
-
-// --- Detection Cascade Priority Tests ---
 
 // TestProtocolDetector_Cascade_AnnotationHighestPriority verifies annotation detection
 // returns confidence 1.0, overriding all heuristic detection.

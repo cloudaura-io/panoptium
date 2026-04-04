@@ -76,6 +76,7 @@ func (dt *DecisionTree) Evaluate(event *PolicyEvent) (*Decision, error) {
 			return &Decision{
 				Action:             rule.Action,
 				Matched:            true,
+				Severity:           string(rule.Severity),
 				MatchedRule:        rule.Name,
 				MatchedRuleIndex:   rule.Index,
 				PolicyName:         dt.policy.Name,

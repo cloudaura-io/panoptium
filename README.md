@@ -6,18 +6,20 @@
 
 <p align="center">
   Runtime security for Cloud Native AI agents.<br/>
-  Observe, enforce, contain — before damage is done.
+  Observe, enforce, contain. Before damage is done.
 </p>
 
 ---
 
 ## The problem
 
-AI agents are autonomous software that can execute tools, spawn processes, open network connections, and interact with external services — all without human approval at each step. When an agent gets compromised, jailbroken, or simply misbehaves, traditional container security tools have no idea what's happening. They see syscalls and network traffic, but they don't understand *intent*.
+You can have a perfectly trained agent with flawless eval scores, red-teamed to the teeth, and it still won't matter when the threat comes from outside the model.
 
-An agent that was told to "read a CSV file" but is now connecting to an external IP and exfiltrating data looks perfectly normal at the container level. It's just a process making a network call.
+Traditional evaluators test what an agent *would* do given a controlled input. They don't run alongside the agent in production. They can't see what happens when a trusted website starts returning prompt injection payloads, when an MCP server poisons its tool descriptions to manipulate the LLM's tool selection, when a multi-step tool chain silently exfiltrates credentials through a side channel, or when an LLM provider response carries encoded instructions hidden in the token stream. These vectors don't exist in eval datasets. They manifest only at runtime, only in real environments, and only when real external services are involved.
 
-Panoptium is built to catch exactly this. It correlates what an agent *declares* it will do (through LLM tool calls) with what it *actually does* (at the kernel level), and enforces security policies in real time — blocking, throttling, quarantining, or killing agent pods when something doesn't add up.
+The uncomfortable truth is that the boundary you always trusted is the one most likely to be weaponized. The API you allowlisted returns poisoned content. The tool that passed every static check changes behavior after deployment. The agent's declared intent says "read a CSV" while its actual syscalls show `connect(attacker.com)`. No amount of offline testing catches a live rug-pull.
+
+Panoptium is an R&D project born from this realization. It flips the perspective: instead of trying to prove an agent is safe before deployment, it assumes any layer can be compromised at any time and enforces security in real time. It sits as a proxy between every agent and every LLM provider, correlates what the agent *declares* it will do (through LLM tool calls and protocol messages) with what it *actually does* (at the kernel and network level), and acts: blocking, throttling, quarantining, or killing agent workloads the moment something doesn't add up. **Not after the fact. While it's happening**.
 
 ## How it works
 
@@ -25,32 +27,27 @@ Panoptium is built to catch exactly this. It correlates what an agent *declares*
   <img src="assets/architecture.svg" alt="Panoptium architecture" />
 </p>
 
-```
-AI Agent Pod --> AgentGateway (Envoy) --> LLM Provider (OpenAI/Anthropic)
-                       |
-                 Panoptium ExtProc
-                 (observe, enforce, strip tools)
-```
-
 All agent-to-LLM traffic flows through [AgentGateway](https://github.com/agentgateway/agentgateway) (Envoy-based). Panoptium runs as an ExtProc filter on that gateway and acts as both the observation and enforcement point.
 
 **Observation:**
 
-- Parses every request and response for OpenAI and Anthropic protocols — tool names, arguments, model parameters, token counts, latency. Handles SSE streaming.
+- Parses every request and response for OpenAI and Anthropic protocols: tool names, arguments, model parameters, token counts, latency. Handles SSE streaming.
 - Resolves agent identity by mapping source IP (from `X-Forwarded-For`) to Kubernetes pod metadata via a pod cache that watches the API server.
 - Publishes all observed events to an embedded NATS event bus for telemetry, SIEM integration, or downstream consumers.
 
 **Policy enforcement:**
 
-- Security rules are defined as Kubernetes CRDs (`AgentPolicy` / `AgentClusterPolicy`) with CEL predicates, priority ordering, namespace vs. cluster scope, and first-match semantics.
-- Policies can target specific pods by label selector and operate in `enforcing` or `auditing` mode.
+- Security rules are defined as Kubernetes CRDs (`AgentPolicy` / `AgentClusterPolicy`) with CEL predicates, priority ordering, and namespace vs. cluster scope. Evaluation is deny-first: all matching policies across all priority tiers are evaluated; at equal priority, `deny`/`quarantine` overrides `allow`. Non-terminal actions (`alert`, `audit`) always fire. Terminal actions (`deny`, `quarantine`) block.
+- Policies can target specific pods by label selector and operate in `enforcing`, `audit`, or `disabled` mode.
 
 **Enforcement actions:**
 
-- **Deny** — block the request with a structured error explaining which rule fired.
-- **Throttle** — sliding-window rate limiting per agent, per tool. Returns 429 when exceeded.
-- **Tool stripping** — removes banned tools from the outgoing request body so the LLM never sees them. Defense-in-depth: also intercepts `tool_call` responses for tools that should have been denied.
-- **Escalation** — repeated denied requests from the same agent within a time window automatically create an `AgentQuarantine` CRD. Actual containment actions (NetworkPolicy, pod eviction, eBPF-LSM restriction) are not yet implemented.
+- **Deny**: block the request with a structured error explaining which rule fired.
+- **Alert**: emit an event without blocking the request. Useful for shadow-mode monitoring.
+- **Quarantine**: immediately isolate the agent by creating an `AgentQuarantine` resource. Containment actions (NetworkPolicy, pod eviction, eBPF-LSM) are stubbed.
+- **Rate limiting**: sliding-window counters with configurable `groupBy` (per-agent, per-tool, or per-agent+tool). Returns 429 when exceeded.
+- **Tool stripping**: removes banned tools from the outgoing request body so the LLM never sees them. Also intercepts `tool_call` responses for tools that should have been denied (defense-in-depth).
+- **Escalation**: each enforcement event contributes risk points based on severity (`low`=5, `medium`=20, `high`=50, `critical`=100). When accumulated risk within a time window exceeds the threshold, an `AgentQuarantine` resource is created. Actual containment actions are not yet implemented.
 
 ## CRDs
 
@@ -97,8 +94,8 @@ helm install panoptium chart/panoptium -n panoptium-system --create-namespace \
 ```
 
 Panoptium automatically creates two `AgentgatewayPolicy` resources:
-- **ExtProc policy** — routes all LLM traffic through Panoptium for observation and enforcement
-- **Identity policy** — injects `X-Forwarded-For` so Panoptium can resolve agent pod identity
+- **ExtProc policy**: routes all LLM traffic through Panoptium for observation and enforcement
+- **Identity policy**: injects `X-Forwarded-For` so Panoptium can resolve agent pod identity
 
 Apply a policy:
 
@@ -138,26 +135,49 @@ To tear down:
 helm uninstall panoptium -n panoptium-system
 ```
 
+## Demo
+
+`demo/run-demo.sh` deploys a Kagent agent on a kind cluster with AgentGateway and runs five scenarios end-to-end:
+
+| Scenario | What it shows |
+|----------|---------------|
+| A | Happy path: audit policy observes traffic without blocking |
+| B | Tool stripping: banned tool removed from the request before it reaches the LLM |
+| C | Hallucination defense: response-path intercept blocks an unauthorized `tool_call` |
+| D | Rate limiting: agent throttled after exceeding the configured limit |
+| E | Quarantine escalation: severity-based risk accumulation triggers `AgentQuarantine` |
+
+```bash
+./demo/run-demo.sh
+```
+
+Scenario C uses a mock LLM backend. The rest hit a real provider.
+
+> [!WARNING]
+> **Known limitation:** AgentGateway v1.0.1 does not support ExtProc `ImmediateResponse`. Scenarios C and D return HTTP 503 instead of the expected 403/429. Panoptium issues the correct status codes, but AgentGateway converts them to 503. Tool stripping (scenario B) is unaffected because it uses body mutation.
+
+## Development
+
+```bash
+make build         # build the controller binary
+make test          # unit tests (uses envtest)
+make test-e2e-full # full E2E on a kind cluster (creates cluster, deploys, tests)
+make docker-build  # build the container image
+make lint          # run golangci-lint
+```
+
 ## Roadmap
 
-| Area | Status |
+| Goal | Status |
 |------|--------|
-| Policy engine (CEL predicates, composition, priority) | Done |
-| Gateway enforcement (ExtProc deny/throttle/allow) | Done |
-| Tool enforcement (strip from request + response intercept) | Done |
-| Agent identity resolution (pod IP to metadata) | Done |
-| Rate limiting (sliding window, per-agent/per-tool) | Done |
-| Event bus (embedded NATS) | Done |
-| CRD operator + Helm chart (5 CRDs, webhooks) | Done |
-| LLM observation (OpenAI / Anthropic, SSE streaming) | Done |
-| MCP protocol observation | Code complete, not wired |
-| A2A / Gemini parsers | Code complete, not wired |
-| Threat signature enforcement | Partial -- CRD works, enforcement pipeline not connected |
-| Quarantine containment | Partial -- escalation works, containment actions stubbed |
-| eBPF / Tetragon observation | Standalone -- not integrated with policy enforcement |
-| Agent behavioral profiling | Planned -- CRD only |
-| Intent-action correlation | Planned |
-| Cross-layer detection | Planned |
+| CRD-based policy engine with real-time ExtProc enforcement | Done |
+| LLM traffic observation (OpenAI, Anthropic, SSE streaming) | Done |
+| Protocol parsers (MCP, A2A, Gemini) | Code complete, not wired |
+| Threat signature detection | Partial |
+| Graduated containment (NetworkPolicy, eBPF-LSM, pod eviction) | Partial, containment actions stubbed |
+| eBPF kernel observation (Tetragon) | Standalone, not integrated |
+| Intent-action correlation (LLM intent vs. kernel behavior) | Planned |
+| Behavioral anomaly detection | Planned |
 | Multi-cluster federation | Planned |
 
 ## Contributing
@@ -166,4 +186,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE) for details.
+Apache License 2.0. See [LICENSE](LICENSE) for details.

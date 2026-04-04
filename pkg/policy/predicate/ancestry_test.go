@@ -22,8 +22,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
-// --- ProcessAncestryEvaluator tests ---
-
 func TestProcessAncestryEvaluator_DirectParent(t *testing.T) {
 	// Process tree: bash(1) -> curl(2)
 	tree := &MockProcessTree{
@@ -336,8 +334,6 @@ func TestProcessAncestryEvaluator_ImplementsInterface(t *testing.T) {
 		ProcessTree:  tree,
 	}
 }
-
-// --- MockProcessTree ---
 
 // MockProcessTree is a test double for ProcessTreeProvider.
 type MockProcessTree struct {

@@ -125,10 +125,10 @@ type rawContentBlockStart struct {
 	Type         string `json:"type"`
 	Index        int    `json:"index"`
 	ContentBlock struct {
-		Type  string `json:"type"`
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Text  string `json:"text"`
+		Type  string   `json:"type"`
+		ID    string   `json:"id"`
+		Name  string   `json:"name"`
+		Text  string   `json:"text"`
 		Input struct{} `json:"input"`
 	} `json:"content_block"`
 }

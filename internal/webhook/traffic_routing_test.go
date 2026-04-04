@@ -24,9 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// --- Traffic Routing Webhook Tests ---
-
-// TestTrafficRouting_InterceptAnnotation_Pod verifies that the webhook
+// TestTrafficRouting_InterceptAnnotation_True verifies that the webhook
 // intercepts Pod CREATE requests for pods with panoptium.io/intercept=true.
 func TestTrafficRouting_InterceptAnnotation_True(t *testing.T) {
 	m := &TrafficRoutingMutator{

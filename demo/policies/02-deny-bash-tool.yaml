@@ -1,4 +1,10 @@
 ---
+# NOTE: AgentGateway v1.0.1 does not support ExtProc ImmediateResponse.
+# Deny actions (HTTP 403) and rateLimit actions (HTTP 429) will cause the
+# gateway to return 503 instead of the expected status code. This is an
+# AgentGateway limitation, not a Panoptium bug. Tool stripping (deny on
+# tool_call) works correctly. Track: agentgateway/agentgateway#TBD
+#
 # Block dangerous tools: bash, shell_exec, run_command, execute.
 # These tools are stripped from the request tools[] array before forwarding to the LLM.
 # If the LLM response contains a tool_call for a banned tool, it is intercepted with HTTP 403.

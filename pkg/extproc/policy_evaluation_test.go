@@ -206,9 +206,9 @@ func TestPolicyEvaluation_EventContextExtraction(t *testing.T) {
 		t.Errorf("expected provider 'openai', got %q", event.GetStringField("provider"))
 	}
 
-	// Verify category and subcategory
-	if event.Category != "protocol" {
-		t.Errorf("expected Category 'protocol', got %q", event.Category)
+	// Verify category and subcategory (FR-7: llm_request is in "llm" layer)
+	if event.Category != "llm" {
+		t.Errorf("expected Category 'llm', got %q", event.Category)
 	}
 	if event.Subcategory != "llm_request" {
 		t.Errorf("expected Subcategory 'llm_request', got %q", event.Subcategory)
@@ -654,5 +654,75 @@ func TestPolicyEvaluation_NilEvaluator(t *testing.T) {
 	}
 	if resp.GetRequestBody() == nil {
 		t.Fatal("expected RequestBody response for pass-through")
+	}
+}
+
+// TestApplyEnforcementDecision_EmitsSeverity verifies that applyEnforcementDecision
+// sets the Severity field on the emitted EnforcementEvent from Decision.Severity.
+func TestApplyEnforcementDecision_EmitsSeverity(t *testing.T) {
+	evaluator := &mockPolicyEvaluator{
+		decision: &policy.Decision{
+			Action: policy.CompiledAction{
+				Type:       v1alpha1.ActionTypeDeny,
+				Parameters: map[string]string{"message": "denied"},
+			},
+			Matched:          true,
+			Severity:         "CRITICAL",
+			MatchedRule:      "critical-rule",
+			MatchedRuleIndex: 0,
+			PolicyName:       "severity-policy",
+			PolicyNamespace:  "default",
+		},
+	}
+	bus, podCache, srv := setupPolicyEvalTestComponents(t, evaluator)
+	defer bus.Close()
+
+	podCache.Set("10.0.0.100", identity.PodInfo{
+		Name:      "severity-pod",
+		Namespace: "default",
+		UID:       "uid-sev-1",
+		Labels:    map[string]string{"app": "agent"},
+	})
+
+	// Subscribe to policy decision events
+	sub := bus.Subscribe(eventbus.EventTypePolicyDecision)
+	defer bus.Unsubscribe(sub)
+
+	client, cleanup := startTestServer(t, srv)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := client.Process(ctx)
+	if err != nil {
+		t.Fatalf("failed to open stream: %v", err)
+	}
+
+	reqBody := makeOpenAIRequestBody("gpt-4", false)
+
+	sendHeadersAndBody(t, stream, []string{
+		":path", "/v1/chat/completions",
+		":method", "POST",
+		"host", "api.openai.com",
+		"content-type", "application/json",
+		"x-forwarded-for", "10.0.0.100",
+	}, reqBody)
+
+	// Verify policy.decision event has Severity set
+	select {
+	case evt := <-sub.Events():
+		enfEvt, ok := evt.(*eventbus.EnforcementEvent)
+		if !ok {
+			t.Fatalf("expected *EnforcementEvent, got %T", evt)
+		}
+		if enfEvt.Severity != "CRITICAL" {
+			t.Errorf("expected Severity=%q on emitted event, got %q", "CRITICAL", enfEvt.Severity)
+		}
+		if enfEvt.Action != "deny" {
+			t.Errorf("expected Action=%q, got %q", "deny", enfEvt.Action)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for policy.decision event")
 	}
 }

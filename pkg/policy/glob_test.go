@@ -18,8 +18,6 @@ package policy
 
 import "testing"
 
-// --- GlobMatcher Tests ---
-
 func TestGlobMatcher_ExactLiteralMatch(t *testing.T) {
 	g := &GlobMatcher{Pattern: "foo/bar"}
 	if !g.Match("foo/bar") {

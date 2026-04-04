@@ -147,32 +147,76 @@ type EvaluationResult struct {
 	PredicateTrace []PredicateTraceEntry
 }
 
-// EffectiveAction returns the winning action after deny-first composition.
-// Terminal deny/quarantine always wins over allow at equal priority.
-// If no decisions exist, returns a default allow action.
+// EffectiveAction returns the winning action after priority-aware deny-first
+// composition. Higher priority always wins. At equal priority, terminal
+// deny/quarantine beats allow (deny-first). If no decisions exist, returns
+// a default allow action.
+//
+// Decisions are expected to be sorted by descending priority (from EvaluateAll).
 func (r *EvaluationResult) EffectiveAction() CompiledAction {
 	if len(r.Decisions) == 0 || r.DefaultAllow {
 		return CompiledAction{Type: "allow"}
 	}
 
-	// Deny-first: if any terminal deny/quarantine exists, it wins.
+	// Walk decisions grouped by priority tier (highest first).
+	// Within each tier, deny-first: if any terminal deny/quarantine exists, it wins.
+	// An explicit allow at a higher tier beats deny at a lower tier.
+	// Non-terminal actions (alert/audit) do not claim a tier — they are
+	// always executed regardless and do not block lower-priority decisions.
+	tierPriority := r.Decisions[0].Priority
+	var tierHasTerminal bool
+	var tierTerminal CompiledAction
+	var tierHasRateLimit bool
+	var tierRateLimit CompiledAction
+	var tierHasAllow bool
+
 	for _, d := range r.Decisions {
-		if d.Action.Type == "deny" || d.Action.Type == "quarantine" {
-			cat := ClassifyAction(d.Action.Type, d.Subcategory)
-			if cat == ActionCategoryTerminal {
-				return d.Action
+		if d.Priority != tierPriority {
+			// Finished processing previous tier -- check if it produced a winner.
+			if tierHasTerminal {
+				return tierTerminal
+			}
+			if tierHasRateLimit {
+				return tierRateLimit
+			}
+			if tierHasAllow {
+				return CompiledAction{Type: "allow"}
+			}
+			// Move to next tier.
+			tierPriority = d.Priority
+			tierHasTerminal = false
+			tierHasRateLimit = false
+			tierHasAllow = false
+		}
+
+		cat := ClassifyAction(d.Action.Type, d.Subcategory)
+		switch cat {
+		case ActionCategoryTerminal:
+			if !tierHasTerminal {
+				tierHasTerminal = true
+				tierTerminal = d.Action
+			}
+		case ActionCategoryRateControl:
+			if !tierHasRateLimit {
+				tierHasRateLimit = true
+				tierRateLimit = d.Action
+			}
+		case ActionCategoryNonTerminal:
+			if d.Action.Type == "allow" {
+				tierHasAllow = true
 			}
 		}
 	}
 
-	// Check for rate limit
-	for _, d := range r.Decisions {
-		if d.Action.Type == "rateLimit" {
-			return d.Action
-		}
+	// Check the last tier.
+	if tierHasTerminal {
+		return tierTerminal
+	}
+	if tierHasRateLimit {
+		return tierRateLimit
 	}
 
-	// No terminal or rate control -- return allow
+	// No terminal or rate control at any tier -- allow.
 	return CompiledAction{Type: "allow"}
 }
 
@@ -223,10 +267,11 @@ func (r *EvaluationResult) RateControlDecisions() []*Decision {
 	return result
 }
 
-// HasDeny returns true if any decision has a deny or quarantine terminal action.
+// HasDeny returns true if any decision is a terminal deny or quarantine.
+// Mutating denies (deny on tool_call, which only strip tools) are excluded.
 func (r *EvaluationResult) HasDeny() bool {
 	for _, d := range r.Decisions {
-		if d.Action.Type == "deny" || d.Action.Type == "quarantine" {
+		if ClassifyAction(d.Action.Type, d.Subcategory) == ActionCategoryTerminal {
 			return true
 		}
 	}
@@ -244,6 +289,12 @@ type Decision struct {
 	// Subcategory is the event subcategory that produced this decision
 	// (e.g., "tool_call", "llm_request"). Used for action classification.
 	Subcategory string
+
+	// Priority is the priority of the source policy that produced this
+	// decision. Used by EffectiveAction() to implement priority-aware
+	// deny-first composition: higher priority wins; deny-first only
+	// applies within the same priority tier.
+	Priority int32
 
 	// Severity is the severity level from the matched rule.
 	Severity string

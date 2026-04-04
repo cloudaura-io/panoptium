@@ -24,8 +24,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
-// --- Universal Tier Tests ---
-
 func TestUniversalTier_StoreAndRetrieve(t *testing.T) {
 	c := NewPolicyDecisionCache(DefaultCacheConfig())
 	defer c.Stop()
@@ -122,8 +120,6 @@ func TestUniversalTier_OverwriteExistingEntry(t *testing.T) {
 		t.Errorf("expected MatchedRule 'rule-v2' after overwrite, got %q", got.MatchedRule)
 	}
 }
-
-// --- Task-Scoped Tier Tests ---
 
 func TestTaskScopedTier_StoreAndRetrieve(t *testing.T) {
 	c := NewPolicyDecisionCache(DefaultCacheConfig())
@@ -228,8 +224,6 @@ func TestTaskScopedTier_InvalidateSessionOnlyAffectsTargetSession(t *testing.T) 
 	}
 }
 
-// --- Once Tier Tests ---
-
 func TestOnceTier_AlwaysReturnsCacheMiss(t *testing.T) {
 	c := NewPolicyDecisionCache(DefaultCacheConfig())
 	defer c.Stop()
@@ -268,8 +262,6 @@ func TestOnceTier_MultipleStoresStillMiss(t *testing.T) {
 	}
 }
 
-// --- Cache Tier Selection Tests ---
-
 func TestCacheTierSelection_UniversalForGlobalRules(t *testing.T) {
 	tier := SelectTier("universal")
 	if tier != TierUniversal {
@@ -304,8 +296,6 @@ func TestCacheTierSelection_UnknownDefaultsToUniversal(t *testing.T) {
 		t.Errorf("expected TierUniversal for unknown annotation, got %v", tier)
 	}
 }
-
-// --- Concurrent Access Tests ---
 
 func TestConcurrentCacheAccess_UniversalTier(t *testing.T) {
 	c := NewPolicyDecisionCache(DefaultCacheConfig())
@@ -400,8 +390,6 @@ func TestConcurrentCacheAccess_StoreAndInvalidate(t *testing.T) {
 
 	wg.Wait()
 }
-
-// --- Policy CRD Invalidation Tests ---
 
 func TestInvalidatePolicy_UniversalTierEvictsMatchingEntries(t *testing.T) {
 	c := NewPolicyDecisionCache(DefaultCacheConfig())
@@ -550,8 +538,6 @@ func TestInvalidatePolicy_TaskScopedAlsoEvicted(t *testing.T) {
 	}
 }
 
-// --- CacheTier String Tests ---
-
 func TestCacheTier_String(t *testing.T) {
 	tests := []struct {
 		tier CacheTier
@@ -568,8 +554,6 @@ func TestCacheTier_String(t *testing.T) {
 		}
 	}
 }
-
-// --- GetEntryVersion Tests ---
 
 func TestGetEntryVersion_MissingKey(t *testing.T) {
 	c := NewPolicyDecisionCache(DefaultCacheConfig())
@@ -638,8 +622,6 @@ func TestGetEntryVersion_OnceTier(t *testing.T) {
 	}
 }
 
-// --- Stats/Metrics Tests ---
-
 func TestCacheStats_TracksHitsAndMisses(t *testing.T) {
 	c := NewPolicyDecisionCache(DefaultCacheConfig())
 	defer c.Stop()
@@ -663,8 +645,6 @@ func TestCacheStats_TracksHitsAndMisses(t *testing.T) {
 		t.Errorf("expected 1 miss, got %d", stats.Misses)
 	}
 }
-
-// --- Flush Tests ---
 
 func TestFlush_ClearsAllTiers(t *testing.T) {
 	c := NewPolicyDecisionCache(DefaultCacheConfig())

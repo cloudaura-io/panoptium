@@ -420,7 +420,7 @@ func (s *ExtProcServer) handleResponseBody(ctx context.Context, state *streamSta
 		}
 
 		policyEvent := &policy.PolicyEvent{
-			Category:    "protocol",
+			Category:    "llm",
 			Subcategory: subcategory,
 			Timestamp:   time.Now(),
 			Namespace:   state.streamCtx.AgentIdentity.Namespace,
@@ -560,7 +560,7 @@ func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interfa
 	}
 
 	policyEvent := &policy.PolicyEvent{
-		Category:    "protocol",
+		Category:    "llm",
 		Subcategory: "llm_request",
 		Timestamp:   time.Now(),
 		Namespace:   agentIdentity.Namespace,
@@ -730,9 +730,27 @@ func (s *ExtProcServer) evaluatePerToolPolicy(state *streamState, baseFields map
 }
 
 // emitPerToolDecisionEvent emits a policy.decision event for a per-tool
-// deny decision, including tool name in the reason.
+// deny decision, including tool name in the reason and escalation parameters.
 func (s *ExtProcServer) emitPerToolDecisionEvent(decision *policy.Decision, agentIdentity eventbus.AgentIdentity, requestID, toolName string) {
 	ruleRef := formatRuleReference(decision.PolicyNamespace, decision.PolicyName, decision.MatchedRuleIndex)
+
+	// Parse escalation parameters from the policy action (if present)
+	var escalationThreshold int
+	var escalationWindow time.Duration
+	var escalationAction string
+	if v, ok := decision.Action.Parameters["escalationThreshold"]; ok {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			escalationThreshold = parsed
+		}
+	}
+	if v, ok := decision.Action.Parameters["escalationWindow"]; ok {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			escalationWindow = time.Duration(parsed) * time.Second
+		}
+	}
+	if v, ok := decision.Action.Parameters["escalationAction"]; ok {
+		escalationAction = v
+	}
 
 	actionLabel := string(decision.Action.Type)
 	if decision.AuditOnly {
@@ -746,10 +764,14 @@ func (s *ExtProcServer) emitPerToolDecisionEvent(decision *policy.Decision, agen
 			ReqID:     requestID,
 			AgentInfo: agentIdentity,
 		},
-		Reason:          fmt.Sprintf("tool %q stripped by policy rule: %s", toolName, ruleRef),
-		Action:          actionLabel,
-		PolicyName:      decision.PolicyName,
-		PolicyNamespace: decision.PolicyNamespace,
+		Reason:              fmt.Sprintf("tool %q stripped by policy rule: %s", toolName, ruleRef),
+		Action:              actionLabel,
+		Severity:            decision.Severity,
+		EscalationThreshold: escalationThreshold,
+		EscalationWindow:    escalationWindow,
+		EscalationAction:    escalationAction,
+		PolicyName:          decision.PolicyName,
+		PolicyNamespace:     decision.PolicyNamespace,
 	})
 }
 
@@ -912,6 +934,7 @@ func (s *ExtProcServer) applyEnforcementDecision(decision *policy.Decision, agen
 		},
 		Reason:              fmt.Sprintf("policy rule matched: %s", ruleRef),
 		Action:              actionLabel,
+		Severity:            decision.Severity,
 		EscalationThreshold: escalationThreshold,
 		EscalationWindow:    escalationWindow,
 		EscalationAction:    escalationAction,

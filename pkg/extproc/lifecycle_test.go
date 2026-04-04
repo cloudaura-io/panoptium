@@ -1001,7 +1001,7 @@ func TestLifecycleManagerListenAddress(t *testing.T) {
 			expectedAddr: ":9999",
 		},
 		{
-			name:         "port zero for auto-assign",
+			name:         "port zero for auto assign",
 			port:         0,
 			expectedAddr: ":0",
 		},

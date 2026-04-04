@@ -189,8 +189,6 @@ func TestGetAncestryCycleDetection(t *testing.T) {
 	}
 }
 
-// --- Tetragon-specific tests ---
-
 func TestHandleProcessExecBuildsAncestry(t *testing.T) {
 	tracker := NewProcessTreeTracker()
 

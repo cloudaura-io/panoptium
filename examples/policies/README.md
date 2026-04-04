@@ -2,6 +2,12 @@
 
 `AgentPolicy` (namespaced) and `AgentClusterPolicy` (cluster-scoped) define what Panoptium should do when an agent does something specific. A policy has three parts: **who** it applies to (target selector), **what** triggers it (event + predicates), and **how** to respond (action).
 
+> **Known Limitation (AgentGateway v1.0.1):** Deny (403) and rateLimit (429)
+> enforcement actions require ExtProc ImmediateResponse support, which is not
+> yet implemented in AgentGateway v1.0.1. These actions will return 503 instead
+> of the expected status code. Tool stripping (deny on tool_call subcategory)
+> works correctly. This is an AgentGateway limitation, not a Panoptium bug.
+
 ## Structure
 
 ```yaml

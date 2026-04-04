@@ -166,7 +166,7 @@ var _ = Describe("AgentPolicy Controller PolicyCache Integration", func() {
 							Name: "delete-rule",
 							Trigger: panoptiumiov1alpha1.Trigger{
 								EventCategory:    "protocol",
-								EventSubcategory: "llm_request",
+								EventSubcategory: "tool_call",
 							},
 							Action:   panoptiumiov1alpha1.Action{Type: panoptiumiov1alpha1.ActionTypeDeny},
 							Severity: panoptiumiov1alpha1.SeverityMedium,

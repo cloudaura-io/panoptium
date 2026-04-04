@@ -26,21 +26,15 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 )
 
-// RateLimitCounter is an interface for rate limit checking. Implementations
-// atomically record an event and report whether the count for the given key
-// exceeds the specified limit within a sliding time window.
+// RateLimitCounter tracks event counts within sliding time windows.
 type RateLimitCounter interface {
-	// IncrementAndCheck records an event for key and returns true if the
-	// count now exceeds limit.
+	// IncrementAndCheck records an event for key and returns true if the count exceeds limit.
 	IncrementAndCheck(key string, limit int) bool
 }
 
-// PolicyCompositionResolver evaluates multiple compiled policies against
-// a single event, applying composition rules: priority ordering,
-// namespace > cluster specificity, and explicit allow override.
+// PolicyCompositionResolver evaluates policies with deny-first semantics and priority ordering.
 type PolicyCompositionResolver struct {
-	// rateLimitCounter is the shared sliding window counter for rate limiting.
-	// When nil, rateLimit action decisions are returned as-is (always match).
+	// rateLimitCounter is the shared sliding window counter. Nil means rate limits always match.
 	rateLimitCounter RateLimitCounter
 }
 
@@ -57,20 +51,7 @@ func NewPolicyCompositionResolverWithRateLimit(counter RateLimitCounter) *Policy
 	}
 }
 
-// Evaluate evaluates the given event against all provided compiled policies
-// using deny-first composition rules. Returns the winning Decision.
-//
-// This is a thin wrapper around EvaluateAll that returns a single Decision
-// for backward compatibility. At equal priority, deny/quarantine beats allow
-// (deny-first semantics per FR-3).
-//
-// Composition rules:
-//   - Policies are sorted by descending priority.
-//   - At equal priority, namespace-scoped policies beat cluster-scoped.
-//   - At equal priority and scope, alphabetical policy name breaks ties.
-//   - Within a policy, rules are evaluated top-to-bottom (first match wins).
-//   - Across policies at equal priority, deny/quarantine overrides allow (deny-first).
-//   - If no rule matches, a default "allow" decision is returned.
+// Evaluate returns the single winning decision from all policies using deny-first composition.
 func (r *PolicyCompositionResolver) Evaluate(policies []*CompiledPolicy, event *PolicyEvent) (*Decision, error) {
 	result, err := r.EvaluateAll(policies, event)
 	if err != nil {
@@ -89,10 +70,8 @@ func (r *PolicyCompositionResolver) Evaluate(policies []*CompiledPolicy, event *
 	var best *Decision
 	for _, d := range result.Decisions {
 		if d.Action.Type == v1alpha1.ActionTypeDeny || d.Action.Type == v1alpha1.ActionTypeQuarantine {
-			if best == nil || d.Action.Type == v1alpha1.ActionTypeDeny || d.Action.Type == v1alpha1.ActionTypeQuarantine {
-				best = d
-				break // Decisions are sorted by priority, first deny wins
-			}
+			best = d
+			break // Decisions are sorted by priority, first deny wins
 		}
 	}
 
@@ -116,13 +95,7 @@ func (r *PolicyCompositionResolver) Evaluate(policies []*CompiledPolicy, event *
 	return best, nil
 }
 
-// EvaluateAll evaluates the given event against ALL provided compiled policies
-// and returns an EvaluationResult containing decisions from ALL matching
-// policies across ALL priority tiers. This replaces the single-winner Evaluate
-// for multi-phase evaluation with deny-first semantics.
-//
-// Unlike Evaluate, EvaluateAll does NOT stop at the first matching priority
-// level. It evaluates every policy and collects all decisions.
+// EvaluateAll evaluates all policies and returns every matching decision across all priority tiers.
 func (r *PolicyCompositionResolver) EvaluateAll(policies []*CompiledPolicy, event *PolicyEvent) (*EvaluationResult, error) {
 	start := time.Now()
 
@@ -177,6 +150,9 @@ func (r *PolicyCompositionResolver) EvaluateAll(policies []*CompiledPolicy, even
 				decision.AuditOnly = true
 			}
 
+			// Set Priority from the source policy for priority-aware composition.
+			decision.Priority = pol.Priority
+
 			// Set Subcategory from event for action classification.
 			decision.Subcategory = event.Subcategory
 
@@ -203,12 +179,7 @@ func (r *PolicyCompositionResolver) EvaluateAll(policies []*CompiledPolicy, even
 	return result, nil
 }
 
-// applyRateLimitCheck performs a post-match rate limit evaluation. It extracts
-// the burstSize from the decision's action parameters, builds a counter key
-// from the policy/rule name and event's toolName field, and atomically
-// increments and checks the counter. If the count is within the burst limit,
-// a default allow decision is returned (pass-through). If the count exceeds
-// the limit, the original rate-limit decision is returned unchanged.
+// applyRateLimitCheck increments the counter keyed by groupBy and returns allow if under the limit.
 func (r *PolicyCompositionResolver) applyRateLimitCheck(decision *Decision, event *PolicyEvent) *Decision {
 	// Extract burst limit from action parameters
 	burstSize := 0
@@ -230,10 +201,27 @@ func (r *PolicyCompositionResolver) applyRateLimitCheck(decision *Decision, even
 		return DefaultAllowDecision()
 	}
 
-	// Build a counter key scoped to the policy+rule and the event's toolName.
-	// This ensures different rules and different tools have independent counters.
-	toolName := event.GetStringField("toolName")
-	key := decision.PolicyName + "/" + decision.MatchedRule + "/" + toolName
+	// Build counter key based on groupBy parameter
+	groupBy := decision.Action.Parameters["groupBy"]
+	if groupBy == "" {
+		groupBy = "agent" // default
+	}
+
+	prefix := decision.PolicyName + "/" + decision.MatchedRule
+	var key string
+
+	switch groupBy {
+	case "tool":
+		toolName := event.GetStringField("toolName")
+		key = prefix + "/" + toolName
+	case "agent+tool":
+		agentKey := rateLimitAgentKey(event)
+		toolName := event.GetStringField("toolName")
+		key = prefix + "/" + agentKey + "/" + toolName
+	default: // "agent"
+		agentKey := rateLimitAgentKey(event)
+		key = prefix + "/" + agentKey
+	}
 
 	exceeded := r.rateLimitCounter.IncrementAndCheck(key, burstSize)
 	if !exceeded {
@@ -244,9 +232,16 @@ func (r *PolicyCompositionResolver) applyRateLimitCheck(decision *Decision, even
 	return decision
 }
 
-// filterByEnforcementMode removes policies with EnforcementMode=disabled from
-// evaluation. Disabled policies are completely skipped — they do not affect the
-// decision or any other policy's evaluation.
+// rateLimitAgentKey returns the agent identity key for rate limiting.
+// It uses PodName if available, falling back to sourceIP from event fields.
+func rateLimitAgentKey(event *PolicyEvent) string {
+	if event.PodName != "" {
+		return event.PodName
+	}
+	return event.GetStringField("sourceIP")
+}
+
+// filterByEnforcementMode removes disabled policies from evaluation.
 func filterByEnforcementMode(policies []*CompiledPolicy) []*CompiledPolicy {
 	filtered := make([]*CompiledPolicy, 0, len(policies))
 	for _, pol := range policies {
@@ -257,13 +252,7 @@ func filterByEnforcementMode(policies []*CompiledPolicy) []*CompiledPolicy {
 	return filtered
 }
 
-// filterByTargetSelector returns only the policies whose TargetSelector matches
-// the event's PodLabels AND whose namespace scope matches the event's namespace.
-//
-// Namespace scoping rules:
-//   - Namespace-scoped policies (IsClusterScoped=false) only match pods in their own namespace.
-//   - Cluster-scoped policies (IsClusterScoped=true) match pods in any namespace.
-//   - Policies with a nil or empty TargetSelector match all pods (within scope).
+// filterByTargetSelector returns policies whose target selector and namespace scope match the event.
 func filterByTargetSelector(policies []*CompiledPolicy, event *PolicyEvent) []*CompiledPolicy {
 	podLabels := labels.Set(event.PodLabels)
 	filtered := make([]*CompiledPolicy, 0, len(policies))

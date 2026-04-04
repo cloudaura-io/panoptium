@@ -46,21 +46,18 @@ func (pm *PolicyMatcher) Matches(result MatchResult, selector ThreatSignatureSel
 		return false
 	}
 
-	// Check name match (if specified)
 	if len(selector.Names) > 0 {
 		if !containsString(selector.Names, result.SignatureName) {
 			return false
 		}
 	}
 
-	// Check category match (if specified)
 	if len(selector.Categories) > 0 {
 		if !containsString(selector.Categories, result.Category) {
 			return false
 		}
 	}
 
-	// Check severity match (if specified)
 	if len(selector.Severities) > 0 {
 		if !containsString(selector.Severities, result.Severity) {
 			return false

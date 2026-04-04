@@ -23,11 +23,7 @@ import (
 	"github.com/panoptium/panoptium/pkg/observer/protocol"
 )
 
-// --- Compile-time interface check ---
-
 var _ protocol.ProtocolParser = (*MCPParser)(nil)
-
-// --- Initialize request parsing ---
 
 // TestMCPParser_ProcessRequest_Initialize verifies parsing of an initialize request.
 func TestMCPParser_ProcessRequest_Initialize(t *testing.T) {
@@ -76,8 +72,6 @@ func TestMCPParser_ProcessRequest_Initialize(t *testing.T) {
 		t.Errorf("client_version = %v, want %q", result.Metadata["client_version"], "1.0.0")
 	}
 }
-
-// --- tools/list response parsing ---
 
 // TestMCPParser_ProcessResponse_ToolsList verifies parsing of a tools/list response.
 func TestMCPParser_ProcessResponse_ToolsList(t *testing.T) {
@@ -152,8 +146,6 @@ func TestMCPParser_ProcessResponse_ToolsList(t *testing.T) {
 	}
 }
 
-// --- tools/call request parsing ---
-
 // TestMCPParser_ProcessRequest_ToolsCall verifies parsing of a tools/call request.
 func TestMCPParser_ProcessRequest_ToolsCall(t *testing.T) {
 	parser := NewMCPParser()
@@ -196,8 +188,6 @@ func TestMCPParser_ProcessRequest_ToolsCall(t *testing.T) {
 	}
 }
 
-// --- Tool response parsing ---
-
 // TestMCPParser_ProcessResponse_ToolResult verifies parsing of a tool call result.
 func TestMCPParser_ProcessResponse_ToolResult(t *testing.T) {
 	parser := NewMCPParser()
@@ -230,8 +220,6 @@ func TestMCPParser_ProcessResponse_ToolResult(t *testing.T) {
 	}
 }
 
-// --- JSON-RPC request ID correlation ---
-
 // TestMCPParser_RequestIDCorrelation verifies tracking request IDs between request and response.
 func TestMCPParser_RequestIDCorrelation(t *testing.T) {
 	parser := NewMCPParser()
@@ -258,8 +246,6 @@ func TestMCPParser_RequestIDCorrelation(t *testing.T) {
 	}
 }
 
-// --- Batched JSON-RPC ---
-
 // TestMCPParser_ProcessRequest_Batch verifies parsing of batched JSON-RPC requests.
 func TestMCPParser_ProcessRequest_Batch(t *testing.T) {
 	parser := NewMCPParser()
@@ -284,8 +270,6 @@ func TestMCPParser_ProcessRequest_Batch(t *testing.T) {
 		t.Errorf("results[1].Method = %q, want %q", results[1].Method, "tools/call")
 	}
 }
-
-// --- Malformed JSON-RPC handling ---
 
 // TestMCPParser_ProcessRequest_MalformedJSON verifies graceful error on malformed JSON.
 func TestMCPParser_ProcessRequest_MalformedJSON(t *testing.T) {
@@ -327,8 +311,6 @@ func TestMCPParser_ProcessRequest_EmptyBody(t *testing.T) {
 		t.Fatal("ProcessRequest() expected error for empty body, got nil")
 	}
 }
-
-// --- Detect ---
 
 // TestMCPParser_Detect verifies detection of MCP traffic.
 func TestMCPParser_Detect(t *testing.T) {

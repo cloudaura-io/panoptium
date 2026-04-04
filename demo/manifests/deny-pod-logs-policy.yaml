@@ -1,4 +1,10 @@
 ---
+# NOTE: AgentGateway v1.0.1 does not support ExtProc ImmediateResponse.
+# Deny actions (HTTP 403) and rateLimit actions (HTTP 429) will cause the
+# gateway to return 503 instead of the expected status code. This is an
+# AgentGateway limitation, not a Panoptium bug. Tool stripping (deny on
+# tool_call) works correctly. Track: agentgateway/agentgateway#TBD
+#
 # Demo policy: strip pod log access tool from agent requests.
 # Demonstrates Panoptium tool stripping enforcement. The agent's request to OpenAI
 # includes tools: [{name: "k8s_get_pod_logs"}]. Panoptium removes that tool from

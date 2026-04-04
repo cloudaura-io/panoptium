@@ -179,7 +179,7 @@ PANOPTIUM_IMG_TAG="${PANOPTIUM_IMG##*:}"
 case "${DEPLOY_METHOD}" in
     helm)
         log_info "Deploying panoptium operator via Helm..."
-        helm install panoptium chart/panoptium/ \
+        helm upgrade --install panoptium chart/panoptium/ \
             --namespace "${NAMESPACE}" \
             --create-namespace \
             --set "image.repository=${PANOPTIUM_IMG_REPO}" \

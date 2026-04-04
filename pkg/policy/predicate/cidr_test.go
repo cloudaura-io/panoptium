@@ -23,8 +23,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
-// --- CIDR Evaluator Tests ---
-
 func TestCIDREvaluator_IPv4_Match(t *testing.T) {
 	_, ipNet, _ := net.ParseCIDR("10.0.0.0/8")
 	eval := &CIDREvaluator{

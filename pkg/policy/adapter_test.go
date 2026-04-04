@@ -209,7 +209,7 @@ func TestEvaluatorAdapter_CallsGetPoliciesAndResolver(t *testing.T) {
 
 	// Initially empty cache — should get default allow
 	event := &PolicyEvent{
-		Category:    "protocol",
+		Category:    "llm",
 		Subcategory: "llm_request",
 		Timestamp:   time.Now(),
 		Namespace:   "test-ns",
@@ -239,7 +239,7 @@ func TestEvaluatorAdapter_CallsGetPoliciesAndResolver(t *testing.T) {
 				{
 					Name: "block-llm",
 					Trigger: v1alpha1.Trigger{
-						EventCategory:    "protocol",
+						EventCategory:    "llm",
 						EventSubcategory: "llm_request",
 					},
 					Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeDeny},

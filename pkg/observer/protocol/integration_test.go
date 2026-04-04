@@ -79,8 +79,6 @@ func collectEvent(sub *eventbus.Subscription, timeout time.Duration) eventbus.Ev
 	}
 }
 
-// --- Integration Tests: Detection -> Parsing -> Event Emission ---
-
 // TestIntegration_MCPToolCall_FullPipeline verifies the end-to-end flow:
 // MCP JSON-RPC tools/call request -> ProtocolDetector selects MCP parser ->
 // MCPParser.ProcessRequest extracts tool metadata -> ProtocolEventPublisher
@@ -338,7 +336,7 @@ func TestIntegration_MixedTraffic_CorrectRouting(t *testing.T) {
 	ctx := context.Background()
 	agentID := eventbus.AgentIdentity{ID: "mixed-agent", Namespace: "default"}
 
-	// --- MCP traffic ---
+	// MCP traffic
 	mcpBody := []byte(`{"jsonrpc":"2.0","method":"tools/list","id":"1"}`)
 	mcpResult := detector.Detect(map[string]string{}, "/mcp", "POST", nil, mcpBody)
 	if mcpResult.Parser == nil || mcpResult.Parser.Name() != "mcp" {
@@ -350,7 +348,7 @@ func TestIntegration_MixedTraffic_CorrectRouting(t *testing.T) {
 	}
 	publisher.EmitParsedRequest("mcp", "req-mixed-mcp", agentID, mcpParsed)
 
-	// --- A2A traffic ---
+	// A2A traffic
 	a2aBody := []byte(`{
 		"jsonrpc":"2.0","method":"tasks/send","id":"2",
 		"params":{"id":"task-1","description":"Analyze doc","skillId":"analyze"}
@@ -367,7 +365,7 @@ func TestIntegration_MixedTraffic_CorrectRouting(t *testing.T) {
 	}
 	publisher.EmitParsedRequest("a2a", "req-mixed-a2a", agentID, a2aParsed)
 
-	// --- Gemini traffic ---
+	// Gemini traffic
 	geminiBody := []byte(`{"model":"gemini-1.5-flash","contents":[{"role":"user","parts":[{"text":"Hi"}]}]}`)
 	geminiResult := detector.Detect(map[string]string{}, "/v1/models/gemini-1.5-flash/generateContent", "POST", nil, geminiBody)
 	if geminiResult.Parser == nil || geminiResult.Parser.Name() != "gemini" {

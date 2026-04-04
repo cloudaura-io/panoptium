@@ -27,48 +27,29 @@ import (
 )
 
 const (
-	// InterceptAnnotation controls whether traffic interception is enabled
-	// for a pod. Set to "true" to enable, "false" to skip.
+	// InterceptAnnotation enables traffic interception when set to "true".
 	InterceptAnnotation = "panoptium.io/intercept"
 
-	// InterceptModeAnnotation selects the traffic interception method.
-	// Supported values: "sidecar" (default), "proxy".
+	// InterceptModeAnnotation selects interception method: "sidecar" (default) or "proxy".
 	InterceptModeAnnotation = "panoptium.io/intercept-mode"
 
-	// envoySidecarContainerName is the name of the injected Envoy sidecar.
 	envoySidecarContainerName = "panoptium-envoy-sidecar"
-
-	// iptablesInitContainerName is the name of the iptables init container.
 	iptablesInitContainerName = "panoptium-iptables"
 )
 
-// NOTE: Not yet wired into the operator. Will be registered once automatic
-// traffic interception is enabled — currently agents must be routed through
-// AgentGateway manually or via pod annotations.
-//
-// TrafficRoutingMutator is a MutatingAdmissionWebhook that intercepts Pod
-// creation to inject traffic routing configuration. It supports two modes:
-//   - sidecar: Inject an Envoy sidecar with ExtProc configuration pointing
-//     to the Panoptium enforcement gateway, plus an iptables init container
-//     for traffic interception.
-//   - proxy: Set HTTPS_PROXY and HTTP_PROXY environment variables on agent
-//     containers to route traffic through the gateway.
-//
-// The webhook respects the panoptium.io/intercept and
-// panoptium.io/intercept-mode annotations on Pods.
+// TrafficRoutingMutator injects sidecar or proxy config into Pods for traffic interception.
+// NOTE: Not yet wired into the operator; agents must be routed manually or via annotations.
 type TrafficRoutingMutator struct {
-	// GatewayAddress is the address of the Panoptium enforcement gateway
-	// (e.g., "panoptium-gateway.panoptium-system.svc.cluster.local:8443").
+	// GatewayAddress is the enforcement gateway address.
 	GatewayAddress string
 
-	// EnvoyImage is the container image for the Envoy sidecar.
+	// EnvoyImage is the Envoy sidecar container image.
 	EnvoyImage string
 
-	// IptablesImage is the container image for the iptables init container.
-	// Defaults to "panoptium/iptables-init:latest".
+	// IptablesImage is the iptables init container image (default: "panoptium/iptables-init:latest").
 	IptablesImage string
 
-	// ExcludedNamespaces is the list of namespaces to skip during mutation.
+	// ExcludedNamespaces lists namespaces to skip during mutation.
 	ExcludedNamespaces []string
 }
 

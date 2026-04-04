@@ -53,7 +53,8 @@ func TestEscalationManager_ThreeDeniesTriggerQuarantine(t *testing.T) {
 	// Give the subscription time to register
 	time.Sleep(50 * time.Millisecond)
 
-	// Emit 3 deny events with escalation parameters
+	// Emit 3 deny events with escalation parameters and severity.
+	// 3 HIGH events = 3 * 50 = 150 risk points, meeting threshold 150.
 	for i := 0; i < 3; i++ {
 		bus.Emit(&eventbus.EnforcementEvent{
 			BaseEvent: eventbus.BaseEvent{
@@ -66,7 +67,8 @@ func TestEscalationManager_ThreeDeniesTriggerQuarantine(t *testing.T) {
 				},
 			},
 			Action:              "deny",
-			EscalationThreshold: 3,
+			Severity:            "HIGH",
+			EscalationThreshold: 150,
 			EscalationWindow:    60 * time.Second,
 			EscalationAction:    "quarantine",
 			PolicyName:          "test-policy",
@@ -265,7 +267,8 @@ func TestEscalationManager_EmptyIdentityErrorsNotSilent(t *testing.T) {
 				},
 			},
 			Action:              "deny",
-			EscalationThreshold: 3,
+			Severity:            "CRITICAL",
+			EscalationThreshold: 100,
 			EscalationWindow:    60 * time.Second,
 			EscalationAction:    "quarantine",
 			PolicyName:          "test-policy",
@@ -305,6 +308,255 @@ func TestEscalationManager_NeedsLeaderElection(t *testing.T) {
 	}
 }
 
+// --- Severity-Based Escalation Tests (FR-5) ---
+
+// TestEscalationManager_ProcessesAllActions verifies that the manager processes
+// alert, deny, and rateLimit events (not just deny) toward escalation.
+func TestEscalationManager_ProcessesAllActions(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	bus := eventbus.NewSimpleBus()
+	defer bus.Close()
+
+	mgr := NewEscalationManager(bus, fakeClient)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- mgr.Start(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Emit mixed action events, each with CRITICAL severity (100 pts each).
+	// Threshold is 200, so 2 CRITICAL events should trigger escalation
+	// regardless of action type.
+	actions := []string{"deny", "alert"}
+	for _, act := range actions {
+		bus.Emit(&eventbus.EnforcementEvent{
+			BaseEvent: eventbus.BaseEvent{
+				Type:  eventbus.EventTypePolicyDecision,
+				Time:  time.Now(),
+				ReqID: "req-mixed-" + act,
+				AgentInfo: eventbus.AgentIdentity{
+					PodName:   "mixed-pod",
+					Namespace: "test-ns",
+				},
+			},
+			Action:              act,
+			Severity:            "CRITICAL",
+			EscalationThreshold: 200,
+			EscalationWindow:    60 * time.Second,
+			EscalationAction:    "quarantine",
+			PolicyName:          "mixed-policy",
+			PolicyNamespace:     "test-ns",
+		})
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	var quarantineList v1alpha1.AgentQuarantineList
+	if err := fakeClient.List(ctx, &quarantineList); err != nil {
+		t.Fatalf("failed to list quarantines: %v", err)
+	}
+
+	if len(quarantineList.Items) == 0 {
+		t.Fatal("expected quarantine from mixed action types (deny + alert), got 0")
+	}
+}
+
+// TestEscalationManager_SeverityFromEvent verifies that the manager reads the
+// Severity field from EnforcementEvent and uses it for risk scoring.
+func TestEscalationManager_SeverityFromEvent(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	bus := eventbus.NewSimpleBus()
+	defer bus.Close()
+
+	mgr := NewEscalationManager(bus, fakeClient)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- mgr.Start(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// 3 MEDIUM events = 3 * 20 = 60 points, below threshold 100
+	for i := 0; i < 3; i++ {
+		bus.Emit(&eventbus.EnforcementEvent{
+			BaseEvent: eventbus.BaseEvent{
+				Type:  eventbus.EventTypePolicyDecision,
+				Time:  time.Now(),
+				ReqID: "req-sev-med",
+				AgentInfo: eventbus.AgentIdentity{
+					PodName:   "sev-pod",
+					Namespace: "test-ns",
+				},
+			},
+			Action:              "deny",
+			Severity:            "MEDIUM",
+			EscalationThreshold: 100,
+			EscalationWindow:    60 * time.Second,
+			EscalationAction:    "quarantine",
+			PolicyName:          "sev-policy",
+			PolicyNamespace:     "test-ns",
+		})
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	var quarantineList v1alpha1.AgentQuarantineList
+	if err := fakeClient.List(ctx, &quarantineList); err != nil {
+		t.Fatalf("failed to list quarantines: %v", err)
+	}
+
+	if len(quarantineList.Items) != 0 {
+		t.Errorf("expected no quarantine at 60 risk points (threshold 100), got %d", len(quarantineList.Items))
+	}
+
+	// 1 CRITICAL event = 100 points, total now 160 >= 100
+	bus.Emit(&eventbus.EnforcementEvent{
+		BaseEvent: eventbus.BaseEvent{
+			Type:  eventbus.EventTypePolicyDecision,
+			Time:  time.Now(),
+			ReqID: "req-sev-crit",
+			AgentInfo: eventbus.AgentIdentity{
+				PodName:   "sev-pod",
+				Namespace: "test-ns",
+			},
+		},
+		Action:              "deny",
+		Severity:            "CRITICAL",
+		EscalationThreshold: 100,
+		EscalationWindow:    60 * time.Second,
+		EscalationAction:    "quarantine",
+		PolicyName:          "sev-policy",
+		PolicyNamespace:     "test-ns",
+	})
+
+	time.Sleep(200 * time.Millisecond)
+
+	if err := fakeClient.List(ctx, &quarantineList); err != nil {
+		t.Fatalf("failed to list quarantines: %v", err)
+	}
+
+	if len(quarantineList.Items) == 0 {
+		t.Fatal("expected quarantine after CRITICAL event pushed total over threshold")
+	}
+
+	cancel()
+	if err := <-errCh; err != nil {
+		t.Errorf("manager returned error: %v", err)
+	}
+}
+
+// TestEscalationManager_AuditEventHalfWeight verifies that audit-prefixed
+// actions ("audit:deny") are recorded with AuditOnly=true and weighted at 50%.
+func TestEscalationManager_AuditEventHalfWeight(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	bus := eventbus.NewSimpleBus()
+	defer bus.Close()
+
+	mgr := NewEscalationManager(bus, fakeClient)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- mgr.Start(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// 2 audit:deny HIGH events = 2 * 50 * 0.5 = 50 points, below threshold 100
+	for i := 0; i < 2; i++ {
+		bus.Emit(&eventbus.EnforcementEvent{
+			BaseEvent: eventbus.BaseEvent{
+				Type:  eventbus.EventTypePolicyDecision,
+				Time:  time.Now(),
+				ReqID: "req-audit-half",
+				AgentInfo: eventbus.AgentIdentity{
+					PodName:   "audit-pod",
+					Namespace: "test-ns",
+				},
+			},
+			Action:              "audit:deny",
+			Severity:            "HIGH",
+			EscalationThreshold: 100,
+			EscalationWindow:    60 * time.Second,
+			EscalationAction:    "quarantine",
+			PolicyName:          "audit-policy",
+			PolicyNamespace:     "test-ns",
+		})
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	var quarantineList v1alpha1.AgentQuarantineList
+	if err := fakeClient.List(ctx, &quarantineList); err != nil {
+		t.Fatalf("failed to list quarantines: %v", err)
+	}
+
+	if len(quarantineList.Items) != 0 {
+		t.Errorf("expected no quarantine at 50 audit-weighted points (threshold 100), got %d", len(quarantineList.Items))
+	}
+
+	// 1 enforced HIGH event = 50 points, total now 100 >= 100
+	bus.Emit(&eventbus.EnforcementEvent{
+		BaseEvent: eventbus.BaseEvent{
+			Type:  eventbus.EventTypePolicyDecision,
+			Time:  time.Now(),
+			ReqID: "req-audit-enforced",
+			AgentInfo: eventbus.AgentIdentity{
+				PodName:   "audit-pod",
+				Namespace: "test-ns",
+			},
+		},
+		Action:              "deny",
+		Severity:            "HIGH",
+		EscalationThreshold: 100,
+		EscalationWindow:    60 * time.Second,
+		EscalationAction:    "quarantine",
+		PolicyName:          "audit-policy",
+		PolicyNamespace:     "test-ns",
+	})
+
+	time.Sleep(200 * time.Millisecond)
+
+	if err := fakeClient.List(ctx, &quarantineList); err != nil {
+		t.Fatalf("failed to list quarantines: %v", err)
+	}
+
+	if len(quarantineList.Items) == 0 {
+		t.Fatal("expected quarantine after enforced HIGH event pushed total to 100")
+	}
+
+	cancel()
+	if err := <-errCh; err != nil {
+		t.Errorf("manager returned error: %v", err)
+	}
+}
+
 // Ensure the quarantine namespace falls back to policy namespace.
 func TestEscalationManager_NamespaceFallback(t *testing.T) {
 	scheme := runtime.NewScheme()
@@ -329,7 +581,8 @@ func TestEscalationManager_NamespaceFallback(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	// Emit events with empty agent namespace — should fall back to policy namespace
+	// Emit events with empty agent namespace — should fall back to policy namespace.
+	// 3 HIGH events = 3 * 50 = 150 risk points, meeting threshold 150.
 	for i := 0; i < 3; i++ {
 		bus.Emit(&eventbus.EnforcementEvent{
 			BaseEvent: eventbus.BaseEvent{
@@ -342,7 +595,8 @@ func TestEscalationManager_NamespaceFallback(t *testing.T) {
 				},
 			},
 			Action:              "deny",
-			EscalationThreshold: 3,
+			Severity:            "HIGH",
+			EscalationThreshold: 150,
 			EscalationWindow:    60 * time.Second,
 			EscalationAction:    "quarantine",
 			PolicyName:          "fallback-policy",

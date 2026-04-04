@@ -26,8 +26,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/eventbus"
 )
 
-// --- Mock Observer Implementation ---
-
 // mockObserver is a test double implementing ProtocolObserver.
 type mockObserver struct {
 	name       string
@@ -91,8 +89,6 @@ func (m *mockObserver) Finalize(_ context.Context, streamCtx *StreamContext, err
 	m.lastFinalizeErr = err
 	return m.finalErr
 }
-
-// --- ProtocolObserver Interface Contract Tests ---
 
 // TestProtocolObserver_Name verifies that observers return their unique name.
 func TestProtocolObserver_Name(t *testing.T) {
@@ -234,8 +230,6 @@ func TestProtocolObserver_Finalize_WithUpstreamError(t *testing.T) {
 	}
 }
 
-// --- ObserverContext Tests ---
-
 // TestObserverContext_Fields verifies that ObserverContext fields are properly set.
 func TestObserverContext_Fields(t *testing.T) {
 	headers := http.Header{}
@@ -266,8 +260,6 @@ func TestObserverContext_Fields(t *testing.T) {
 		t.Errorf("Body = %q, want %q", string(ctx.Body), `{"model":"gpt-4"}`)
 	}
 }
-
-// --- StreamContext Tests ---
 
 // TestStreamContext_Fields verifies that StreamContext fields are properly set.
 func TestStreamContext_Fields(t *testing.T) {
@@ -309,8 +301,6 @@ func TestStreamContext_Fields(t *testing.T) {
 		t.Error("Stream = false, want true")
 	}
 }
-
-// --- ObserverRegistry Tests ---
 
 // TestNewObserverRegistry verifies that a new registry can be created.
 func TestNewObserverRegistry(t *testing.T) {

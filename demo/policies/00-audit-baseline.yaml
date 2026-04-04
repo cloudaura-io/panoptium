@@ -20,7 +20,7 @@ spec:
     - name: audit-all-llm-requests
       severity: INFO
       trigger:
-        eventCategory: protocol
+        eventCategory: llm
         eventSubcategory: llm_request
       action:
         type: deny

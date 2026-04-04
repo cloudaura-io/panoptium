@@ -20,8 +20,6 @@ import (
 	"testing"
 )
 
-// --- Request Parsing Tests ---
-
 // TestParseRequest_Basic verifies parsing a basic OpenAI chat completion request.
 func TestParseRequest_Basic(t *testing.T) {
 	body := []byte(`{
@@ -108,8 +106,6 @@ func TestParseRequest_InvalidJSON(t *testing.T) {
 		t.Fatal("ParseRequest() expected error for invalid JSON, got nil")
 	}
 }
-
-// --- SSE Streaming Response Parsing Tests ---
 
 // TestParseSSEChunk_SingleToken verifies parsing a single SSE data line with a token.
 func TestParseSSEChunk_SingleToken(t *testing.T) {
@@ -242,8 +238,6 @@ func TestParseSSEFrame_EmptyFrame(t *testing.T) {
 	}
 }
 
-// --- Non-Streaming Response Parsing Tests ---
-
 // TestParseNonStreamingResponse verifies parsing a complete non-streaming response.
 func TestParseNonStreamingResponse(t *testing.T) {
 	body := []byte(`{
@@ -293,8 +287,6 @@ func TestParseNonStreamingResponse(t *testing.T) {
 		t.Errorf("OutputTokens = %d, want 8", resp.OutputTokens)
 	}
 }
-
-// --- Tool Extraction Tests ---
 
 // TestParseRequest_ToolExtraction_SingleTool verifies extracting tools[].function.name
 // from an OpenAI chat completions request with a single tool.

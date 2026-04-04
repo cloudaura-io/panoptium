@@ -246,8 +246,6 @@ func TestLLMRequestCompleteEvent(t *testing.T) {
 	}
 }
 
-// --- EnforcementEvent Severity Tests ---
-
 func TestEnforcementEvent_SeverityField(t *testing.T) {
 	e := &EnforcementEvent{
 		BaseEvent: BaseEvent{

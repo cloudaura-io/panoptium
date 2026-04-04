@@ -24,8 +24,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
-// --- TemporalSequenceDetector tests ---
-
 func TestTemporalSequenceDetector_PrecededBy_WithinDuration(t *testing.T) {
 	det := NewTemporalSequenceDetector()
 

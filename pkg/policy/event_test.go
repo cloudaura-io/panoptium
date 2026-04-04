@@ -18,8 +18,6 @@ package policy
 
 import "testing"
 
-// --- GetField Tests ---
-
 func TestGetField_ExistingKey(t *testing.T) {
 	e := &PolicyEvent{
 		Fields: map[string]interface{}{
@@ -54,8 +52,6 @@ func TestGetField_NilFieldsMap(t *testing.T) {
 	}
 }
 
-// --- GetStringField Tests ---
-
 func TestGetStringField_StringValue(t *testing.T) {
 	e := &PolicyEvent{
 		Fields: map[string]interface{}{
@@ -89,8 +85,6 @@ func TestGetStringField_NilFieldsMap(t *testing.T) {
 		t.Errorf("GetStringField with nil Fields = %q, want empty string", got)
 	}
 }
-
-// --- GetIntField Tests ---
 
 func TestGetIntField_IntValue(t *testing.T) {
 	e := &PolicyEvent{
@@ -149,10 +143,6 @@ func TestGetIntField_NilFieldsMap(t *testing.T) {
 		t.Errorf("GetIntField with nil Fields = %d, want 0", got)
 	}
 }
-
-// --- DefaultAllowDecision Tests ---
-
-// --- EvaluationResult Tests ---
 
 func TestEvaluationResult_ActionClassification(t *testing.T) {
 	result := &EvaluationResult{
@@ -264,8 +254,6 @@ func TestEvaluationResult_MutatingDecisions(t *testing.T) {
 		t.Errorf("MutatingDecisions()[0].MatchedRule = %q, want %q", mutating[0].MatchedRule, "deny-tool")
 	}
 }
-
-// --- DefaultAllowDecision Tests ---
 
 func TestDefaultAllowDecision_ReturnsAllowAction(t *testing.T) {
 	d := DefaultAllowDecision()

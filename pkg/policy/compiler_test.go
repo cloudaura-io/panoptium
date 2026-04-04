@@ -25,8 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// --- Test Helpers ---
-
 // newTestPolicy creates a AgentPolicy with the given rules for testing.
 func newTestPolicy(name, namespace string, priority int32, rules []v1alpha1.PolicyRule) *v1alpha1.AgentPolicy {
 	return &v1alpha1.AgentPolicy{
@@ -44,8 +42,6 @@ func newTestPolicy(name, namespace string, priority int32, rules []v1alpha1.Poli
 		},
 	}
 }
-
-// --- Compiler Tests ---
 
 func TestPolicyCompiler_ValidPolicy(t *testing.T) {
 	policy := newTestPolicy("test-policy", "default", 100, []v1alpha1.PolicyRule{
@@ -510,8 +506,6 @@ func TestPolicyCompiler_EnforcementMode(t *testing.T) {
 	}
 }
 
-// --- CompileCluster Tests ---
-
 func newTestClusterPolicy(name string, priority int32, rules []v1alpha1.PolicyRule) *v1alpha1.AgentClusterPolicy {
 	return &v1alpha1.AgentClusterPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -642,8 +636,6 @@ func TestCompileCluster_InvalidRegex(t *testing.T) {
 		t.Errorf("expected CompilationError, got %T: %v", err, err)
 	}
 }
-
-// --- Predicate Parsing Tests ---
 
 func TestPredicateParsing_EqualityOperator(t *testing.T) {
 	policy := newTestPolicy("eq-parse", "default", 100, []v1alpha1.PolicyRule{
@@ -806,8 +798,6 @@ func TestPredicateParsing_InvalidCELReturnsError(t *testing.T) {
 	}
 }
 
-// --- Event Subcategory Edge Cases ---
-
 func TestCompiler_UnknownEventSubcategory(t *testing.T) {
 	policy := newTestPolicy("unknown-sub", "default", 100, []v1alpha1.PolicyRule{
 		{
@@ -871,8 +861,6 @@ func TestCompiler_EmptySubcategory(t *testing.T) {
 		t.Fatalf("Compile() unexpected error for empty subcategory: %v", err)
 	}
 }
-
-// --- Preservation and Assignment Tests ---
 
 func TestCompiler_TargetSelectorPreserved(t *testing.T) {
 	policy := newTestPolicy("labels-test", "default", 100, []v1alpha1.PolicyRule{
@@ -1007,8 +995,6 @@ func TestCompiler_EmptyRulesListCompiles(t *testing.T) {
 	}
 }
 
-// --- CompilationError Method Tests ---
-
 func TestCompilationError_ErrorWithRuleName(t *testing.T) {
 	err := &CompilationError{
 		PolicyName: "my-policy",
@@ -1061,8 +1047,6 @@ func TestCompilationError_UnwrapNilCause(t *testing.T) {
 		t.Errorf("Unwrap() = %v, want nil", err.Unwrap())
 	}
 }
-
-// --- GroupBy Parameter Tests ---
 
 func TestCompileRateLimit_GroupByParameter(t *testing.T) {
 	for _, groupBy := range []string{"agent", "tool", "agent+tool"} {
@@ -1126,6 +1110,104 @@ func TestCompileRateLimit_DefaultGroupBy(t *testing.T) {
 	// groupBy absent is fine -- default applied at evaluation time
 	if _, ok := compiled.Rules[0].Action.Parameters["groupBy"]; ok {
 		t.Errorf("expected groupBy to be absent when not specified, got %q", compiled.Rules[0].Action.Parameters["groupBy"])
+	}
+}
+
+func TestValidTriggerLayers_LLMLayer(t *testing.T) {
+	// Verify llm_request, llm_response, llm_response_chunk are valid under "llm" layer
+	llmSubcategories := []string{"llm_request", "llm_response", "llm_response_chunk"}
+	for _, sub := range llmSubcategories {
+		pol := newTestPolicy("llm-layer-test", "default", 100, []v1alpha1.PolicyRule{
+			{
+				Name: "test-rule",
+				Trigger: v1alpha1.Trigger{
+					EventCategory:    "llm",
+					EventSubcategory: sub,
+				},
+				Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeAlert},
+				Severity: v1alpha1.SeverityMedium,
+			},
+		})
+
+		compiler := NewPolicyCompiler()
+		_, err := compiler.Compile(pol)
+		if err != nil {
+			t.Errorf("expected llm/%s to be valid, got error: %v", sub, err)
+		}
+	}
+}
+
+func TestValidTriggerLayers_ProtocolLayer_NoLLM(t *testing.T) {
+	// Verify llm_request, llm_response, llm_response_chunk are NOT valid under "protocol" layer
+	llmSubcategories := []string{"llm_request", "llm_response", "llm_response_chunk"}
+	for _, sub := range llmSubcategories {
+		pol := newTestPolicy("protocol-no-llm-test", "default", 100, []v1alpha1.PolicyRule{
+			{
+				Name: "test-rule",
+				Trigger: v1alpha1.Trigger{
+					EventCategory:    "protocol",
+					EventSubcategory: sub,
+				},
+				Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeAlert},
+				Severity: v1alpha1.SeverityMedium,
+			},
+		})
+
+		compiler := NewPolicyCompiler()
+		_, err := compiler.Compile(pol)
+		if err == nil {
+			t.Errorf("expected protocol/%s to be rejected, got no error", sub)
+		}
+	}
+}
+
+func TestCompile_RejectsOldProtocolLLM(t *testing.T) {
+	pol := newTestPolicy("old-protocol-test", "default", 100, []v1alpha1.PolicyRule{
+		{
+			Name: "old-style-rule",
+			Trigger: v1alpha1.Trigger{
+				EventCategory:    "protocol",
+				EventSubcategory: "llm_request",
+			},
+			Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeDeny},
+			Severity: v1alpha1.SeverityHigh,
+		},
+	})
+
+	compiler := NewPolicyCompiler()
+	_, err := compiler.Compile(pol)
+	if err == nil {
+		t.Fatal("expected CompilationError for protocol/llm_request, got nil")
+	}
+	var ce *CompilationError
+	if !asCompilationError(err, &ce) {
+		t.Fatalf("expected *CompilationError, got %T: %v", err, err)
+	}
+}
+
+func TestCompile_AcceptsNewLLMLayer(t *testing.T) {
+	pol := newTestPolicy("new-llm-test", "default", 100, []v1alpha1.PolicyRule{
+		{
+			Name: "llm-layer-rule",
+			Trigger: v1alpha1.Trigger{
+				EventCategory:    "llm",
+				EventSubcategory: "llm_request",
+			},
+			Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeDeny},
+			Severity: v1alpha1.SeverityHigh,
+		},
+	})
+
+	compiler := NewPolicyCompiler()
+	compiled, err := compiler.Compile(pol)
+	if err != nil {
+		t.Fatalf("expected successful compilation for llm/llm_request, got error: %v", err)
+	}
+	if compiled.Rules[0].TriggerLayer != "llm" {
+		t.Errorf("expected TriggerLayer=%q, got %q", "llm", compiled.Rules[0].TriggerLayer)
+	}
+	if compiled.Rules[0].TriggerEvent != "llm_request" {
+		t.Errorf("expected TriggerEvent=%q, got %q", "llm_request", compiled.Rules[0].TriggerEvent)
 	}
 }
 

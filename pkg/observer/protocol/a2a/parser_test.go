@@ -23,11 +23,7 @@ import (
 	"github.com/panoptium/panoptium/pkg/observer/protocol"
 )
 
-// --- Compile-time interface check ---
-
 var _ protocol.ProtocolParser = (*A2AParser)(nil)
-
-// --- Agent Card Tests ---
 
 // TestA2AParser_Detect_AgentCard verifies detection of Agent Card discovery path.
 func TestA2AParser_Detect_AgentCard(t *testing.T) {
@@ -132,8 +128,6 @@ func TestA2AParser_ProcessResponse_AgentCard_MalformedMissingFields(t *testing.T
 	}
 }
 
-// --- Task Delegation Tests ---
-
 // TestA2AParser_ProcessRequest_TasksSend verifies parsing tasks/send request.
 func TestA2AParser_ProcessRequest_TasksSend(t *testing.T) {
 	parser := NewA2AParser()
@@ -199,8 +193,6 @@ func TestA2AParser_ProcessRequest_TasksSendSubscribe(t *testing.T) {
 	}
 }
 
-// --- SSE Streaming Tests ---
-
 // TestA2AParser_ProcessStreamChunk_TaskUpdate verifies SSE chunk parsing for task updates.
 func TestA2AParser_ProcessStreamChunk_TaskUpdate(t *testing.T) {
 	parser := NewA2AParser()
@@ -240,8 +232,6 @@ func TestA2AParser_ProcessStreamChunk_Empty(t *testing.T) {
 		t.Error("ProcessStreamChunk() should return nil for empty chunk")
 	}
 }
-
-// --- Message Content Tests ---
 
 // TestA2AParser_ProcessRequest_EmptyBody verifies error on empty body.
 func TestA2AParser_ProcessRequest_EmptyBody(t *testing.T) {

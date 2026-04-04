@@ -20,8 +20,6 @@ import (
 	"testing"
 )
 
-// --- Request Parsing Tests ---
-
 // TestParseRequest_Basic verifies parsing a basic Anthropic messages API request.
 func TestParseRequest_Basic(t *testing.T) {
 	body := []byte(`{
@@ -108,8 +106,6 @@ func TestParseRequest_InvalidJSON(t *testing.T) {
 		t.Fatal("ParseRequest() expected error for invalid JSON, got nil")
 	}
 }
-
-// --- SSE Streaming Response Parsing Tests ---
 
 // TestParseSSEEvent_ContentBlockDelta verifies parsing a content_block_delta event.
 func TestParseSSEEvent_ContentBlockDelta(t *testing.T) {
@@ -207,8 +203,6 @@ func TestParseSSEFrame_EmptyFrame(t *testing.T) {
 	}
 }
 
-// --- Non-Streaming Response Parsing Tests ---
-
 // TestParseNonStreamingResponse verifies parsing a complete non-streaming response.
 func TestParseNonStreamingResponse(t *testing.T) {
 	body := []byte(`{
@@ -252,8 +246,6 @@ func TestParseNonStreamingResponse(t *testing.T) {
 		t.Errorf("OutputTokens = %d, want 9", resp.OutputTokens)
 	}
 }
-
-// --- Tool Extraction Tests ---
 
 // TestParseRequest_ToolExtraction_SingleTool verifies extracting tools[].name
 // from an Anthropic messages API request with a single tool.

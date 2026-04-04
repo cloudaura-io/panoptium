@@ -81,9 +81,6 @@ var _ = Describe("Policy Engine E2E", Label("e2e-policy"), Ordered, func() {
 		}
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-1: Policy Compilation via CRD Apply and Status Reporting
-	// -----------------------------------------------------------------------
 	Context("PE-1: Policy Compilation", func() {
 		It("should compile a valid AgentPolicy and set Ready=True with correct ruleCount", func() {
 			policyName := uniqueName("pe1-valid")
@@ -181,9 +178,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-2: Deny Action Strips Dangerous Tool from Request (HTTP 200)
-	// -----------------------------------------------------------------------
 	Context("PE-2: Deny Action", func() {
 		var curlPod string
 		BeforeAll(func() {
@@ -238,9 +232,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-3: Explicit Allow Override at Equal Priority
-	// -----------------------------------------------------------------------
 	Context("PE-3: Allow Override", func() {
 		var curlPod string
 		BeforeAll(func() {
@@ -318,9 +309,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-4: Namespace-Scoped Policy Overrides ClusterPolicy
-	// -----------------------------------------------------------------------
 	Context("PE-4: Namespace Override", func() {
 		var curlPod string
 		BeforeAll(func() {
@@ -397,9 +385,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-5: Rate Limiting Throttle (HTTP 429) After Limit Exceeded
-	// -----------------------------------------------------------------------
 	Context("PE-5: Rate Limiting", func() {
 		var curlPod string
 		BeforeAll(func() {
@@ -466,9 +451,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-6: Escalation Chain: 3x Deny Triggers Quarantine CRD
-	// -----------------------------------------------------------------------
 	Context("PE-6: Escalation Chain", func() {
 		var curlPod string
 		BeforeAll(func() {
@@ -540,9 +522,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-7: Temporal Sequence: file_write Then egress_attempt Triggers Alert
-	// -----------------------------------------------------------------------
 	// This test validates the temporal sequence detection path end-to-end:
 	// a file_write event followed by an egress_attempt within a 10-second
 	// window should trigger an alert action.
@@ -657,9 +636,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-8: policy.decision Events Published to NATS with Full Trace
-	// -----------------------------------------------------------------------
 	Context("PE-8: NATS Decision Events", func() {
 		var curlPod string
 		BeforeAll(func() {
@@ -716,9 +692,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-9: Fallback rewritePath Converts Deny to Allow with Annotation
-	// -----------------------------------------------------------------------
 	Context("PE-9: Fallback RewritePath", func() {
 		var curlPod string
 		BeforeAll(func() {
@@ -792,9 +765,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-10: Hot-Reload: Update CRD Without Operator Restart
-	// -----------------------------------------------------------------------
 	Context("PE-10: Hot-Reload", func() {
 		var curlPod string
 		BeforeAll(func() {
@@ -896,9 +866,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-11: Concurrent Multi-Agent: 10 Requests, 5 Agents, Race-Free
-	// -----------------------------------------------------------------------
 	Context("PE-11: Concurrency", func() {
 		const numAgents = 5
 		const requestsPerAgent = 2
@@ -995,9 +962,6 @@ spec:
 		})
 	})
 
-	// -----------------------------------------------------------------------
-	// PE-12: Evaluation Latency <5ms p99 Under Load
-	// -----------------------------------------------------------------------
 	Context("PE-12: Latency Benchmark", func() {
 		const numBenchPods = 10
 		const requestsPerPod = 10

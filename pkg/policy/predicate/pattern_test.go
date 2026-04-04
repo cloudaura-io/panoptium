@@ -23,8 +23,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
-// --- Glob Evaluator Tests ---
-
 func TestGlobEvaluator_RecursiveGlobMatch(t *testing.T) {
 	matcher := &policy.GlobMatcher{Pattern: "/etc/**"}
 	eval := &GlobEvaluator{
@@ -219,8 +217,6 @@ func TestGlobEvaluator_ExactMatch(t *testing.T) {
 func TestGlobEvaluator_ImplementsInterface(t *testing.T) {
 	var _ PredicateEvaluator = (*GlobEvaluator)(nil)
 }
-
-// --- Regex Evaluator Tests ---
 
 func TestRegexEvaluator_SimpleMatch(t *testing.T) {
 	re := regexp.MustCompile(`^curl`)

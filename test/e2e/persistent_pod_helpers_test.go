@@ -21,10 +21,6 @@ import (
 	"testing"
 )
 
-// ---------------------------------------------------------------------------
-// Unit Tests for Persistent Pod Helpers
-// ---------------------------------------------------------------------------
-
 // TestPersistentPodNameGeneration verifies that createPersistentCurlPod
 // generates RFC 1123-compliant pod names with the expected prefix.
 func TestPersistentPodNameGeneration(t *testing.T) {
@@ -62,7 +58,7 @@ func TestPersistentPodNameUniqueness(t *testing.T) {
 // kubectl exec command arguments for sending a tool call request through an
 // existing persistent pod.
 func TestBuildCurlExecArgs(t *testing.T) {
-	args := buildCurlExecArgs("my-pod", "10.0.0.1", "agent-1", "dangerous_exec", nil)
+	args := buildCurlExecArgs("my-pod", "10.0.0.1", "dangerous_exec", nil)
 
 	// Should start with "exec my-pod -n <namespace> --"
 	if args[0] != "exec" {
@@ -123,7 +119,7 @@ func TestBuildCurlExecArgsWithExtraHeaders(t *testing.T) {
 		"x-custom-header": "custom-value",
 		"x-another":       "another-value",
 	}
-	args := buildCurlExecArgs("pod1", "10.0.0.1", "agent-1", "tool1", headers)
+	args := buildCurlExecArgs("pod1", "10.0.0.1", "tool1", headers)
 
 	customFound := false
 	anotherFound := false

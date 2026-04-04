@@ -59,8 +59,6 @@ func setupMixedDetector() *ProtocolDetector {
 	return detector
 }
 
-// --- MCP Traffic Detection ---
-
 // TestMixedDetect_MCP_ViaJSONRPC verifies MCP detection via JSON-RPC method field.
 func TestMixedDetect_MCP_ViaJSONRPC(t *testing.T) {
 	detector := setupMixedDetector()
@@ -96,8 +94,6 @@ func TestMixedDetect_MCP_ViaJSONRPC(t *testing.T) {
 		})
 	}
 }
-
-// --- A2A Traffic Detection ---
 
 // TestMixedDetect_A2A_AgentCard verifies A2A detection via /.well-known/agent-card.json path.
 func TestMixedDetect_A2A_AgentCard(t *testing.T) {
@@ -141,8 +137,6 @@ func TestMixedDetect_A2A_TaskSend(t *testing.T) {
 	}
 }
 
-// --- Gemini Traffic Detection ---
-
 // TestMixedDetect_Gemini_V1Beta verifies Gemini detection via /v1beta/models/* path.
 func TestMixedDetect_Gemini_V1Beta(t *testing.T) {
 	detector := setupMixedDetector()
@@ -184,8 +178,6 @@ func TestMixedDetect_Gemini_V1(t *testing.T) {
 	}
 }
 
-// --- OpenAI Traffic Routing ---
-
 // TestMixedDetect_OpenAI_StillRoutes verifies OpenAI traffic still routes correctly.
 func TestMixedDetect_OpenAI_StillRoutes(t *testing.T) {
 	detector := setupMixedDetector()
@@ -208,8 +200,6 @@ func TestMixedDetect_OpenAI_StillRoutes(t *testing.T) {
 	}
 }
 
-// --- Anthropic Traffic Routing ---
-
 // TestMixedDetect_Anthropic_StillRoutes verifies Anthropic traffic still routes correctly.
 func TestMixedDetect_Anthropic_StillRoutes(t *testing.T) {
 	detector := setupMixedDetector()
@@ -228,8 +218,6 @@ func TestMixedDetect_Anthropic_StillRoutes(t *testing.T) {
 		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "anthropic")
 	}
 }
-
-// --- Annotation Override Tests ---
 
 // TestMixedDetect_AnnotationOverridesPath verifies annotation overrides all heuristics.
 func TestMixedDetect_AnnotationOverridesPath(t *testing.T) {
@@ -276,8 +264,6 @@ func TestMixedDetect_AnnotationOverridesJSONRPC(t *testing.T) {
 		t.Errorf("Parser = %q, want %q (annotation override)", result.Parser.Name(), "gemini")
 	}
 }
-
-// --- Detection Latency ---
 
 // TestMixedDetect_Latency_SubMillisecond verifies detection completes in <1ms (NFR-1).
 func TestMixedDetect_Latency_SubMillisecond(t *testing.T) {

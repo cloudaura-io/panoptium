@@ -23,8 +23,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/eventbus"
 )
 
-// --- Publisher Tests ---
-
 // TestProtocolEventPublisher_EmitParsedRequest_MCP verifies MCP event emission.
 func TestProtocolEventPublisher_EmitParsedRequest_MCP(t *testing.T) {
 	bus := eventbus.NewSimpleBus()

@@ -19,6 +19,8 @@ package action
 import (
 	"sync"
 	"time"
+
+	"github.com/panoptium/panoptium/pkg/eventbus"
 )
 
 // EscalationLevel defines a single escalation rule: when the count of
@@ -41,6 +43,8 @@ type EscalationLevel struct {
 // actionRecord stores a timestamped action for sliding window counting.
 type actionRecord struct {
 	Action    string
+	Severity  string
+	AuditOnly bool
 	Timestamp time.Time
 }
 
@@ -109,6 +113,61 @@ func (p *EscalationProcessor) CheckEscalation(agentKey, currentAction string) (b
 		}
 
 		if count >= level.Threshold {
+			return true, level.ToAction
+		}
+	}
+
+	return false, ""
+}
+
+// RecordSeverityAction records an action occurrence with severity and audit
+// mode information for severity-based risk accumulation (FR-5).
+func (p *EscalationProcessor) RecordSeverityAction(agentKey, actionType, severity string, auditOnly bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.state[agentKey] = append(p.state[agentKey], actionRecord{
+		Action:    actionType,
+		Severity:  severity,
+		AuditOnly: auditOnly,
+		Timestamp: time.Now(),
+	})
+}
+
+// CheckSeverityEscalation checks whether the accumulated severity-weighted
+// risk for the given agent exceeds the escalation threshold. The threshold
+// is reinterpreted as a risk point threshold (not a count).
+//
+// Risk scoring: each record contributes SeverityScore(severity) points,
+// with audit-only records weighted at 50% (FR-5).
+//
+// Returns (true, toAction) if escalation is triggered, or (false, "") if not.
+func (p *EscalationProcessor) CheckSeverityEscalation(agentKey string) (bool, string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	records, ok := p.state[agentKey]
+	if !ok {
+		return false, ""
+	}
+
+	now := time.Now()
+
+	for _, level := range p.levels {
+		cutoff := now.Add(-level.Window)
+		totalRisk := 0
+
+		for _, rec := range records {
+			if rec.Timestamp.After(cutoff) {
+				score := eventbus.SeverityScore(rec.Severity)
+				if rec.AuditOnly {
+					score = score / 2 // 50% weight for audit events
+				}
+				totalRisk += score
+			}
+		}
+
+		if totalRisk >= level.Threshold {
 			return true, level.ToAction
 		}
 	}

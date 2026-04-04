@@ -24,11 +24,7 @@ import (
 	"github.com/panoptium/panoptium/pkg/observer/protocol"
 )
 
-// --- Compile-time interface check ---
-
 var _ protocol.ProtocolParser = (*GeminiParser)(nil)
-
-// --- Detect Tests ---
 
 // TestGeminiParser_Detect_V1Beta verifies detection of v1beta generateContent path.
 func TestGeminiParser_Detect_V1Beta(t *testing.T) {
@@ -71,8 +67,6 @@ func TestGeminiParser_Detect_NonGemini(t *testing.T) {
 		t.Error("Detect() returned true for non-Gemini path, want false")
 	}
 }
-
-// --- Request Parsing Tests ---
 
 // TestGeminiParser_ProcessRequest_GenerateContent verifies parsing a generateContent request.
 func TestGeminiParser_ProcessRequest_GenerateContent(t *testing.T) {
@@ -169,8 +163,6 @@ func TestGeminiParser_ProcessRequest_FunctionResponse(t *testing.T) {
 	}
 }
 
-// --- SSE Response Parsing Tests ---
-
 // TestGeminiParser_ProcessStreamChunk_TextContent verifies text extraction from SSE chunks.
 func TestGeminiParser_ProcessStreamChunk_TextContent(t *testing.T) {
 	parser := NewGeminiParser()
@@ -257,8 +249,6 @@ func TestGeminiParser_ProcessStreamChunk_Empty(t *testing.T) {
 		t.Error("ProcessStreamChunk() should return nil for empty chunk")
 	}
 }
-
-// --- Non-streaming response ---
 
 // TestGeminiParser_ProcessResponse_NonStreaming verifies parsing of non-streaming response.
 func TestGeminiParser_ProcessResponse_NonStreaming(t *testing.T) {
@@ -351,8 +341,6 @@ func TestGeminiParser_ProcessResponse_FunctionCallResponse(t *testing.T) {
 		t.Errorf("function_call_name = %v, want %q", result.Metadata["function_call_name"], "get_weather")
 	}
 }
-
-// --- Performance Tests ---
 
 // TestGeminiParser_ChunkProcessingLatency verifies chunk processing <5ms (NFR-1).
 func TestGeminiParser_ChunkProcessingLatency(t *testing.T) {

@@ -36,9 +36,9 @@ import (
 // toolOnlyDenyEvaluator denies tool_call events but allows llm_request events.
 // This is needed because FR-2 dual emission evaluates llm_request first.
 type toolOnlyDenyEvaluator struct {
-	denyDecision   *policy.Decision
-	lastToolEvent  *policy.PolicyEvent
-	lastEvent      *policy.PolicyEvent
+	denyDecision  *policy.Decision
+	lastToolEvent *policy.PolicyEvent
+	lastEvent     *policy.PolicyEvent
 }
 
 func (m *toolOnlyDenyEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.Decision, error) {

@@ -28,10 +28,6 @@ import (
 	"github.com/panoptium/panoptium/test/utils"
 )
 
-// ---------------------------------------------------------------------------
-// ThreatSignature CRD Lifecycle E2E Tests
-// ---------------------------------------------------------------------------
-
 var _ = Describe("ThreatSignature CRD Lifecycle E2E", Label("e2e-threat-sig"), Ordered, func() {
 
 	BeforeAll(func() {
@@ -70,9 +66,6 @@ var _ = Describe("ThreatSignature CRD Lifecycle E2E", Label("e2e-threat-sig"), O
 		}
 	})
 
-	// -------------------------------------------------------------------
-	// TS-1: Valid ThreatSignature CRD Lifecycle (create, update, delete)
-	// -------------------------------------------------------------------
 	Context("TS-1: Valid ThreatSignature CRD Lifecycle", func() {
 
 		It("should create a valid ThreatSignature and reach Ready=True", func() {
@@ -228,9 +221,6 @@ spec:
 		})
 	})
 
-	// -------------------------------------------------------------------
-	// TS-2: Invalid ThreatSignature Rejection
-	// -------------------------------------------------------------------
 	Context("TS-2: Invalid ThreatSignature Rejection", func() {
 
 		It("should reject a ThreatSignature with invalid regex at admission", func() {
@@ -318,10 +308,6 @@ spec:
 		})
 	})
 })
-
-// ---------------------------------------------------------------------------
-// Default Helm-Deployed ThreatSignature E2E Tests
-// ---------------------------------------------------------------------------
 
 var _ = Describe("Default Helm ThreatSignature E2E", Label("e2e-threat-sig"), Ordered, func() {
 
@@ -446,10 +432,6 @@ var _ = Describe("Default Helm ThreatSignature E2E", Label("e2e-threat-sig"), Or
 	})
 })
 
-// ---------------------------------------------------------------------------
-// CRD-Driven Threat Detection Hot-Reload E2E Tests
-// ---------------------------------------------------------------------------
-
 var _ = Describe("ThreatSignature Hot-Reload E2E", Label("e2e-threat-sig"), Ordered, func() {
 
 	BeforeAll(func() {
@@ -480,9 +462,6 @@ var _ = Describe("ThreatSignature Hot-Reload E2E", Label("e2e-threat-sig"), Orde
 		}
 	})
 
-	// -------------------------------------------------------------------
-	// TS-4: CRD-Driven Threat Detection Hot-Reload
-	// -------------------------------------------------------------------
 	Context("TS-4: Threat Signature Hot-Reload via Reconciler", func() {
 
 		It("should reconcile a new ThreatSignature and emit Kubernetes event on compilation", func() {
@@ -654,10 +633,6 @@ spec:
 	})
 })
 
-// ---------------------------------------------------------------------------
-// AgentPolicy Integration with ThreatSignatures E2E Tests
-// ---------------------------------------------------------------------------
-
 var _ = Describe("ThreatSignature Policy Integration E2E", Label("e2e-threat-sig"), Ordered, func() {
 
 	BeforeAll(func() {
@@ -688,9 +663,6 @@ var _ = Describe("ThreatSignature Policy Integration E2E", Label("e2e-threat-sig
 		}
 	})
 
-	// -------------------------------------------------------------------
-	// TS-5: AgentPolicy with ThreatSignature References
-	// -------------------------------------------------------------------
 	Context("TS-5: Policy-ThreatSignature Integration", func() {
 
 		It("should create a AgentPolicy referencing a threat signature by name and reach Ready=True", func() {
@@ -742,7 +714,7 @@ spec:
     - name: block-on-threat-sig
       trigger:
         eventCategory: protocol
-        eventSubcategory: mcp.tool.call
+        eventSubcategory: tool_call
       threatSignatures:
         names:
           - %s
@@ -783,7 +755,7 @@ spec:
     - name: block-prompt-injection
       trigger:
         eventCategory: protocol
-        eventSubcategory: mcp.tool.call
+        eventSubcategory: tool_call
       threatSignatures:
         categories:
           - prompt_injection
@@ -824,7 +796,7 @@ spec:
     - name: alert-critical-threats
       trigger:
         eventCategory: protocol
-        eventSubcategory: mcp.tool.call
+        eventSubcategory: tool_call
       threatSignatures:
         severities:
           - CRITICAL
@@ -849,12 +821,7 @@ spec:
 	})
 })
 
-// ---------------------------------------------------------------------------
-// ThreatSignature Helper Functions
-// ---------------------------------------------------------------------------
-
-// waitForThreatSignatureReady polls the ThreatSignature status until
-// Ready=True or the timeout expires.
+// waitForThreatSignatureReady polls until Ready=True or the timeout expires.
 func waitForThreatSignatureReady(name string, timeout time.Duration) {
 	By(fmt.Sprintf("waiting for ThreatSignature %s to be Ready=True", name))
 	verifyReady := func(g Gomega) {

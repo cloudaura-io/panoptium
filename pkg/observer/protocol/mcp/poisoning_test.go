@@ -99,8 +99,6 @@ func newDetectorWithDefaults(sensitivity string) *ToolPoisoningDetector {
 	return d
 }
 
-// --- Tool Poisoning Detection Tests ---
-
 // TestPoisoningDetector_NormalDescription verifies low score for normal descriptions.
 func TestPoisoningDetector_NormalDescription(t *testing.T) {
 	detector := newDetectorWithDefaults(SensitivityMedium)

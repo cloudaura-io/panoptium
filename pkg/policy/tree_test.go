@@ -417,8 +417,6 @@ func TestDecisionTree_EmptyRules(t *testing.T) {
 	}
 }
 
-// --- Phase 4: Inequality and Numeric Operator Tests ---
-
 func TestDecisionTree_InequalityOperator(t *testing.T) {
 	compiled := &CompiledPolicy{
 		Name:      "neq-test",
@@ -445,7 +443,7 @@ func TestDecisionTree_InequalityOperator(t *testing.T) {
 
 	tree := NewDecisionTree(compiled)
 
-	t.Run("!= returns true when field differs from value", func(t *testing.T) {
+	t.Run("not equal returns true when field differs", func(t *testing.T) {
 		event := &PolicyEvent{
 			Category:    "kernel",
 			Subcategory: "process_exec",
@@ -464,7 +462,7 @@ func TestDecisionTree_InequalityOperator(t *testing.T) {
 		}
 	})
 
-	t.Run("!= returns false when field equals value", func(t *testing.T) {
+	t.Run("not equal returns false when field equals value", func(t *testing.T) {
 		event := &PolicyEvent{
 			Category:    "kernel",
 			Subcategory: "process_exec",
@@ -507,7 +505,7 @@ func TestDecisionTree_GreaterThanOperator(t *testing.T) {
 
 	tree := NewDecisionTree(compiled)
 
-	t.Run("> with int field value", func(t *testing.T) {
+	t.Run("greater than with int field value", func(t *testing.T) {
 		event := &PolicyEvent{
 			Category:    "llm",
 			Subcategory: "completion_receive",
@@ -523,7 +521,7 @@ func TestDecisionTree_GreaterThanOperator(t *testing.T) {
 		}
 	})
 
-	t.Run("> with float64 field value", func(t *testing.T) {
+	t.Run("greater than with float64 field value", func(t *testing.T) {
 		event := &PolicyEvent{
 			Category:    "llm",
 			Subcategory: "completion_receive",
@@ -539,7 +537,7 @@ func TestDecisionTree_GreaterThanOperator(t *testing.T) {
 		}
 	})
 
-	t.Run("> returns false when below threshold", func(t *testing.T) {
+	t.Run("greater than returns false when below threshold", func(t *testing.T) {
 		event := &PolicyEvent{
 			Category:    "llm",
 			Subcategory: "completion_receive",
@@ -582,7 +580,7 @@ func TestDecisionTree_LessThanOperator(t *testing.T) {
 
 	tree := NewDecisionTree(compiled)
 
-	t.Run("< with int field value", func(t *testing.T) {
+	t.Run("less than with int field value", func(t *testing.T) {
 		event := &PolicyEvent{
 			Category:    "llm",
 			Subcategory: "completion_receive",
@@ -598,7 +596,7 @@ func TestDecisionTree_LessThanOperator(t *testing.T) {
 		}
 	})
 
-	t.Run("< with float64 field value", func(t *testing.T) {
+	t.Run("less than with float64 field value", func(t *testing.T) {
 		event := &PolicyEvent{
 			Category:    "llm",
 			Subcategory: "completion_receive",
@@ -614,7 +612,7 @@ func TestDecisionTree_LessThanOperator(t *testing.T) {
 		}
 	})
 
-	t.Run("< returns false when above threshold", func(t *testing.T) {
+	t.Run("less than returns false when above threshold", func(t *testing.T) {
 		event := &PolicyEvent{
 			Category:    "llm",
 			Subcategory: "completion_receive",
@@ -630,8 +628,6 @@ func TestDecisionTree_LessThanOperator(t *testing.T) {
 		}
 	})
 }
-
-// --- Phase 4: Regex, Glob, and CIDR End-to-End Evaluation Tests ---
 
 func TestDecisionTree_RegexEvaluation(t *testing.T) {
 	re := regexp.MustCompile(`^/tmp/.*\.sh$`)
@@ -821,8 +817,6 @@ func TestDecisionTree_CIDREvaluation(t *testing.T) {
 	})
 }
 
-// --- Phase 4: Raw Operator and Unknown Operator Tests ---
-
 // TestDecisionTree_RawOperatorRemoved verifies that the "raw" operator
 // no longer exists and is treated as an unknown operator (returns error).
 // This test replaces the previous TestDecisionTree_RawOperator which
@@ -920,8 +914,6 @@ func TestDecisionTree_UnknownOperator(t *testing.T) {
 		t.Error("PredicateTrace should contain an error entry for unknown operator")
 	}
 }
-
-// --- Phase 4: Multi-Predicate AND Logic and Trace Tests ---
 
 func TestDecisionTree_MultiPredicateAND(t *testing.T) {
 	compiled := &CompiledPolicy{
@@ -1060,8 +1052,6 @@ func TestDecisionTree_PredicateTracePopulated(t *testing.T) {
 	}
 }
 
-// --- Phase 4: Decision Metadata and Trigger Matching Tests ---
-
 func TestDecisionTree_DecisionMetadata(t *testing.T) {
 	compiled := &CompiledPolicy{
 		Name:      "metadata-policy",
@@ -1141,8 +1131,6 @@ func TestDecisionTree_EmptyTriggerEventMatchesAllSubcategories(t *testing.T) {
 		})
 	}
 }
-
-// --- Phase 4: Error-Handling and Defensive Edge-Case Tests ---
 
 func TestDecisionTree_CIDRWithInvalidIP(t *testing.T) {
 	_, ipNet, _ := net.ParseCIDR("10.0.0.0/8")
@@ -1442,8 +1430,6 @@ func TestDecisionTree_MissingPrecompiledCIDR(t *testing.T) {
 		t.Error("PredicateTrace should contain an error for missing pre-compiled CIDR")
 	}
 }
-
-// --- Phase 4: resolveField Prefix-Stripping Tests ---
 
 func TestDecisionTree_ResolveFieldStripPrefix(t *testing.T) {
 	compiled := &CompiledPolicy{

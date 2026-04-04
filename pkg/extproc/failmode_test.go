@@ -74,8 +74,6 @@ func (e *errorPolicyEvaluator) EvaluateAll(_ *policy.PolicyEvent) (*policy.Evalu
 	return nil, e.err
 }
 
-// --- Fail-Open Tests ---
-
 // TestFailOpen_PassThroughOnPolicyError verifies that in fail-open mode,
 // when the policy evaluator returns an error, traffic passes through.
 func TestFailOpen_PassThroughOnPolicyError(t *testing.T) {
@@ -169,8 +167,6 @@ func TestFailOpen_EmitsBypassEvent(t *testing.T) {
 		t.Fatal("timed out waiting for enforcement.bypass event")
 	}
 }
-
-// --- Fail-Closed Tests ---
 
 // TestFailClosed_Returns503OnPolicyError verifies that in fail-closed mode,
 // when the policy evaluator returns an error, the ExtProc server returns

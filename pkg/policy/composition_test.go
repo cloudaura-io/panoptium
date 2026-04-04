@@ -633,8 +633,6 @@ func TestPolicyComposition_RateLimitNonMatchingEvent(t *testing.T) {
 	}
 }
 
-// --- Namespace scoping tests ---
-
 func TestPolicyComposition_NamespacedPolicy_DoesNotMatchPodInOtherNamespace(t *testing.T) {
 	resolver := NewPolicyCompositionResolver()
 
@@ -871,8 +869,6 @@ func TestPolicyComposition_ClusterPolicy_WithSelector_MatchesAcrossNamespaces(t 
 	}
 }
 
-// --- EvaluateAll Tests ---
-
 func TestEvaluateAll_ReturnsEvaluationResult(t *testing.T) {
 	resolver := NewPolicyCompositionResolver()
 	policies := []*CompiledPolicy{
@@ -958,21 +954,21 @@ func TestEvaluateAll_DenyFirstAtEqualPriority(t *testing.T) {
 		{
 			Name: "allow-pol", Namespace: "default", Priority: 100,
 			Rules: []*CompiledRule{
-				{Name: "allow-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "allow-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}},
 			},
 		},
 		{
 			Name: "deny-pol", Namespace: "default", Priority: 100,
 			Rules: []*CompiledRule{
-				{Name: "deny-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "deny-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}},
 			},
 		},
 	}
 
 	event := &PolicyEvent{
-		Category:    "protocol",
+		Category:    "llm",
 		Subcategory: "llm_request",
 		Namespace:   "default",
 		Fields:      map[string]interface{}{},
@@ -995,21 +991,21 @@ func TestEvaluateAll_HigherPriorityDenyWins(t *testing.T) {
 		{
 			Name: "high-deny", Namespace: "default", Priority: 200,
 			Rules: []*CompiledRule{
-				{Name: "deny-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "deny-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}},
 			},
 		},
 		{
 			Name: "low-allow", Namespace: "default", Priority: 100,
 			Rules: []*CompiledRule{
-				{Name: "allow-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "allow-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}},
 			},
 		},
 	}
 
 	event := &PolicyEvent{
-		Category:    "protocol",
+		Category:    "llm",
 		Subcategory: "llm_request",
 		Namespace:   "default",
 		Fields:      map[string]interface{}{},
@@ -1032,21 +1028,21 @@ func TestEvaluateAll_HigherPriorityAllowWins(t *testing.T) {
 		{
 			Name: "high-allow", Namespace: "default", Priority: 200,
 			Rules: []*CompiledRule{
-				{Name: "allow-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "allow-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}},
 			},
 		},
 		{
 			Name: "low-deny", Namespace: "default", Priority: 100,
 			Rules: []*CompiledRule{
-				{Name: "deny-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "deny-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}},
 			},
 		},
 	}
 
 	event := &PolicyEvent{
-		Category:    "protocol",
+		Category:    "llm",
 		Subcategory: "llm_request",
 		Namespace:   "default",
 		Fields:      map[string]interface{}{},
@@ -1057,16 +1053,15 @@ func TestEvaluateAll_HigherPriorityAllowWins(t *testing.T) {
 		t.Fatalf("EvaluateAll() error: %v", err)
 	}
 
-	// Higher priority allow exists but lower priority deny also exists.
-	// Since we collect ALL decisions and deny-first means any deny at
-	// any priority level blocks, this should still deny.
-	// Actually, per FR-3: "At equal priority, deny wins". But at different
-	// priorities, higher priority wins. So a priority 200 allow beats priority 100 deny.
-	// The effective action looks at ALL decisions, but respects priority ordering.
-	// We need to verify the EffectiveAction respects priority hierarchy.
-	// Let's check the actual Decisions first.
 	if len(result.Decisions) != 2 {
 		t.Fatalf("expected 2 decisions, got %d", len(result.Decisions))
+	}
+
+	// Higher priority allow (200) must beat lower priority deny (100).
+	// Deny-first only applies within the same priority tier (FR-3).
+	effective := result.EffectiveAction()
+	if effective.Type != v1alpha1.ActionTypeAllow {
+		t.Errorf("EffectiveAction().Type = %q, want %q (higher priority allow wins)", effective.Type, v1alpha1.ActionTypeAllow)
 	}
 }
 
@@ -1076,21 +1071,21 @@ func TestEvaluateAll_NonTerminalCollected(t *testing.T) {
 		{
 			Name: "alert-pol", Namespace: "default", Priority: 100,
 			Rules: []*CompiledRule{
-				{Name: "alert-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "alert-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeAlert}},
 			},
 		},
 		{
 			Name: "deny-pol", Namespace: "default", Priority: 100,
 			Rules: []*CompiledRule{
-				{Name: "deny-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "deny-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}},
 			},
 		},
 	}
 
 	event := &PolicyEvent{
-		Category:    "protocol",
+		Category:    "llm",
 		Subcategory: "llm_request",
 		Namespace:   "default",
 		Fields:      map[string]interface{}{},
@@ -1117,14 +1112,14 @@ func TestEvaluateAll_RateLimitClassified(t *testing.T) {
 		{
 			Name: "rate-pol", Namespace: "default", Priority: 100,
 			Rules: []*CompiledRule{
-				{Name: "rate-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "rate-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeRateLimit, Parameters: map[string]string{"burstSize": "10"}}},
 			},
 		},
 	}
 
 	event := &PolicyEvent{
-		Category:    "protocol",
+		Category:    "llm",
 		Subcategory: "llm_request",
 		Namespace:   "default",
 		Fields:      map[string]interface{}{},
@@ -1145,7 +1140,7 @@ func TestEvaluateAll_EmptyPolicies(t *testing.T) {
 	resolver := NewPolicyCompositionResolver()
 
 	event := &PolicyEvent{
-		Category:    "protocol",
+		Category:    "llm",
 		Subcategory: "llm_request",
 		Namespace:   "default",
 		Fields:      map[string]interface{}{},
@@ -1173,14 +1168,14 @@ func TestEvaluateAll_AuditModeFlagPreserved(t *testing.T) {
 			Name: "audit-pol", Namespace: "default", Priority: 100,
 			EnforcementMode: v1alpha1.EnforcementModeAudit,
 			Rules: []*CompiledRule{
-				{Name: "deny-rule", TriggerLayer: "protocol", TriggerEvent: "llm_request",
+				{Name: "deny-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
 					Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}},
 			},
 		},
 	}
 
 	event := &PolicyEvent{
-		Category:    "protocol",
+		Category:    "llm",
 		Subcategory: "llm_request",
 		Namespace:   "default",
 		Fields:      map[string]interface{}{},
@@ -1196,5 +1191,254 @@ func TestEvaluateAll_AuditModeFlagPreserved(t *testing.T) {
 	}
 	if !result.Decisions[0].AuditOnly {
 		t.Error("expected AuditOnly=true for audit-mode policy decision")
+	}
+}
+
+// keyTrackingCounter records per-key call counts for testing groupBy behavior.
+type keyTrackingCounter struct {
+	counts map[string]int
+}
+
+func newKeyTrackingCounter() *keyTrackingCounter {
+	return &keyTrackingCounter{counts: make(map[string]int)}
+}
+
+func (c *keyTrackingCounter) IncrementAndCheck(key string, limit int) bool {
+	c.counts[key]++
+	return c.counts[key] > limit
+}
+
+func TestRateLimitCheck_GroupByAgent(t *testing.T) {
+	counter := newKeyTrackingCounter()
+	resolver := NewPolicyCompositionResolverWithRateLimit(counter)
+
+	policies := []*CompiledPolicy{
+		{
+			Name:      "agent-rate",
+			Namespace: "default",
+			Priority:  100,
+			Rules: []*CompiledRule{
+				{
+					Name:         "agent-limit",
+					TriggerLayer: "protocol",
+					TriggerEvent: "tool_call",
+					Action: CompiledAction{
+						Type: v1alpha1.ActionTypeRateLimit,
+						Parameters: map[string]string{
+							"burstSize": "2",
+							"groupBy":   "agent",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Two different tools from the same agent should share one counter
+	event1 := &PolicyEvent{
+		Category:    "protocol",
+		Subcategory: "tool_call",
+		Namespace:   "default",
+		PodName:     "agent-pod-1",
+		Fields:      map[string]interface{}{"toolName": "bash"},
+	}
+	event2 := &PolicyEvent{
+		Category:    "protocol",
+		Subcategory: "tool_call",
+		Namespace:   "default",
+		PodName:     "agent-pod-1",
+		Fields:      map[string]interface{}{"toolName": "read_file"},
+	}
+
+	resolver.Evaluate(policies, event1) // count 1
+	resolver.Evaluate(policies, event2) // count 2 (same agent key)
+
+	// 3rd request from same agent should exceed limit=2
+	decision, _ := resolver.Evaluate(policies, event1)
+	if !decision.Matched {
+		t.Error("expected rate limit exceeded for agent-based grouping after 3 requests")
+	}
+
+	// Verify both tools used the same counter key
+	if len(counter.counts) != 1 {
+		t.Errorf("expected 1 counter key (agent-based), got %d keys: %v", len(counter.counts), counter.counts)
+	}
+}
+
+func TestRateLimitCheck_GroupByTool(t *testing.T) {
+	counter := newKeyTrackingCounter()
+	resolver := NewPolicyCompositionResolverWithRateLimit(counter)
+
+	policies := []*CompiledPolicy{
+		{
+			Name:      "tool-rate",
+			Namespace: "default",
+			Priority:  100,
+			Rules: []*CompiledRule{
+				{
+					Name:         "tool-limit",
+					TriggerLayer: "protocol",
+					TriggerEvent: "tool_call",
+					Action: CompiledAction{
+						Type: v1alpha1.ActionTypeRateLimit,
+						Parameters: map[string]string{
+							"burstSize": "2",
+							"groupBy":   "tool",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Same agent, different tools should have independent counters
+	eventBash := &PolicyEvent{
+		Category:    "protocol",
+		Subcategory: "tool_call",
+		Namespace:   "default",
+		PodName:     "agent-pod-1",
+		Fields:      map[string]interface{}{"toolName": "bash"},
+	}
+	eventRead := &PolicyEvent{
+		Category:    "protocol",
+		Subcategory: "tool_call",
+		Namespace:   "default",
+		PodName:     "agent-pod-1",
+		Fields:      map[string]interface{}{"toolName": "read_file"},
+	}
+
+	resolver.Evaluate(policies, eventBash) // bash count 1
+	resolver.Evaluate(policies, eventBash) // bash count 2
+	resolver.Evaluate(policies, eventRead) // read_file count 1
+
+	// bash should now exceed limit
+	bashDecision, _ := resolver.Evaluate(policies, eventBash)
+	if !bashDecision.Matched {
+		t.Error("expected rate limit exceeded for bash (3 > 2)")
+	}
+
+	// read_file should still be within limit
+	readDecision, _ := resolver.Evaluate(policies, eventRead)
+	if readDecision.Matched && readDecision.Action.Type == v1alpha1.ActionTypeRateLimit {
+		t.Error("expected read_file to still be within limit (2 <= 2)")
+	}
+
+	// Verify two separate counter keys
+	if len(counter.counts) != 2 {
+		t.Errorf("expected 2 counter keys (tool-based), got %d keys: %v", len(counter.counts), counter.counts)
+	}
+}
+
+func TestRateLimitCheck_GroupByAgentTool(t *testing.T) {
+	counter := newKeyTrackingCounter()
+	resolver := NewPolicyCompositionResolverWithRateLimit(counter)
+
+	policies := []*CompiledPolicy{
+		{
+			Name:      "agenttool-rate",
+			Namespace: "default",
+			Priority:  100,
+			Rules: []*CompiledRule{
+				{
+					Name:         "agenttool-limit",
+					TriggerLayer: "protocol",
+					TriggerEvent: "tool_call",
+					Action: CompiledAction{
+						Type: v1alpha1.ActionTypeRateLimit,
+						Parameters: map[string]string{
+							"burstSize": "1",
+							"groupBy":   "agent+tool",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Same agent + same tool share a counter, different agent or tool is independent
+	event1 := &PolicyEvent{
+		Category:    "protocol",
+		Subcategory: "tool_call",
+		Namespace:   "default",
+		PodName:     "agent-1",
+		Fields:      map[string]interface{}{"toolName": "bash"},
+	}
+	event2 := &PolicyEvent{
+		Category:    "protocol",
+		Subcategory: "tool_call",
+		Namespace:   "default",
+		PodName:     "agent-2",
+		Fields:      map[string]interface{}{"toolName": "bash"},
+	}
+
+	resolver.Evaluate(policies, event1) // agent-1/bash count 1
+
+	// agent-1/bash should now exceed limit=1
+	decision1, _ := resolver.Evaluate(policies, event1)
+	if !decision1.Matched {
+		t.Error("expected rate limit exceeded for agent-1/bash (2 > 1)")
+	}
+
+	// agent-2/bash should still be within limit (different agent)
+	decision2, _ := resolver.Evaluate(policies, event2)
+	if decision2.Matched && decision2.Action.Type == v1alpha1.ActionTypeRateLimit {
+		t.Error("expected agent-2/bash to be within limit (independent counter)")
+	}
+}
+
+func TestRateLimitCheck_DefaultGroupByAgent(t *testing.T) {
+	counter := newKeyTrackingCounter()
+	resolver := NewPolicyCompositionResolverWithRateLimit(counter)
+
+	policies := []*CompiledPolicy{
+		{
+			Name:      "default-rate",
+			Namespace: "default",
+			Priority:  100,
+			Rules: []*CompiledRule{
+				{
+					Name:         "default-limit",
+					TriggerLayer: "protocol",
+					TriggerEvent: "tool_call",
+					Action: CompiledAction{
+						Type: v1alpha1.ActionTypeRateLimit,
+						Parameters: map[string]string{
+							"burstSize": "2",
+							// No groupBy — should default to "agent"
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Different tools from same agent should share counter (agent-based default)
+	event1 := &PolicyEvent{
+		Category:    "protocol",
+		Subcategory: "tool_call",
+		Namespace:   "default",
+		PodName:     "agent-pod",
+		Fields:      map[string]interface{}{"toolName": "bash"},
+	}
+	event2 := &PolicyEvent{
+		Category:    "protocol",
+		Subcategory: "tool_call",
+		Namespace:   "default",
+		PodName:     "agent-pod",
+		Fields:      map[string]interface{}{"toolName": "read_file"},
+	}
+
+	resolver.Evaluate(policies, event1) // count 1
+	resolver.Evaluate(policies, event2) // count 2 (same agent key)
+
+	// 3rd request should exceed limit
+	decision, _ := resolver.Evaluate(policies, event1)
+	if !decision.Matched {
+		t.Error("expected rate limit exceeded with default agent-based grouping")
+	}
+
+	// Verify single counter key (agent-based)
+	if len(counter.counts) != 1 {
+		t.Errorf("expected 1 counter key (default agent grouping), got %d keys: %v", len(counter.counts), counter.counts)
 	}
 }

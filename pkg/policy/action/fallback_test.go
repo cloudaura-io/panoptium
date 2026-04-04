@@ -20,8 +20,6 @@ import (
 	"testing"
 )
 
-// --- PathRewriter tests ---
-
 func TestPathRewriter_RewritesDeniedPath(t *testing.T) {
 	rewriter := &PathRewriter{
 		SafePaths: map[string]string{
@@ -76,8 +74,6 @@ func TestPathRewriter_NoSafeAlternative(t *testing.T) {
 		t.Error("expected fallback to fail (no safe path for /etc/hostname)")
 	}
 }
-
-// --- ArgumentSanitizer tests ---
 
 func TestArgumentSanitizer_StripsFields(t *testing.T) {
 	sanitizer := &ArgumentSanitizer{
@@ -136,8 +132,6 @@ func TestArgumentSanitizer_NoSensitiveFields(t *testing.T) {
 	}
 }
 
-// --- ProviderSubstituter tests ---
-
 func TestProviderSubstituter_SubstitutesEndpoint(t *testing.T) {
 	sub := &ProviderSubstituter{
 		EndpointMap: map[string]string{
@@ -191,8 +185,6 @@ func TestProviderSubstituter_NoMapping(t *testing.T) {
 		t.Error("expected fallback to fail (no mapping for endpoint)")
 	}
 }
-
-// --- FallbackEngine tests ---
 
 func TestFallbackEngine_SuccessConvertsToAllow(t *testing.T) {
 	engine := &FallbackEngine{

@@ -23,8 +23,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
-// --- AllowExecutor tests ---
-
 func TestAllowExecutor_ProducesPermitDecision(t *testing.T) {
 	exec := &AllowExecutor{}
 	ctx := &ActionContext{
@@ -59,8 +57,6 @@ func TestAllowExecutor_ProducesPermitDecision(t *testing.T) {
 		t.Error("expected audit annotation 'allowed'")
 	}
 }
-
-// --- DenyExecutor tests ---
 
 func TestDenyExecutor_ProducesBlockDecision(t *testing.T) {
 	exec := &DenyExecutor{}
@@ -125,8 +121,6 @@ func TestDenyExecutor_DefaultMessage(t *testing.T) {
 	}
 }
 
-// --- ThrottleExecutor tests ---
-
 func TestThrottleExecutor_ProducesDelayDecision(t *testing.T) {
 	exec := &ThrottleExecutor{}
 	ctx := &ActionContext{
@@ -179,8 +173,6 @@ func TestThrottleExecutor_DefaultRetryAfter(t *testing.T) {
 		t.Errorf("expected default RetryAfterSeconds=60, got %d", result.RetryAfterSeconds)
 	}
 }
-
-// --- AlertExecutor tests ---
 
 func TestAlertExecutor_ProducesPermitWithAlert(t *testing.T) {
 	exec := &AlertExecutor{}
@@ -238,8 +230,6 @@ func TestAlertExecutor_DefaultSeverity(t *testing.T) {
 		t.Errorf("expected default AlertSeverity=MEDIUM, got %q", result.AlertSeverity)
 	}
 }
-
-// --- QuarantineExecutor tests ---
 
 func TestQuarantineExecutor_ProducesIsolationDecision(t *testing.T) {
 	exec := &QuarantineExecutor{}
@@ -304,8 +294,6 @@ func TestQuarantineExecutor_DefaultContainmentLevel(t *testing.T) {
 	}
 }
 
-// --- RedirectExecutor tests ---
-
 func TestRedirectExecutor_ProducesRewrittenTarget(t *testing.T) {
 	exec := &RedirectExecutor{}
 	ctx := &ActionContext{
@@ -340,8 +328,6 @@ func TestRedirectExecutor_ProducesRewrittenTarget(t *testing.T) {
 		t.Errorf("expected RedirectTarget=https://sandbox.example.com/run, got %q", result.RedirectTarget)
 	}
 }
-
-// --- MutateExecutor tests ---
 
 func TestMutateExecutor_ProducesModifiedFields(t *testing.T) {
 	exec := &MutateExecutor{}
@@ -380,8 +366,6 @@ func TestMutateExecutor_ProducesModifiedFields(t *testing.T) {
 		t.Errorf("expected stripFields mutation, got %v", result.Mutations)
 	}
 }
-
-// --- ActionExecutorRegistry tests ---
 
 func TestActionExecutorRegistry_Dispatch(t *testing.T) {
 	registry := NewActionExecutorRegistry()

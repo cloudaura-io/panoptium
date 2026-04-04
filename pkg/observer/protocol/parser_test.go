@@ -21,8 +21,6 @@ import (
 	"testing"
 )
 
-// --- Mock ProtocolParser Implementation ---
-
 // mockParser is a test double implementing ProtocolParser.
 type mockParser struct {
 	name        string
@@ -97,8 +95,6 @@ func (m *mockParser) ProcessStreamChunk(ctx context.Context, chunk []byte, state
 		Content:  string(chunk),
 	}, nil
 }
-
-// --- ProtocolParser Interface Contract Tests ---
 
 // TestProtocolParser_Detect verifies that Detect returns a boolean and confidence score.
 func TestProtocolParser_Detect(t *testing.T) {
@@ -190,8 +186,6 @@ func TestProtocolParser_ProcessStreamChunk(t *testing.T) {
 		t.Errorf("Protocol = %q, want %q", chunk1.Protocol, "gemini")
 	}
 }
-
-// --- StreamState Tests ---
 
 // TestStreamState_NewStreamState verifies initial StreamState creation.
 func TestStreamState_NewStreamState(t *testing.T) {

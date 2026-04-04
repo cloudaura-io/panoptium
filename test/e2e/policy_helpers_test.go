@@ -31,12 +31,6 @@ import (
 	"github.com/panoptium/panoptium/test/utils"
 )
 
-// ---------------------------------------------------------------------------
-// CRD Management Helpers
-// ---------------------------------------------------------------------------
-
-// applyAgentPolicy applies a AgentPolicy CRD from the given YAML spec
-// via kubectl. The YAML must be a complete resource manifest.
 func applyAgentPolicy(yamlSpec string) error {
 	cmd := exec.Command("kubectl", "apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(yamlSpec)
@@ -44,8 +38,6 @@ func applyAgentPolicy(yamlSpec string) error {
 	return err
 }
 
-// applyAgentClusterPolicy applies a AgentClusterPolicy CRD from the
-// given YAML spec via kubectl.
 func applyAgentClusterPolicy(yamlSpec string) error {
 	cmd := exec.Command("kubectl", "apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(yamlSpec)
@@ -53,27 +45,20 @@ func applyAgentClusterPolicy(yamlSpec string) error {
 	return err
 }
 
-// deleteAgentPolicy deletes a namespaced AgentPolicy by name.
-// Uses --ignore-not-found=true so it is safe to call on already-deleted resources.
+// Safe to call on already-deleted resources.
 func deleteAgentPolicy(name, ns string) {
 	cmd := exec.Command("kubectl", "delete", "agentpolicy", name,
 		"-n", ns, "--ignore-not-found=true")
 	_, _ = utils.Run(cmd)
 }
 
-// deleteAgentClusterPolicy deletes a cluster-scoped AgentClusterPolicy by name.
 func deleteAgentClusterPolicy(name string) {
 	cmd := exec.Command("kubectl", "delete", "agentclusterpolicy", name,
 		"--ignore-not-found=true")
 	_, _ = utils.Run(cmd)
 }
 
-// ---------------------------------------------------------------------------
-// Status Polling Helpers
-// ---------------------------------------------------------------------------
-
-// waitForPolicyReady polls the AgentPolicy status until Ready=True or the
-// timeout expires. Uses Ginkgo Eventually for structured polling.
+// waitForPolicyReady polls until Ready=True or the timeout expires.
 func waitForPolicyReady(name, ns string, timeout time.Duration) {
 	By(fmt.Sprintf("waiting for AgentPolicy %s/%s to be Ready=True", ns, name))
 	verifyReady := func(g Gomega) {
@@ -87,8 +72,7 @@ func waitForPolicyReady(name, ns string, timeout time.Duration) {
 	Eventually(verifyReady, timeout, 5*time.Second).Should(Succeed())
 }
 
-// waitForClusterPolicyReady polls the AgentClusterPolicy status until
-// Ready=True or the timeout expires.
+// waitForClusterPolicyReady polls until Ready=True or the timeout expires.
 func waitForClusterPolicyReady(name string, timeout time.Duration) {
 	By(fmt.Sprintf("waiting for AgentClusterPolicy %s to be Ready=True", name))
 	verifyReady := func(g Gomega) {
@@ -101,13 +85,8 @@ func waitForClusterPolicyReady(name string, timeout time.Duration) {
 	Eventually(verifyReady, timeout, 5*time.Second).Should(Succeed())
 }
 
-// ---------------------------------------------------------------------------
-// Persistent Pod Lifecycle Helpers
-// ---------------------------------------------------------------------------
-
-// persistentCurlPodName generates a unique, RFC 1123-compliant pod name for a
-// persistent curl pod. The contextName identifies the test context (e.g. "pe2",
-// "ge1") to make debugging easier.
+// persistentCurlPodName generates a unique, RFC 1123-compliant pod name.
+// contextName identifies the test context (e.g. "pe2", "ge1").
 func persistentCurlPodName(contextName string) string {
 	safe := strings.ReplaceAll(contextName, "_", "-")
 	name := fmt.Sprintf("e2e-curl-%s-%d", safe, time.Now().UnixNano()%1000000)
@@ -310,10 +289,6 @@ func execMultiToolRequest(podName, gwIP string, toolNames []string, extraHeaders
 	return parseExecResponse(output)
 }
 
-// ---------------------------------------------------------------------------
-// Structured Error Assertion
-// ---------------------------------------------------------------------------
-
 // structuredError represents the JSON error body returned by enforcement actions.
 type structuredError struct {
 	Error      string `json:"error"`
@@ -352,10 +327,6 @@ func assertStructuredError(body, expectedErrorType, expectedRuleRef string) erro
 	return nil
 }
 
-// ---------------------------------------------------------------------------
-// Operator Restart Count
-// ---------------------------------------------------------------------------
-
 // getOperatorRestartCount returns the total restart count for the operator
 // controller-manager pod. Returns 0 if no restarts have occurred.
 func getOperatorRestartCount() (int, error) {
@@ -379,10 +350,6 @@ func getOperatorRestartCount() (int, error) {
 	}
 	return count, nil
 }
-
-// ---------------------------------------------------------------------------
-// Policy Status Helpers
-// ---------------------------------------------------------------------------
 
 // getPolicyRuleCount returns the ruleCount from the AgentPolicy status.
 func getPolicyRuleCount(name, ns string) (int32, error) {
@@ -424,19 +391,11 @@ func getPolicyObservedGeneration(name, ns string) (int64, error) {
 	return gen, nil
 }
 
-// ---------------------------------------------------------------------------
-// Unique Name Generator
-// ---------------------------------------------------------------------------
-
 // uniqueName generates a unique resource name with the given prefix.
 // Uses timestamp suffix to avoid conflicts with concurrent test runs.
 func uniqueName(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano()%1000000)
 }
-
-// ---------------------------------------------------------------------------
-// ExtProc Readiness Probe Helpers
-// ---------------------------------------------------------------------------
 
 // waitForExtProcReadyWithProbe is the testable core of the ExtProc readiness
 // probe. It calls probeFn repeatedly until it returns a non-503 status code,
@@ -474,10 +433,6 @@ func waitForExtProcReady(curlPod, gwIP string) {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(),
 		"ExtProc gRPC path did not become ready within 60s")
 }
-
-// ---------------------------------------------------------------------------
-// Unit Tests for Helper Functions
-// ---------------------------------------------------------------------------
 
 func TestAssertStructuredError(t *testing.T) {
 	tests := []struct {
@@ -590,7 +545,7 @@ func TestUniqueName(t *testing.T) {
 	}
 }
 
-// TestWaitForExtProcReady_Timeout verifies that waitForExtProcReadyWithTimeout
+// TestWaitForExtProcReady_Timeout verifies that waitForExtProcReadyWithProbe
 // returns an error when the probe function consistently returns 503 (indicating
 // the ExtProc gRPC connection is not yet established).
 func TestWaitForExtProcReady_Timeout(t *testing.T) {
@@ -615,7 +570,7 @@ func TestWaitForExtProcReady_Timeout(t *testing.T) {
 }
 
 // TestWaitForExtProcReady_SuccessAfterRetry verifies that
-// waitForExtProcReadyWithTimeout returns nil once the probe returns a non-503
+// waitForExtProcReadyWithProbe returns nil once the probe returns a non-503
 // status code, even after initial 503 responses.
 func TestWaitForExtProcReady_SuccessAfterRetry(t *testing.T) {
 	callCount := 0

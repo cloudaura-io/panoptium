@@ -22,8 +22,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
-// --- String Equality Evaluator Tests ---
-
 func TestStringEqualityEvaluator_ExactMatch(t *testing.T) {
 	eval := &StringEqualityEvaluator{
 		FieldPath: "processName",
@@ -115,8 +113,6 @@ func TestStringEqualityEvaluator_NilFields(t *testing.T) {
 	}
 }
 
-// --- String Prefix Evaluator Tests ---
-
 func TestStringEqualityEvaluator_Prefix(t *testing.T) {
 	eval := &StringEqualityEvaluator{
 		FieldPath: "path",
@@ -165,8 +161,6 @@ func TestStringEqualityEvaluator_Prefix_NoMatch(t *testing.T) {
 	}
 }
 
-// --- String Suffix Evaluator Tests ---
-
 func TestStringEqualityEvaluator_Suffix(t *testing.T) {
 	eval := &StringEqualityEvaluator{
 		FieldPath: "path",
@@ -214,8 +208,6 @@ func TestStringEqualityEvaluator_Suffix_NoMatch(t *testing.T) {
 		t.Error("expected no match for path not ending with '.conf'")
 	}
 }
-
-// --- Integer Comparison Evaluator Tests ---
 
 func TestNumericComparisonEvaluator_Equal(t *testing.T) {
 	eval := &NumericComparisonEvaluator{
@@ -506,8 +498,6 @@ func TestNumericComparisonEvaluator_MissingField(t *testing.T) {
 	}
 }
 
-// --- String Inequality (Negation) Tests ---
-
 func TestStringEqualityEvaluator_ExactMatch_Negated(t *testing.T) {
 	eval := &StringEqualityEvaluator{
 		FieldPath: "processName",
@@ -557,8 +547,6 @@ func TestStringEqualityEvaluator_ExactMatch_Negated_DifferentValue(t *testing.T)
 		t.Error("expected match for negated processName == 'curl' when value is 'wget'")
 	}
 }
-
-// --- Field Extraction from Different Event Types ---
 
 func TestFieldExtractor_KernelEvent(t *testing.T) {
 	extractor := &FieldExtractor{}
@@ -703,8 +691,6 @@ func TestFieldExtractor_NilFields(t *testing.T) {
 	}
 }
 
-// --- PredicateEvaluator Interface Compliance ---
-
 func TestStringEqualityEvaluator_ImplementsInterface(t *testing.T) {
 	var _ PredicateEvaluator = (*StringEqualityEvaluator)(nil)
 }
@@ -712,8 +698,6 @@ func TestStringEqualityEvaluator_ImplementsInterface(t *testing.T) {
 func TestNumericComparisonEvaluator_ImplementsInterface(t *testing.T) {
 	var _ PredicateEvaluator = (*NumericComparisonEvaluator)(nil)
 }
-
-// --- Tool Name Equality (Protocol Layer) ---
 
 func TestStringEqualityEvaluator_ToolName(t *testing.T) {
 	eval := &StringEqualityEvaluator{
@@ -738,8 +722,6 @@ func TestStringEqualityEvaluator_ToolName(t *testing.T) {
 		t.Error("expected match for toolName == 'execute_command'")
 	}
 }
-
-// --- Non-String Field Coercion to String ---
 
 func TestStringEqualityEvaluator_NonStringFieldCoercion(t *testing.T) {
 	eval := &StringEqualityEvaluator{

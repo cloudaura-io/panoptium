@@ -21,6 +21,7 @@ package escalation
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -81,8 +82,10 @@ func (m *EscalationManager) Start(ctx context.Context) error {
 	}
 }
 
-// handleEvent processes a single event from the bus. It skips events that
-// are not deny actions or that have no escalation configuration.
+// handleEvent processes a single event from the bus. It processes ALL
+// enforcement events that have escalation configuration, using severity-based
+// risk accumulation (FR-5). Audit events (prefixed "audit:") are recorded
+// with 50% weight.
 func (m *EscalationManager) handleEvent(ctx context.Context, evt eventbus.Event) {
 	l := log.FromContext(ctx).WithName("escalation-manager")
 
@@ -91,10 +94,7 @@ func (m *EscalationManager) handleEvent(ctx context.Context, evt eventbus.Event)
 		return
 	}
 
-	// Only process deny actions with escalation configuration
-	if enfEvt.Action != "deny" {
-		return
-	}
+	// Skip events without escalation configuration
 	if enfEvt.EscalationThreshold <= 0 {
 		return
 	}
@@ -120,25 +120,35 @@ func (m *EscalationManager) handleEvent(ctx context.Context, evt eventbus.Event)
 		return
 	}
 
+	// Detect audit events by checking for "audit:" prefix
+	isAudit := strings.HasPrefix(enfEvt.Action, "audit:")
+	baseAction := enfEvt.Action
+	if isAudit {
+		baseAction = strings.TrimPrefix(enfEvt.Action, "audit:")
+	}
+
+	// Parse severity from the event
+	severity := enfEvt.Severity
+
 	// Configure escalation level dynamically from event parameters.
 	// The processor is shared across agents, so we set the levels to match
 	// the current policy's escalation configuration. Since all events for a
 	// given policy carry the same parameters, this is safe.
 	m.processor.SetLevels([]action.EscalationLevel{
 		{
-			FromAction: "deny",
+			FromAction: baseAction,
 			ToAction:   enfEvt.EscalationAction,
 			Threshold:  enfEvt.EscalationThreshold,
 			Window:     enfEvt.EscalationWindow,
 		},
 	})
 
-	// Record and check escalation
-	m.processor.RecordAction(agentKey, "deny")
-	escalated, toAction := m.processor.CheckEscalation(agentKey, "deny")
+	// Record severity-weighted action and check escalation
+	m.processor.RecordSeverityAction(agentKey, baseAction, severity, isAudit)
+	escalated, toAction := m.processor.CheckSeverityEscalation(agentKey)
 
 	if escalated && toAction == "quarantine" {
-		reason := fmt.Sprintf("escalation triggered: %d deny actions within %s for agent %q",
+		reason := fmt.Sprintf("escalation triggered: severity-weighted risk exceeded threshold %d within %s for agent %q",
 			enfEvt.EscalationThreshold, enfEvt.EscalationWindow, agentKey)
 
 		l.Info("escalation threshold reached, creating quarantine",
@@ -146,6 +156,8 @@ func (m *EscalationManager) handleEvent(ctx context.Context, evt eventbus.Event)
 			"threshold", enfEvt.EscalationThreshold,
 			"window", enfEvt.EscalationWindow,
 			"policy", enfEvt.PolicyName,
+			"severity", severity,
+			"audit", isAudit,
 		)
 
 		if err := m.createQuarantine(ctx, enfEvt.AgentInfo, enfEvt.PolicyName, enfEvt.PolicyNamespace, reason); err != nil {

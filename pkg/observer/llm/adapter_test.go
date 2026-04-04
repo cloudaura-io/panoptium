@@ -26,8 +26,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/observer/protocol"
 )
 
-// --- Compile-time interface check ---
-
 var _ protocol.ProtocolParser = (*LLMParserAdapter)(nil)
 
 // TestLLMParserAdapter_Name verifies the adapter returns the LLM observer name.
@@ -186,8 +184,6 @@ func TestLLMParserAdapter_ProcessStreamChunk(t *testing.T) {
 		t.Errorf("Protocol = %q, want %q", result.Protocol, "llm")
 	}
 }
-
-// --- Regression Tests: Existing ProtocolObserver still works ---
 
 // TestLLMObserver_RegressionOpenAI verifies existing OpenAI parsing is unaffected.
 func TestLLMObserver_RegressionOpenAI(t *testing.T) {

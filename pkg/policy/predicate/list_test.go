@@ -22,8 +22,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
-// --- List Membership Evaluator Tests ---
-
 func TestListMembershipEvaluator_InAllowlist(t *testing.T) {
 	eval := &ListMembershipEvaluator{
 		FieldPath: "toolName",
@@ -193,8 +191,6 @@ func TestListMembershipEvaluator_MissingField(t *testing.T) {
 func TestListMembershipEvaluator_ImplementsInterface(t *testing.T) {
 	var _ PredicateEvaluator = (*ListMembershipEvaluator)(nil)
 }
-
-// --- ConfigMapListResolver Tests ---
 
 func TestConfigMapListResolver_ResolveEntries(t *testing.T) {
 	resolver := &ConfigMapListResolver{

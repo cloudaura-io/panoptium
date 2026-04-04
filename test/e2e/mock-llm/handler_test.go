@@ -314,12 +314,157 @@ func TestAnthropicNonStreaming(t *testing.T) {
 	}
 }
 
+// TestOpenAIToolCallStreaming verifies that when FORCE_TOOL_CALL is set,
+// the OpenAI handler returns a tool_call SSE stream instead of text tokens.
+func TestOpenAIToolCallStreaming(t *testing.T) {
+	old := forceToolCall
+	forceToolCall = "bash"
+	defer func() { forceToolCall = old }()
+
+	handler := newOpenAIHandler()
+
+	body := `{"model":"gpt-4","messages":[{"role":"user","content":"hi"}],"stream":true}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("expected Content-Type text/event-stream, got %q", ct)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	var toolName string
+	var gotFinishToolCalls bool
+	var gotDone bool
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			gotDone = true
+			continue
+		}
+
+		var chunk openAIToolCallChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			t.Fatalf("failed to parse SSE chunk: %v", err)
+		}
+		if len(chunk.Choices) > 0 {
+			for _, tc := range chunk.Choices[0].Delta.ToolCalls {
+				if tc.Function.Name != "" {
+					toolName = tc.Function.Name
+				}
+			}
+			if chunk.Choices[0].FinishReason == "tool_calls" {
+				gotFinishToolCalls = true
+			}
+		}
+	}
+
+	if toolName != "bash" {
+		t.Errorf("expected tool_call name %q, got %q", "bash", toolName)
+	}
+	if !gotFinishToolCalls {
+		t.Error("expected finish_reason \"tool_calls\"")
+	}
+	if !gotDone {
+		t.Error("expected [DONE] terminator")
+	}
+}
+
+// TestOpenAIToolCallNonStreaming verifies that when FORCE_TOOL_CALL is set,
+// the non-streaming handler returns a tool_call response.
+func TestOpenAIToolCallNonStreaming(t *testing.T) {
+	old := forceToolCall
+	forceToolCall = "k8s_get_pod_logs"
+	defer func() { forceToolCall = old }()
+
+	handler := newOpenAIHandler()
+
+	body := `{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var result openAIToolCallNonStreamResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(result.Choices) == 0 {
+		t.Fatal("expected at least one choice")
+	}
+	choice := result.Choices[0]
+	if choice.FinishReason != "tool_calls" {
+		t.Errorf("expected finish_reason %q, got %q", "tool_calls", choice.FinishReason)
+	}
+	if len(choice.Message.ToolCalls) == 0 {
+		t.Fatal("expected at least one tool_call")
+	}
+	if choice.Message.ToolCalls[0].Function.Name != "k8s_get_pod_logs" {
+		t.Errorf("expected tool name %q, got %q", "k8s_get_pod_logs", choice.Message.ToolCalls[0].Function.Name)
+	}
+}
+
 // openAIChunk represents a chunk in an OpenAI SSE streaming response.
 type openAIChunk struct {
 	Choices []struct {
 		Delta struct {
 			Content string `json:"content"`
 		} `json:"delta"`
+	} `json:"choices"`
+}
+
+// openAIToolCallChunk represents an SSE chunk containing tool_call deltas.
+type openAIToolCallChunk struct {
+	Choices []struct {
+		Delta struct {
+			ToolCalls []struct {
+				Index    int    `json:"index"`
+				ID       string `json:"id"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
+		} `json:"delta"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+}
+
+// openAIToolCallNonStreamResponse represents a non-streaming response with tool_calls.
+type openAIToolCallNonStreamResponse struct {
+	Choices []struct {
+		Message struct {
+			ToolCalls []struct {
+				ID       string `json:"id"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 }
 

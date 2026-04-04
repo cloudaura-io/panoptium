@@ -66,7 +66,7 @@ panoptium_extproc_active_streams 0
 			wantFound: true,
 		},
 		{
-			name:      "multi-label match",
+			name:      "multi label match",
 			metric:    "panoptium_agent_identity_resolution_total",
 			labels:    map[string]string{"method": "header", "result": "success"},
 			wantValue: 5,
@@ -80,7 +80,7 @@ panoptium_extproc_active_streams 0
 			wantFound: true,
 		},
 		{
-			name:      "non-existent metric",
+			name:      "nonexistent metric",
 			metric:    "panoptium_nonexistent",
 			labels:    nil,
 			wantValue: 0,

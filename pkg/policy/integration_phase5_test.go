@@ -28,8 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// --- Integration Test: Compile -> Evaluate -> Verify Decision and Trace ---
-
 func TestIntegration_CompileEvaluateDecisionTrace(t *testing.T) {
 	pol := &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -99,8 +97,6 @@ func TestIntegration_CompileEvaluateDecisionTrace(t *testing.T) {
 		}
 	}
 }
-
-// --- Integration Test: Multiple Policies with Composition ---
 
 func TestIntegration_MultiPolicyComposition(t *testing.T) {
 	compiler := policy.NewPolicyCompiler()
@@ -205,8 +201,6 @@ func TestIntegration_MultiPolicyComposition(t *testing.T) {
 	}
 }
 
-// --- Integration Test: Rate Limiting Across Multiple Evaluations ---
-
 func TestIntegration_RateLimitingAcrossEvaluations(t *testing.T) {
 	counter := predicate.NewSlidingWindowCounter(5 * time.Second)
 	eval := &predicate.RateLimitEvaluator{
@@ -252,8 +246,6 @@ func TestIntegration_RateLimitingAcrossEvaluations(t *testing.T) {
 		t.Error("expected true (at limit) on third evaluation")
 	}
 }
-
-// --- Integration Test: Temporal Sequence Detection ---
 
 func TestIntegration_TemporalSequenceDetection(t *testing.T) {
 	detector := predicate.NewTemporalSequenceDetector()
@@ -306,8 +298,6 @@ func TestIntegration_TemporalSequenceDetection(t *testing.T) {
 		t.Error("expected true (file_write preceded egress_attempt)")
 	}
 }
-
-// --- Integration Test: Escalation Chain Triggered by Repeated Violations ---
 
 func TestIntegration_EscalationChainRepeatedViolations(t *testing.T) {
 	proc := action.NewEscalationProcessor([]action.EscalationLevel{
@@ -378,8 +368,6 @@ func TestIntegration_EscalationChainRepeatedViolations(t *testing.T) {
 		t.Errorf("expected ContainmentLevel=3, got %d", result.ContainmentLevel)
 	}
 }
-
-// --- Integration Test: Decision Event Published to Event Bus ---
 
 func TestIntegration_DecisionEventPublished(t *testing.T) {
 	bus := eventbus.NewSimpleBus()

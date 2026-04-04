@@ -21,8 +21,6 @@ import (
 	"time"
 )
 
-// --- EscalationProcessor tests ---
-
 func TestEscalationProcessor_DenyToQuarantine(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
 		{FromAction: "deny", ToAction: "quarantine", Threshold: 3, Window: 5 * time.Second},
@@ -215,4 +213,81 @@ func TestEscalationProcessor_CleanupEmptyLevels(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{})
 	proc.RecordAction("agent-1", "deny")
 	proc.Cleanup() // Should not panic with empty levels
+}
+
+func TestEscalationProcessor_SeverityRisk(t *testing.T) {
+	proc := NewEscalationProcessor([]EscalationLevel{
+		{FromAction: "deny", ToAction: "quarantine", Threshold: 100, Window: 5 * time.Second},
+	})
+
+	// 3 MEDIUM events = 3 * 20 = 60 points, below threshold 100
+	proc.RecordSeverityAction("agent-1", "deny", "MEDIUM", false)
+	proc.RecordSeverityAction("agent-1", "deny", "MEDIUM", false)
+	proc.RecordSeverityAction("agent-1", "deny", "MEDIUM", false)
+
+	escalated, _ := proc.CheckSeverityEscalation("agent-1")
+	if escalated {
+		t.Error("expected no escalation at 60 risk points (threshold 100)")
+	}
+}
+
+func TestEscalationProcessor_SeverityRisk_CriticalTriggers(t *testing.T) {
+	proc := NewEscalationProcessor([]EscalationLevel{
+		{FromAction: "deny", ToAction: "quarantine", Threshold: 100, Window: 5 * time.Second},
+	})
+
+	// 1 CRITICAL (100) + 1 INFO (0) = 100 points, meets threshold
+	proc.RecordSeverityAction("agent-1", "deny", "CRITICAL", false)
+	proc.RecordSeverityAction("agent-1", "deny", "INFO", false)
+
+	escalated, toAction := proc.CheckSeverityEscalation("agent-1")
+	if !escalated {
+		t.Error("expected escalation at 100 risk points (threshold 100)")
+	}
+	if toAction != "quarantine" {
+		t.Errorf("expected quarantine, got %q", toAction)
+	}
+}
+
+func TestEscalationProcessor_AuditWeight(t *testing.T) {
+	proc := NewEscalationProcessor([]EscalationLevel{
+		{FromAction: "deny", ToAction: "quarantine", Threshold: 100, Window: 5 * time.Second},
+	})
+
+	// 2 HIGH audit events = 2 * 50 * 0.5 = 50 points
+	proc.RecordSeverityAction("agent-1", "deny", "HIGH", true)
+	proc.RecordSeverityAction("agent-1", "deny", "HIGH", true)
+
+	escalated, _ := proc.CheckSeverityEscalation("agent-1")
+	if escalated {
+		t.Error("expected no escalation at 50 risk points (threshold 100)")
+	}
+
+	// 1 more HIGH enforced event = 50 pts, total now 100
+	proc.RecordSeverityAction("agent-1", "deny", "HIGH", false)
+
+	escalated, _ = proc.CheckSeverityEscalation("agent-1")
+	if !escalated {
+		t.Error("expected escalation at 100 risk points (threshold 100)")
+	}
+}
+
+func TestEscalationProcessor_SeverityRisk_WindowExpiry(t *testing.T) {
+	proc := NewEscalationProcessor([]EscalationLevel{
+		{FromAction: "deny", ToAction: "quarantine", Threshold: 100, Window: 100 * time.Millisecond},
+	})
+
+	proc.RecordSeverityAction("agent-1", "deny", "CRITICAL", false)
+
+	escalated, _ := proc.CheckSeverityEscalation("agent-1")
+	if !escalated {
+		t.Error("expected escalation before window expiry")
+	}
+
+	time.Sleep(150 * time.Millisecond)
+
+	escalated, _ = proc.CheckSeverityEscalation("agent-1")
+	if escalated {
+		t.Error("expected no escalation after window expiry")
+	}
 }

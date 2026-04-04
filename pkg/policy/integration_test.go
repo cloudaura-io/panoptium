@@ -25,8 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// --- Integration Tests: Full Pipeline (Compile → Tree → Evaluate) ---
-
 func TestIntegration_FullPipeline_RegexPredicate(t *testing.T) {
 	policy := &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -274,8 +272,6 @@ func TestIntegration_FullPipeline_EqualityPredicate(t *testing.T) {
 	}
 }
 
-// --- Integration Tests: No-Match and Multi-Rule ---
-
 func TestIntegration_FullPipeline_NoMatchDefaultAllow(t *testing.T) {
 	policy := &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -425,8 +421,6 @@ func TestIntegration_FullPipeline_MultiRuleFirstMatchWins(t *testing.T) {
 		}
 	})
 }
-
-// --- Concurrency Safety Test ---
 
 func TestIntegration_ConcurrencySafety(t *testing.T) {
 	policy := &v1alpha1.AgentPolicy{

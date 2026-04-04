@@ -68,7 +68,7 @@ func TestDetectPriorityConflicts(t *testing.T) {
 		wantConflict bool
 	}{
 		{
-			name: "no conflict - different priorities",
+			name: "no conflict different priorities",
 			policies: []panoptiumiov1alpha1.AgentPolicy{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
@@ -92,7 +92,7 @@ func TestDetectPriorityConflicts(t *testing.T) {
 			wantConflict: false,
 		},
 		{
-			name: "conflict - same priority, overlapping selector",
+			name: "conflict same priority overlapping selector",
 			policies: []panoptiumiov1alpha1.AgentPolicy{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
@@ -116,7 +116,7 @@ func TestDetectPriorityConflicts(t *testing.T) {
 			wantConflict: true,
 		},
 		{
-			name: "no conflict - same priority, different selectors",
+			name: "no conflict same priority different selectors",
 			policies: []panoptiumiov1alpha1.AgentPolicy{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},

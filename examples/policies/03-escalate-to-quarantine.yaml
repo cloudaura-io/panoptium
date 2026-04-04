@@ -1,3 +1,9 @@
+# NOTE: AgentGateway v1.0.1 does not support ExtProc ImmediateResponse.
+# Deny actions (HTTP 403) and rateLimit actions (HTTP 429) will cause the
+# gateway to return 503 instead of the expected status code. This is an
+# AgentGateway limitation, not a Panoptium bug. Tool stripping (deny on
+# tool_call) works correctly. Track: agentgateway/agentgateway#TBD
+#
 # After 3 denied requests within 60 seconds, quarantine the agent pod.
 # Creates an AgentQuarantine resource which triggers:
 #   - deny-all NetworkPolicy

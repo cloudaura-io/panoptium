@@ -24,8 +24,6 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
-// --- SlidingWindowCounter tests ---
-
 func TestSlidingWindowCounter_Increment(t *testing.T) {
 	c := NewSlidingWindowCounter(1 * time.Second)
 	c.Increment("agent-1")
@@ -175,8 +173,6 @@ func TestSlidingWindowCounter_Cleanup(t *testing.T) {
 		t.Errorf("Count for key1 after cleanup: got %d, want 0", got)
 	}
 }
-
-// --- RateLimitEvaluator tests ---
 
 func TestRateLimitEvaluator_BelowLimit(t *testing.T) {
 	counter := NewSlidingWindowCounter(1 * time.Second)
@@ -504,6 +500,53 @@ func TestRateLimitEvaluator_IncrementAndEvaluate(t *testing.T) {
 	}
 	if !matched {
 		t.Error("third evaluation: expected true (at limit), got false")
+	}
+}
+
+// TestRateLimitEvaluator_GroupByField verifies that the evaluator uses the
+// configured GroupByField to partition counters. Different GroupByField values
+// produce independent counting behavior for the same events.
+func TestRateLimitEvaluator_GroupByField(t *testing.T) {
+	// Counter shared between two evaluators with different GroupByField
+	counter := NewSlidingWindowCounter(1 * time.Second)
+
+	evalByAgent := &RateLimitEvaluator{
+		Counter:       counter,
+		Limit:         2,
+		GroupByField:  "agentID",
+		AutoIncrement: true,
+	}
+
+	evalByTool := &RateLimitEvaluator{
+		Counter:       counter,
+		Limit:         2,
+		GroupByField:  "toolName",
+		AutoIncrement: true,
+	}
+
+	// Event with both fields
+	event := &policy.PolicyEvent{
+		Category:    "protocol",
+		Subcategory: "tool_call",
+		Fields: map[string]interface{}{
+			"agentID":  "agent-1",
+			"toolName": "bash",
+		},
+	}
+
+	// Evaluate twice with agent-based evaluator: counter key = "agent-1"
+	evalByAgent.Evaluate(event)
+	matched, _ := evalByAgent.Evaluate(event)
+	if !matched {
+		t.Error("agent-based evaluator: expected true (count 2 >= limit 2)")
+	}
+
+	// Tool-based evaluator uses "bash" as key — should start from 0
+	// since it's a different key namespace
+	matched, _ = evalByTool.Evaluate(event)
+	// "bash" count is now 1 (first time this key is used)
+	if matched {
+		t.Error("tool-based evaluator: expected false (count 1 < limit 2)")
 	}
 }
 
