@@ -299,7 +299,11 @@ scenario_c() {
   info ""
   info "Two-layer enforcement:"
   info "  Layer 1 (request):  Panoptium strips k8s_get_pod_logs from tools[]"
-  info "  Layer 2 (response): Panoptium catches the unauthorized tool_call → 403"
+  info "  Layer 2 (response): Panoptium catches the unauthorized tool_call (403)"
+  info ""
+  warn "AgentGateway v1.0.1 limitation: ImmediateResponse is not supported."
+  warn "Layer 2 (response-path deny) returns 503 instead of 403."
+  warn "Panoptium correctly issues 403, but AgentGateway converts it to 503."
   info ""
   info "Policy: demo-deny-pod-logs (priority 100, enforcing)"
   pause
@@ -361,7 +365,12 @@ scenario_c() {
 scenario_d() {
   banner "Scenario D: Rate Limiting"
   info "Sending 6 rapid tasks to exceed the 5 req/min rate limit."
-  info "The rate-limit policy will throttle the agent after 5 requests."
+  info "The rate-limit policy uses agent-based counting (groupBy: agent)."
+  info "All tools from the same agent share one counter."
+  info ""
+  warn "AgentGateway v1.0.1 limitation: ImmediateResponse is not supported."
+  warn "Rate-limited requests return 503 instead of 429 (no Retry-After header)."
+  warn "Panoptium correctly issues 429, but AgentGateway converts it to 503."
   pause
 
   for i in $(seq 1 6); do
@@ -378,16 +387,284 @@ scenario_d() {
 
 scenario_e() {
   banner "Scenario E: Quarantine Escalation"
-  info "After repeated denials, Panoptium escalates to quarantine."
-  info "This creates an AgentQuarantine resource that isolates the pod."
+  info "This scenario demonstrates the full quarantine escalation flow."
+  info ""
+  info "Escalation uses severity-weighted risk accumulation (FR-5)."
+  info "A single CRITICAL deny event (100 risk pts) meets the threshold=100,"
+  info "triggering immediate quarantine via the EscalationManager."
+  info ""
+  info "Flow:"
+  info "  1. Apply escalation policy (deny critical_tool, CRITICAL severity)"
+  info "  2. Send request with critical_tool through the gateway"
+  info "  3. Panoptium strips critical_tool (deny action, 100 risk pts)"
+  info "  4. EscalationManager detects threshold breach → creates AgentQuarantine"
+  info "  5. Quarantine controller reconciles → sets Contained=True"
+  echo ""
+  warn "AgentGateway v1.0.1 limitation: ImmediateResponse is not supported."
+  warn "Tool stripping works correctly (body mutation), but HTTP 403/429 deny"
+  warn "responses require AgentGateway ImmediateResponse support (not yet in v1.0.1)."
+  echo ""
+  info "NetworkPolicy enforcement is planned for the graduated_containment track."
+  info "Currently, the quarantine controller sets status conditions but does not"
+  info "create NetworkPolicies or BPF-LSM rules."
+  pause
+
+  # ── Setup ──
+  info "Ensuring mock-llm image is available..."
+  ensure_mock_llm_image
+
+  info "Clearing any existing quarantine resources..."
+  $K delete agentquarantine --all -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+
+  info "Temporarily removing conflicting routes..."
+  $K delete httproute llm-route -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+  $K delete httproute demo-openai-route -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+
+  info "Deploying mock LLM backend (normal mode, no forced tool calls)..."
+  $K apply -f - <<'MOCK_LLM_EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-llm-escalation
+  namespace: panoptium-system
+  labels:
+    app: mock-llm-escalation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-llm-escalation
+  template:
+    metadata:
+      labels:
+        app: mock-llm-escalation
+    spec:
+      containers:
+      - name: mock-llm
+        image: example.com/mock-llm:e2e
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-llm-escalation
+  namespace: panoptium-system
+  labels:
+    app: mock-llm-escalation
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: mock-llm-escalation
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mock-llm-escalation-backend
+  namespace: panoptium-system
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: mock-escalation
+        openai: {}
+        host: mock-llm-escalation.panoptium-system.svc.cluster.local
+        port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: demo-escalation-route
+  namespace: panoptium-system
+spec:
+  parentRefs:
+  - name: e2e-gateway
+    namespace: panoptium-system
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /chat/completions
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: mock-llm-escalation-backend
+MOCK_LLM_EOF
+
+  info "Waiting for mock LLM to be ready..."
+  $K rollout status deployment/mock-llm-escalation \
+    -n "$GATEWAY_NS" --timeout=60s 2>/dev/null || \
+    warn "Mock LLM not ready — continuing anyway."
+  sleep 3
+
+  # ── Step 1: Apply escalation policy ──
+  echo ""
+  info "Step 1: Applying escalation policy..."
+  $K apply -f "${DEMO_DIR}/policies/05-escalate-critical-tool.yaml"
+  sleep 3
+
+  info "Policy status:"
+  $K get agentclusterpolicy demo-escalate-critical-tool -o wide 2>/dev/null || true
   echo ""
 
-  info "Current AgentQuarantine resources:"
-  $K get agentquarantine -n "$GATEWAY_NS" --no-headers 2>/dev/null || \
-    warn "No quarantine resources found."
+  # ── Step 2: Get gateway ClusterIP ──
+  local GW_IP
+  GW_IP=$($K get svc -n "$GATEWAY_NS" \
+    -l gateway.networking.k8s.io/gateway-name=e2e-gateway \
+    -o jsonpath='{.items[0].spec.clusterIP}' 2>/dev/null)
 
+  if [[ -z "$GW_IP" ]]; then
+    err "Could not find gateway service ClusterIP."
+    err "Check: kubectl get svc -n $GATEWAY_NS -l gateway.networking.k8s.io/gateway-name=e2e-gateway"
+    return 1
+  fi
+  info "Gateway ClusterIP: ${GW_IP}"
+
+  # Create a temporary curl pod for sending requests through the cluster network
+  local CURL_POD="demo-curl-escalation"
+  info "Creating curl pod for in-cluster requests..."
+  $K run "$CURL_POD" -n "$GATEWAY_NS" \
+    --image=curlimages/curl:latest \
+    --restart=Never \
+    --command -- sleep 300 2>/dev/null || true
+  $K wait pod "$CURL_POD" -n "$GATEWAY_NS" \
+    --for=condition=Ready --timeout=30s 2>/dev/null || \
+    warn "Curl pod not ready."
+
+  # ── Step 3: Send request with critical_tool ──
   echo ""
-  show_panoptium_logs 20
+  info "Step 2: Sending request with critical_tool through the gateway..."
+  info "The request includes tools: [{name: 'critical_tool'}]"
+  info "Panoptium will strip critical_tool from tools[] (deny action)"
+  info "and publish a CRITICAL severity enforcement event."
+  echo ""
+
+  local PAYLOAD='{"model":"gpt-4","messages":[{"role":"user","content":"use critical tool"}],"tools":[{"type":"function","function":{"name":"critical_tool","parameters":{}}}],"stream":false}'
+
+  local RESPONSE
+  RESPONSE=$($K exec "$CURL_POD" -n "$GATEWAY_NS" -- \
+    curl -s --max-time 30 \
+      -X POST "http://${GW_IP}:8080/v1/chat/completions" \
+      -H "Content-Type: application/json" \
+      -d "$PAYLOAD" 2>/dev/null) || true
+
+  if [[ -n "$RESPONSE" ]]; then
+    echo -e "  ${CYAN}Response (tool was stripped, LLM responded normally):${RESET}"
+    echo "$RESPONSE" | jq '.' 2>/dev/null || echo "$RESPONSE"
+  else
+    warn "No response received (this may be expected if gateway returned an error)."
+  fi
+  echo ""
+
+  # ── Step 4: Wait for AgentQuarantine creation ──
+  info "Step 3: Waiting for AgentQuarantine creation (up to 15s)..."
+  echo ""
+
+  local QUARANTINE_FOUND=false
+  for i in $(seq 1 15); do
+    local QC
+    QC=$($K get agentquarantine -n "$GATEWAY_NS" --no-headers 2>/dev/null | head -1)
+    if [[ -n "$QC" ]]; then
+      QUARANTINE_FOUND=true
+      echo -e "  ${GREEN}AgentQuarantine created after ${i}s!${RESET}"
+      break
+    fi
+    sleep 1
+  done
+
+  if [[ "$QUARANTINE_FOUND" != "true" ]]; then
+    warn "No AgentQuarantine created within 15s."
+    warn "This may happen if the escalation event was not published."
+    warn "Check operator logs below for details."
+  fi
+  echo ""
+
+  # ── Step 5: Display quarantine status ──
+  info "Step 4: AgentQuarantine resources:"
+  $K get agentquarantine -n "$GATEWAY_NS" -o wide 2>/dev/null || true
+  echo ""
+
+  if [[ "$QUARANTINE_FOUND" == "true" ]]; then
+    local QR_NAME
+    QR_NAME=$($K get agentquarantine -n "$GATEWAY_NS" --no-headers \
+      -o custom-columns=':metadata.name' 2>/dev/null | head -1)
+
+    if [[ -n "$QR_NAME" ]]; then
+      info "Quarantine details:"
+      echo ""
+      echo -e "  ${CYAN}Spec:${RESET}"
+      $K get agentquarantine "$QR_NAME" -n "$GATEWAY_NS" \
+        -o jsonpath='{.spec}' 2>/dev/null | jq '.' 2>/dev/null || true
+      echo ""
+      echo -e "  ${CYAN}Status conditions:${RESET}"
+      $K get agentquarantine "$QR_NAME" -n "$GATEWAY_NS" \
+        -o jsonpath='{.status.conditions}' 2>/dev/null | jq '.' 2>/dev/null || \
+        info "(No conditions set yet — quarantine controller may need time to reconcile)"
+      echo ""
+    fi
+  fi
+
+  # ── Step 6: Show operator logs ──
+  info "Step 5: Operator logs (escalation chain):"
+  show_panoptium_logs 30
+
+  # ── Notes ──
+  echo ""
+  echo -e "${YELLOW}────────────────────────────────────────────────────────${RESET}"
+  echo -e "${YELLOW}  Notes on current quarantine behavior:${RESET}"
+  echo -e "${YELLOW}────────────────────────────────────────────────────────${RESET}"
+  echo ""
+  echo -e "  ${BOLD}1. Tool stripping works correctly:${RESET}"
+  echo "     critical_tool was removed from the request tools[] array."
+  echo "     The LLM never saw it. The deny event triggered escalation."
+  echo ""
+  echo -e "  ${BOLD}2. AgentGateway ImmediateResponse (not yet available):${RESET}"
+  echo "     HTTP 403/429 deny responses require AgentGateway to support"
+  echo "     ExtProc ImmediateResponse. In v1.0.1, deny actions that use"
+  echo "     tool stripping work, but ImmediateResponse returns 503."
+  echo ""
+  echo -e "  ${BOLD}3. NetworkPolicy enforcement (graduated_containment track):${RESET}"
+  echo "     The quarantine controller currently sets status conditions"
+  echo "     (Contained=True, Ready=True) but does not yet create"
+  echo "     NetworkPolicies or BPF-LSM rules. Full graduated containment"
+  echo "     (5-level escalation with real enforcement) is planned in the"
+  echo "     graduated_containment track (ADR-006)."
+  echo ""
+
+  # ── Cleanup ──
+  info "Step 6: Cleaning up..."
+  $K delete agentquarantine --all -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+  $K delete agentclusterpolicy demo-escalate-critical-tool --ignore-not-found 2>/dev/null || true
+  $K delete httproute demo-escalation-route -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+  $K delete deployment mock-llm-escalation -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+  $K delete service mock-llm-escalation -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+  $K delete agentgatewaybackend mock-llm-escalation-backend -n "$GATEWAY_NS" --ignore-not-found 2>/dev/null || true
+  $K delete pod "$CURL_POD" -n "$GATEWAY_NS" --ignore-not-found --force 2>/dev/null || true
+  $K apply -f "$(dirname "$DEMO_DIR")/test/e2e/manifests/agentgateway-route.yaml" 2>/dev/null || true
+  $K apply -f "${DEMO_DIR}/manifests/agentgateway-openai-backend.yaml" 2>/dev/null || true
+  info "Cleanup done."
   pause
 }
 
@@ -404,15 +681,20 @@ echo "                        |"
 echo "                   Panoptium ExtProc"
 echo "                   (policy enforcement)"
 echo ""
-echo "  Scenario C uses a mock LLM backend instead of OpenAI"
-echo "  to demonstrate response-path defense-in-depth."
+echo "  Scenarios C and E use a mock LLM backend instead of OpenAI"
+echo "  (C for response-path defense, E for quarantine escalation)."
 echo ""
 echo "Scenarios:"
 echo "  A) Happy path       -- agent request observed by audit policy"
 echo "  B) Tool strip       -- pod log tool stripped from request by policy"
 echo "  C) Hallucination    -- response-path defense against tool hallucination"
 echo "  D) Rate limit       -- agent throttled after 5 req/min"
-echo "  E) Quarantine       -- escalation after repeated violations"
+echo "  E) Quarantine       -- full escalation flow (policy → deny → quarantine)"
+echo ""
+echo -e "${YELLOW}NOTE: AgentGateway v1.0.1 does not support ExtProc ImmediateResponse.${RESET}"
+echo -e "${YELLOW}Scenarios C and D return HTTP 503 instead of 403/429.${RESET}"
+echo -e "${YELLOW}This is an AgentGateway limitation, not a Panoptium bug.${RESET}"
+echo -e "${YELLOW}Tool stripping (B) works because it uses body mutation.${RESET}"
 echo ""
 
 check_prereqs
