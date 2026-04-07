@@ -168,9 +168,11 @@ kubectl create namespace "${NAMESPACE}" 2>/dev/null || true
 
 cd "${PROJECT_ROOT}"
 
-# Install Panoptium CRDs first (required before operator starts)
-log_info "Installing Panoptium CRDs..."
-make install
+# Helm installs CRDs from crds/; skip manual install to avoid field-manager conflicts
+if [[ "${DEPLOY_METHOD}" != "helm" ]]; then
+    log_info "Installing Panoptium CRDs..."
+    make install
+fi
 
 # Parse image repository and tag from PANOPTIUM_IMG
 PANOPTIUM_IMG_REPO="${PANOPTIUM_IMG%:*}"
