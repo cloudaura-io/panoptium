@@ -1,0 +1,570 @@
+[
+  {
+    "id": "A.1",
+    "title": "Direct Prompt Injection",
+    "file": "a1-direct-prompt-injection.md",
+    "difficulty": "medium",
+    "category_id": "A",
+    "description": "Attacker provides malicious instructions directly in the user prompt"
+  },
+  {
+    "id": "A.2",
+    "title": "Indirect Prompt Injection",
+    "file": "a2-indirect-prompt-injection.md",
+    "difficulty": "hard",
+    "category_id": "A",
+    "description": "Malicious instructions are embedded in external data sources"
+  },
+  {
+    "id": "A.3",
+    "title": "Invisible/Encoded Prompt Injection",
+    "file": "a3-invisible-encoded-prompt-injection.md",
+    "difficulty": "very-hard",
+    "category_id": "A",
+    "description": "Malicious instructions are encoded using invisible Unicode characters"
+  },
+  {
+    "id": "A.4",
+    "title": "Multimodal Prompt Injection",
+    "file": "a4-multimodal-prompt-injection.md",
+    "difficulty": "very-hard",
+    "category_id": "A",
+    "description": "Malicious instructions embedded within images, audio files, or video"
+  },
+  {
+    "id": "A.5",
+    "title": "Context Window Poisoning",
+    "file": "a5-context-window-poisoning.md",
+    "difficulty": "medium",
+    "category_id": "A",
+    "description": "Overwhelming the agent's context window with excessive, strategically"
+  },
+  {
+    "id": "A.6",
+    "title": "Memory and History Poisoning",
+    "file": "a6-memory-and-history-poisoning.md",
+    "difficulty": "very-hard",
+    "category_id": "A",
+    "description": "Injecting malicious instructions or false facts into an agent's"
+  },
+  {
+    "id": "A.7",
+    "title": "Multi-Turn Escalation (Crescendo Attack)",
+    "file": "a7-multi-turn-escalation-crescendo-attack.md",
+    "difficulty": "hard",
+    "category_id": "A",
+    "description": "A multi-turn jailbreak that starts with seemingly innocent questions"
+  },
+  {
+    "id": "A.8",
+    "title": "Echo Chamber Attack",
+    "file": "a8-echo-chamber-attack.md",
+    "difficulty": "very-hard",
+    "category_id": "A",
+    "description": "A multi-stage conversational attack that plants seeds in early turns"
+  },
+  {
+    "id": "B.1",
+    "title": "Tool Poisoning via Description Injection",
+    "file": "b1-tool-poisoning-via-description-injection.md",
+    "difficulty": "hard",
+    "category_id": "B",
+    "description": "Attackers embed malicious prompt injection instructions within MCP"
+  },
+  {
+    "id": "B.2",
+    "title": "Tool Shadowing / Cross-Server Hijacking",
+    "file": "b2-tool-shadowing-cross-server-hijacking.md",
+    "difficulty": "very-hard",
+    "category_id": "B",
+    "description": "A malicious MCP server injects tool descriptions that modify the"
+  },
+  {
+    "id": "B.3",
+    "title": "Confused Deputy Attack",
+    "file": "b3-confused-deputy-attack.md",
+    "difficulty": "hard",
+    "category_id": "B",
+    "description": "The agent is tricked into using its legitimate credentials and"
+  },
+  {
+    "id": "B.4",
+    "title": "Tool Parameter Injection",
+    "file": "b4-tool-parameter-injection.md",
+    "difficulty": "medium",
+    "category_id": "B",
+    "description": "Attacker manipulates the parameters that the agent passes to tools,"
+  },
+  {
+    "id": "B.5",
+    "title": "MCP Rug Pull / Schema Mutation Attack",
+    "file": "b5-mcp-rug-pull-schema-mutation-attack.md",
+    "difficulty": "very-hard",
+    "category_id": "B",
+    "description": "An MCP server dynamically alters tool definitions AFTER the initial"
+  },
+  {
+    "id": "B.6",
+    "title": "TOCTOU Race Condition on Tool Results",
+    "file": "b6-toctou-race-condition-on-tool-results.md",
+    "difficulty": "hard",
+    "category_id": "B",
+    "description": "The agent checks a condition (e.g., file permissions, account balance,"
+  },
+  {
+    "id": "B.7",
+    "title": "Callback/Webhook Manipulation",
+    "file": "b7-callback-webhook-manipulation.md",
+    "difficulty": "medium",
+    "category_id": "B",
+    "description": "Attacker manipulates the callback URLs or webhook endpoints that"
+  },
+  {
+    "id": "B.8",
+    "title": "Cross-Tool Data Leakage",
+    "file": "b8-cross-tool-data-leakage.md",
+    "difficulty": "hard",
+    "category_id": "B",
+    "description": "Sensitive data accessed through one tool is inadvertently or"
+  },
+  {
+    "id": "C.1",
+    "title": "Direct HTTP/DNS Exfiltration",
+    "file": "c1-direct-http-dns-exfiltration.md",
+    "difficulty": "easy",
+    "category_id": "C",
+    "description": "Agent is manipulated into sending sensitive data to an"
+  },
+  {
+    "id": "C.2",
+    "title": "Markdown Image Rendering Exfiltration",
+    "file": "c2-markdown-image-rendering-exfiltration.md",
+    "difficulty": "medium",
+    "category_id": "C",
+    "description": "The agent is manipulated into including sensitive data in markdown"
+  },
+  {
+    "id": "C.3",
+    "title": "Covert Channel Exfiltration (Steganographic)",
+    "file": "c3-covert-channel-exfiltration-steganographic.md",
+    "difficulty": "very-hard",
+    "category_id": "C",
+    "description": "Data is exfiltrated through covert channels that are invisible to"
+  },
+  {
+    "id": "C.4",
+    "title": "Sharded/Slow Exfiltration",
+    "file": "c4-sharded-slow-exfiltration.md",
+    "difficulty": "very-hard",
+    "category_id": "C",
+    "description": "Data is exfiltrated in small fragments over many interactions,"
+  },
+  {
+    "id": "C.5",
+    "title": "Side-Channel Information Leakage",
+    "file": "c5-side-channel-information-leakage.md",
+    "difficulty": "hard",
+    "category_id": "C",
+    "description": "Sensitive information leaks through side channels: response timing"
+  },
+  {
+    "id": "C.6",
+    "title": "Metadata Exfiltration",
+    "file": "c6-metadata-exfiltration.md",
+    "difficulty": "medium",
+    "category_id": "C",
+    "description": "Data is exfiltrated through metadata channels: HTTP headers, URL"
+  },
+  {
+    "id": "D.1",
+    "title": "Privilege Escalation via Configuration Rewrite",
+    "file": "d1-privilege-escalation-via-configuration-rewrite.md",
+    "difficulty": "medium",
+    "category_id": "D",
+    "description": "The agent overwrites its own configuration and security settings to"
+  },
+  {
+    "id": "D.2",
+    "title": "Cross-Agent Privilege Escalation",
+    "file": "d2-cross-agent-privilege-escalation.md",
+    "difficulty": "hard",
+    "category_id": "D",
+    "description": "One compromised agent modifies another agent's configuration files"
+  },
+  {
+    "id": "D.3",
+    "title": "Container/Sandbox Escape",
+    "file": "d3-container-sandbox-escape.md",
+    "difficulty": "medium",
+    "category_id": "D",
+    "description": "The agent escapes its container or sandbox environment to access"
+  },
+  {
+    "id": "D.4",
+    "title": "Credential Theft (Env Vars, Secrets, Tokens)",
+    "file": "d4-credential-theft-env-vars-secrets-tokens.md",
+    "difficulty": "easy",
+    "category_id": "D",
+    "description": "Agent is manipulated into reading and exfiltrating credentials"
+  },
+  {
+    "id": "D.5",
+    "title": "Identity Spoofing / Agent Impersonation",
+    "file": "d5-identity-spoofing-agent-impersonation.md",
+    "difficulty": "medium",
+    "category_id": "D",
+    "description": "Attacker creates rogue agents that impersonate legitimate agents,"
+  },
+  {
+    "id": "D.6",
+    "title": "Session Hijacking / Token Theft",
+    "file": "d6-session-hijacking-token-theft.md",
+    "difficulty": "hard",
+    "category_id": "D",
+    "description": "Attacker steals or replays OAuth tokens, API keys, or session"
+  },
+  {
+    "id": "D.7",
+    "title": "Lateral Movement via Agent Connections",
+    "file": "d7-lateral-movement-via-agent-connections.md",
+    "difficulty": "very-hard",
+    "category_id": "D",
+    "description": "Attackers use a compromised agent's legitimate, authenticated"
+  },
+  {
+    "id": "E.1",
+    "title": "Agent-to-Agent Prompt Injection Propagation",
+    "file": "e1-agent-to-agent-prompt-injection-propagation.md",
+    "difficulty": "hard",
+    "category_id": "E",
+    "description": "Prompt injection that propagates from one agent to another through"
+  },
+  {
+    "id": "E.2",
+    "title": "Agent Session Smuggling (A2A Protocol)",
+    "file": "e2-agent-session-smuggling-a2a-protocol.md",
+    "difficulty": "very-hard",
+    "category_id": "E",
+    "description": "In the A2A (Agent2Agent) protocol, a malicious remote agent"
+  },
+  {
+    "id": "E.3",
+    "title": "Coordinated Multi-Agent Attacks",
+    "file": "e3-coordinated-multi-agent-attacks.md",
+    "difficulty": "very-hard",
+    "category_id": "E",
+    "description": "Multiple compromised or colluding agents coordinate to achieve an"
+  },
+  {
+    "id": "E.4",
+    "title": "Agent Collusion",
+    "file": "e4-agent-collusion.md",
+    "difficulty": "very-hard",
+    "category_id": "E",
+    "description": "Agents establish covert communication channels (steganographic"
+  },
+  {
+    "id": "E.5",
+    "title": "Cascading Compromise",
+    "file": "e5-cascading-compromise.md",
+    "difficulty": "hard",
+    "category_id": "E",
+    "description": "A single compromised agent triggers a chain reaction of compromises"
+  },
+  {
+    "id": "E.6",
+    "title": "Information Aggregation Attack",
+    "file": "e6-information-aggregation-attack.md",
+    "difficulty": "very-hard",
+    "category_id": "E",
+    "description": "An attacker uses multiple agent interactions or multi-agent systems"
+  },
+  {
+    "id": "E.7",
+    "title": "Resource Starvation via Coordination",
+    "file": "e7-resource-starvation-via-coordination.md",
+    "difficulty": "medium",
+    "category_id": "E",
+    "description": "Multiple agents are manipulated to simultaneously consume shared"
+  },
+  {
+    "id": "F.1",
+    "title": "Poisoned MCP Servers and Tools",
+    "file": "f1-poisoned-mcp-servers-and-tools.md",
+    "difficulty": "hard",
+    "category_id": "F",
+    "description": "Attackers publish MCP servers containing tool poisoning payloads"
+  },
+  {
+    "id": "F.2",
+    "title": "Compromised Model Weights / Backdoored Models",
+    "file": "f2-compromised-model-weights-backdoored-models.md",
+    "difficulty": "very-hard",
+    "category_id": "F",
+    "description": "Backdoors are inserted into model weights during training or"
+  },
+  {
+    "id": "F.3",
+    "title": "Slopsquatting / Package Hallucination Exploitation",
+    "file": "f3-slopsquatting-package-hallucination-exploitation.md",
+    "difficulty": "medium",
+    "category_id": "F",
+    "description": "Attackers register package names that LLMs frequently hallucinate,"
+  },
+  {
+    "id": "F.4",
+    "title": "Dependency Confusion in Agent Ecosystems",
+    "file": "f4-dependency-confusion-in-agent-ecosystems.md",
+    "difficulty": "medium",
+    "category_id": "F",
+    "description": "Traditional dependency confusion (exploiting how package managers"
+  },
+  {
+    "id": "F.5",
+    "title": "Trojaned Training Data",
+    "file": "f5-trojaned-training-data.md",
+    "difficulty": "very-hard",
+    "category_id": "F",
+    "description": "Malicious data injected into training datasets influences agent"
+  },
+  {
+    "id": "G.1",
+    "title": "Infinite Loop / Recursive Task Generation",
+    "file": "g1-infinite-loop-recursive-task-generation.md",
+    "difficulty": "medium",
+    "category_id": "G",
+    "description": "Attacker induces the agent to enter infinite loops through logical"
+  },
+  {
+    "id": "G.2",
+    "title": "Token/Cost Amplification (Denial of Wallet)",
+    "file": "g2-token-cost-amplification-denial-of-wallet.md",
+    "difficulty": "easy",
+    "category_id": "G",
+    "description": "Attacker triggers expensive operations that drain the victim's API"
+  },
+  {
+    "id": "G.3",
+    "title": "Rate Limit Evasion",
+    "file": "g3-rate-limit-evasion.md",
+    "difficulty": "medium",
+    "category_id": "G",
+    "description": "Techniques to bypass token budgets and rate limits. In-app token"
+  },
+  {
+    "id": "G.4",
+    "title": "Cryptomining via Agent Compute",
+    "file": "g4-cryptomining-via-agent-compute.md",
+    "difficulty": "medium",
+    "category_id": "G",
+    "description": "Agent compute resources (especially GPUs) are hijacked for"
+  },
+  {
+    "id": "G.5",
+    "title": "Storage/Memory Exhaustion",
+    "file": "g5-storage-memory-exhaustion.md",
+    "difficulty": "easy",
+    "category_id": "G",
+    "description": "Agent is manipulated to create excessive files, database records,"
+  },
+  {
+    "id": "H.1",
+    "title": "Detection Evasion via Obfuscation",
+    "file": "h1-detection-evasion-via-obfuscation.md",
+    "difficulty": "medium",
+    "category_id": "H",
+    "description": "Attacker obfuscates injection payloads using encoding, Unicode"
+  },
+  {
+    "id": "H.2",
+    "title": "Monitoring/Observability Bypass",
+    "file": "h2-monitoring-observability-bypass.md",
+    "difficulty": "very-hard",
+    "category_id": "H",
+    "description": "Agent behavior is crafted to stay within normal operational"
+  },
+  {
+    "id": "H.3",
+    "title": "Persistence via Configuration Injection",
+    "file": "h3-persistence-via-configuration-injection.md",
+    "difficulty": "medium",
+    "category_id": "H",
+    "description": "Attacker establishes persistence by modifying agent configuration"
+  },
+  {
+    "id": "H.4",
+    "title": "Memory-Based Persistence",
+    "file": "h4-memory-based-persistence.md",
+    "difficulty": "very-hard",
+    "category_id": "H",
+    "description": "Attacker establishes persistence in the agent's long-term memory"
+  },
+  {
+    "id": "H.5",
+    "title": "Log Tampering and Anti-Forensics",
+    "file": "h5-log-tampering-and-anti-forensics.md",
+    "difficulty": "medium",
+    "category_id": "H",
+    "description": "Compromised agents modify or delete their own logs to hide evidence"
+  },
+  {
+    "id": "H.6",
+    "title": "Delayed Activation / Sleeper Agent Behavior",
+    "file": "h6-delayed-activation-sleeper-agent-behavior.md",
+    "difficulty": "very-hard",
+    "category_id": "H",
+    "description": "Malicious instructions are designed to activate only when specific"
+  },
+  {
+    "id": "I.1",
+    "title": "Goal Hijacking / Objective Drift",
+    "file": "i1-goal-hijacking-objective-drift.md",
+    "difficulty": "hard",
+    "category_id": "I",
+    "description": "Attacker alters the agent's objectives or decision path through"
+  },
+  {
+    "id": "I.2",
+    "title": "Hallucination Exploitation",
+    "file": "i2-hallucination-exploitation.md",
+    "difficulty": "medium",
+    "category_id": "I",
+    "description": "Attackers exploit the agent's tendency to hallucinate by creating"
+  },
+  {
+    "id": "I.3",
+    "title": "Reasoning/Chain-of-Thought Manipulation",
+    "file": "i3-reasoning-chain-of-thought-manipulation.md",
+    "difficulty": "very-hard",
+    "category_id": "I",
+    "description": "Attacker injects content that manipulates the agent's intermediate"
+  },
+  {
+    "id": "I.4",
+    "title": "Instruction Hierarchy Bypass",
+    "file": "i4-instruction-hierarchy-bypass.md",
+    "difficulty": "medium",
+    "category_id": "I",
+    "description": "Attacks that exploit the ambiguous hierarchy between system"
+  },
+  {
+    "id": "I.5",
+    "title": "Jailbreaking in Agentic Context",
+    "file": "i5-jailbreaking-in-agentic-context.md",
+    "difficulty": "hard",
+    "category_id": "I",
+    "description": "Traditional jailbreaking attacks become far more dangerous in"
+  },
+  {
+    "id": "I.6",
+    "title": "Social Engineering of the Agent",
+    "file": "i6-social-engineering-of-the-agent.md",
+    "difficulty": "medium",
+    "category_id": "I",
+    "description": "Using social engineering techniques (urgency, authority, social"
+  },
+  {
+    "id": "I.7",
+    "title": "Human-Agent Trust Exploitation",
+    "file": "i7-human-agent-trust-exploitation.md",
+    "difficulty": "very-hard",
+    "category_id": "I",
+    "description": "Attackers exploit the tendency of users to trust agent outputs"
+  },
+  {
+    "id": "I.8",
+    "title": "Agentic Scheming and Deception",
+    "file": "i8-agentic-scheming-and-deception.md",
+    "difficulty": "very-hard",
+    "category_id": "I",
+    "description": "Advanced AI models autonomously engage in scheming behavior:"
+  },
+  {
+    "id": "J.1",
+    "title": "Kubernetes RBAC Abuse",
+    "file": "j1-kubernetes-rbac-abuse.md",
+    "difficulty": "medium",
+    "category_id": "J",
+    "description": "AI agent pods run with overly permissive Kubernetes service accounts."
+  },
+  {
+    "id": "J.2",
+    "title": "Network-Level Attacks (DNS Rebinding, SSRF)",
+    "file": "j2-network-level-attacks-dns-rebinding-ssrf.md",
+    "difficulty": "medium",
+    "category_id": "J",
+    "description": "DNS rebinding attacks resolve a domain to a benign address during"
+  },
+  {
+    "id": "J.3",
+    "title": "Model API Interception (Agent-in-the-Middle)",
+    "file": "j3-model-api-interception-agent-in-the-middle.md",
+    "difficulty": "medium",
+    "category_id": "J",
+    "description": "Attacker intercepts communication between the agent and its LLM"
+  },
+  {
+    "id": "J.4",
+    "title": "Sidecar/Init Container Attacks",
+    "file": "j4-sidecar-init-container-attacks.md",
+    "difficulty": "hard",
+    "category_id": "J",
+    "description": "In Kubernetes deployments with service mesh (Istio/Envoy), sidecar"
+  },
+  {
+    "id": "J.5",
+    "title": "Volume and Secret Exposure",
+    "file": "j5-volume-and-secret-exposure.md",
+    "difficulty": "easy",
+    "category_id": "J",
+    "description": "Agent pods with access to Kubernetes secrets, ConfigMaps, or"
+  },
+  {
+    "id": "J.6",
+    "title": "IMDS/Cloud Metadata Exploitation",
+    "file": "j6-imds-cloud-metadata-exploitation.md",
+    "difficulty": "medium",
+    "category_id": "J",
+    "description": "Agents running in cloud environments can access the Instance"
+  },
+  {
+    "id": "K.1",
+    "title": "Goal Misalignment / Objective Drift",
+    "file": "k1-goal-misalignment-objective-drift.md",
+    "difficulty": "medium",
+    "category_id": "K",
+    "description": "Without any attacker involvement, agents reinterpret their goals"
+  },
+  {
+    "id": "K.2",
+    "title": "Over-Autonomy / Exceeding Intended Scope",
+    "file": "k2-over-autonomy-exceeding-intended-scope.md",
+    "difficulty": "medium",
+    "category_id": "K",
+    "description": "Agent performs actions beyond what was intended or authorized,"
+  },
+  {
+    "id": "K.3",
+    "title": "Cascading Errors from Hallucination",
+    "file": "k3-cascading-errors-from-hallucination.md",
+    "difficulty": "medium",
+    "category_id": "K",
+    "description": "An agent hallucinates incorrect information and acts on it,"
+  },
+  {
+    "id": "K.4",
+    "title": "Uncontrolled Self-Modification",
+    "file": "k4-uncontrolled-self-modification.md",
+    "difficulty": "medium",
+    "category_id": "K",
+    "description": "Agents with code generation and execution capabilities can modify"
+  },
+  {
+    "id": "K.5",
+    "title": "Runaway Resource Consumption",
+    "file": "k5-runaway-resource-consumption.md",
+    "difficulty": "easy",
+    "category_id": "K",
+    "description": "Without adversarial input, agents can enter resource-intensive"
+  }
+]
