@@ -129,6 +129,8 @@ Any pod with `app: my-agent` that tries to call `shell_exec` gets denied.
 
 More examples in [`examples/policies/`](examples/policies/).
 
+**Threat catalog:** [cloudaura-io.github.io/panoptium/threats/](https://cloudaura-io.github.io/panoptium/threats/) - 71 documented attack vectors across 11 categories.
+
 To tear down:
 
 ```bash
