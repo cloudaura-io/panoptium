@@ -2,7 +2,17 @@ name: E2E Tests
 
 on:
   push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'scripts/build-threat-manifest.py'
+      - '*.md'
   pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'scripts/build-threat-manifest.py'
+      - '*.md'
 
 jobs:
   test-e2e:

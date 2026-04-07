@@ -2,7 +2,17 @@ name: Lint
 
 on:
   push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'scripts/build-threat-manifest.py'
+      - '*.md'
   pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'scripts/build-threat-manifest.py'
+      - '*.md'
 
 jobs:
   lint:
