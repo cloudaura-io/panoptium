@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
 	"github.com/panoptium/panoptium/pkg/eventbus"
 )
 
@@ -32,7 +33,7 @@ func TestDecisionPublisher_EmitsMatchedRuleEvent(t *testing.T) {
 	pub := NewDecisionPublisher(bus)
 
 	decision := &Decision{
-		Action:             CompiledAction{Type: "deny"},
+		Action:             CompiledAction{Type: v1alpha1.ActionTypeDeny},
 		Matched:            true,
 		MatchedRule:        "block-curl",
 		MatchedRuleIndex:   0,
@@ -61,7 +62,7 @@ func TestDecisionPublisher_EmitsMatchedRuleEvent(t *testing.T) {
 		if pde.MatchedRule != "block-curl" {
 			t.Errorf("expected MatchedRule=block-curl, got %q", pde.MatchedRule)
 		}
-		if string(pde.ActionTaken) != "deny" {
+		if string(pde.ActionTaken) != string(v1alpha1.ActionTypeDeny) {
 			t.Errorf("expected ActionTaken=deny, got %q", pde.ActionTaken)
 		}
 		if pde.TriggerCategory != "kernel" {
@@ -90,7 +91,7 @@ func TestDecisionPublisher_EmitsPredicateTrace(t *testing.T) {
 	pub := NewDecisionPublisher(bus)
 
 	decision := &Decision{
-		Action:      CompiledAction{Type: "deny"},
+		Action:      CompiledAction{Type: v1alpha1.ActionTypeDeny},
 		Matched:     true,
 		MatchedRule: "test-rule",
 		PredicateTrace: []PredicateTraceEntry{
@@ -184,7 +185,7 @@ func TestDecisionPublisher_NonBlockingEmission(t *testing.T) {
 	pub := NewDecisionPublisher(bus)
 
 	decision := &Decision{
-		Action:      CompiledAction{Type: "deny"},
+		Action:      CompiledAction{Type: v1alpha1.ActionTypeDeny},
 		Matched:     true,
 		MatchedRule: "test",
 	}

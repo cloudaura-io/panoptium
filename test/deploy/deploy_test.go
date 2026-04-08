@@ -27,11 +27,13 @@ import (
 	"testing"
 )
 
+const projectRelPath = "../.."
+
 // TestDockerBuild verifies that `make docker-build` succeeds with the operator image.
 // This catches Dockerfile issues such as missing COPY directives for source directories.
 func TestDockerBuild(t *testing.T) {
 	cmd := exec.Command("make", "docker-build", "IMG=example.com/panoptium:e2e")
-	cmd.Dir = "../.."
+	cmd.Dir = projectRelPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("make docker-build failed: %v\nOutput:\n%s", err, string(output))
@@ -44,7 +46,7 @@ func TestKustomizeExtProcService(t *testing.T) {
 	kustomizeBin := findKustomize(t)
 
 	cmd := exec.Command(kustomizeBin, "build", "config/default")
-	cmd.Dir = "../.."
+	cmd.Dir = projectRelPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("kustomize build failed: %v\nOutput:\n%s", err, string(output))
@@ -68,7 +70,7 @@ func TestKustomizeExtProcContainerPort(t *testing.T) {
 	kustomizeBin := findKustomize(t)
 
 	cmd := exec.Command(kustomizeBin, "build", "config/default")
-	cmd.Dir = "../.."
+	cmd.Dir = projectRelPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("kustomize build failed: %v\nOutput:\n%s", err, string(output))

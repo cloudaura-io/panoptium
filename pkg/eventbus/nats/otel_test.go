@@ -140,7 +140,7 @@ func TestParentChildSpanRelationship(t *testing.T) {
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSyncer(exporter),
 	)
-	defer tp.Shutdown(context.Background())
+	defer func() { _ = tp.Shutdown(context.Background()) }()
 
 	tracer := tp.Tracer("test")
 
@@ -159,7 +159,7 @@ func TestParentChildSpanRelationship(t *testing.T) {
 	childSpan.End()
 
 	// Force flush
-	tp.ForceFlush(context.Background())
+	_ = tp.ForceFlush(context.Background())
 
 	spans := exporter.GetSpans()
 	if len(spans) < 2 {
@@ -197,8 +197,8 @@ func TestOTelTelemetryConfig(t *testing.T) {
 	}
 
 	// Test env var override
-	os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
-	defer os.Unsetenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	_ = os.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
+	defer func() { _ = os.Unsetenv("OTEL_EXPORTER_OTLP_ENDPOINT") }()
 
 	cfg2 := DefaultTelemetryConfig()
 	if cfg2.OTLPEndpoint != "otel-collector:4317" {

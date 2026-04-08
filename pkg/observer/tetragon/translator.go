@@ -23,6 +23,15 @@ import (
 	"github.com/panoptium/panoptium/pkg/eventbus"
 )
 
+const (
+	eventSyscallExecve  = "syscall.execve"
+	subcatExecve        = "execve"
+	eventLifecycleExit  = "lifecycle.exit"
+	eventSyscallFork    = "syscall.fork"
+	eventSecurityMount  = "security.mount"
+	eventSecurityPtrace = "security.ptrace"
+)
+
 // Translator converts Tetragon RawEvents into Panoptium eventbus.Event instances.
 type Translator struct{}
 
@@ -39,11 +48,11 @@ func (tr *Translator) Translate(raw *RawEvent) (eventbus.Event, error) {
 
 	switch raw.Type {
 	case EventTypeProcessExec:
-		eventType = "syscall.execve"
-		subcategory = "execve"
+		eventType = eventSyscallExecve
+		subcategory = subcatExecve
 
 	case EventTypeProcessExit:
-		eventType = "lifecycle.exit"
+		eventType = eventLifecycleExit
 		subcategory = "exit"
 
 	case EventTypeProcessKprobe:
@@ -99,7 +108,7 @@ func (tr *Translator) translateKprobe(raw *RawEvent) (eventType, subcategory str
 	case "sys_connect", "__x64_sys_connect", "__arm64_sys_connect":
 		return "syscall.connect", "connect"
 	case "sched_process_fork":
-		return "syscall.fork", "fork"
+		return eventSyscallFork, "fork"
 	case "sys_setns", "__x64_sys_setns", "__arm64_sys_setns":
 		return "security.setns", "setns"
 	case "sys_unshare", "__x64_sys_unshare", "__arm64_sys_unshare":
@@ -107,9 +116,9 @@ func (tr *Translator) translateKprobe(raw *RawEvent) (eventType, subcategory str
 	case "sys_bpf", "__x64_sys_bpf", "__arm64_sys_bpf":
 		return "security.unauthorized-bpf", "unauthorized-bpf"
 	case "security_sb_mount":
-		return "security.mount", "mount"
+		return eventSecurityMount, "mount"
 	case "security_ptrace_access_check":
-		return "security.ptrace", "ptrace"
+		return eventSecurityPtrace, "ptrace"
 	default:
 		// Unknown kprobe: skip gracefully.
 		return "", ""
@@ -120,11 +129,11 @@ func (tr *Translator) translateKprobe(raw *RawEvent) (eventType, subcategory str
 func (tr *Translator) translateTracepoint(raw *RawEvent) (eventType, subcategory string) {
 	switch raw.KprobeFunc {
 	case "sched_process_exec":
-		return "syscall.execve", "execve"
+		return eventSyscallExecve, subcatExecve
 	case "sched_process_fork":
-		return "syscall.fork", "fork"
+		return eventSyscallFork, "fork"
 	case "sched_process_exit":
-		return "lifecycle.exit", "exit"
+		return eventLifecycleExit, "exit"
 	default:
 		return "", ""
 	}
@@ -134,9 +143,9 @@ func (tr *Translator) translateTracepoint(raw *RawEvent) (eventType, subcategory
 func (tr *Translator) translateLSM(raw *RawEvent) (eventType, subcategory string) {
 	switch raw.LSMHook {
 	case "security_sb_mount":
-		return "security.mount", "mount"
+		return eventSecurityMount, "mount"
 	case "security_ptrace_access_check":
-		return "security.ptrace", "ptrace"
+		return eventSecurityPtrace, "ptrace"
 	default:
 		return "", ""
 	}

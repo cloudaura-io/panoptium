@@ -151,7 +151,10 @@ func (d *ProtocolDetector) Parsers() []string {
 //   - method: HTTP method (GET, POST, etc.)
 //   - annotations: pod annotations (may be nil)
 //   - body: request body for JSON-RPC inspection (may be nil)
-func (d *ProtocolDetector) Detect(headers map[string]string, path string, method string, annotations map[string]string, body []byte) DetectionResult {
+func (d *ProtocolDetector) Detect(
+	headers map[string]string, path string, method string,
+	annotations map[string]string, body []byte,
+) DetectionResult {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 

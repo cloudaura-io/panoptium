@@ -16,7 +16,11 @@ limitations under the License.
 
 package policy
 
-import "testing"
+import (
+	"testing"
+
+	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
+)
 
 func TestGetField_ExistingKey(t *testing.T) {
 	e := &PolicyEvent{
@@ -148,7 +152,10 @@ func TestEvaluationResult_ActionClassification(t *testing.T) {
 	result := &EvaluationResult{
 		Decisions: []*Decision{
 			{Action: CompiledAction{Type: "alert"}, Matched: true, MatchedRule: "alert-rule"},
-			{Action: CompiledAction{Type: "deny"}, Matched: true, MatchedRule: "deny-tool", PolicyName: "tool-deny"},
+			{
+				Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}, Matched: true,
+				MatchedRule: "deny-tool", PolicyName: "tool-deny",
+			},
 			{Action: CompiledAction{Type: "rateLimit"}, Matched: true, MatchedRule: "rate-rule"},
 			{Action: CompiledAction{Type: "quarantine"}, Matched: true, MatchedRule: "quarantine-rule"},
 		},
@@ -181,28 +188,28 @@ func TestEvaluationResult_Empty(t *testing.T) {
 		DefaultAllow: true,
 	}
 	effective := result.EffectiveAction()
-	if effective.Type != "allow" {
-		t.Errorf("EffectiveAction().Type = %q, want %q", effective.Type, "allow")
+	if effective.Type != v1alpha1.ActionTypeAllow {
+		t.Errorf("EffectiveAction().Type = %q, want %q", effective.Type, v1alpha1.ActionTypeAllow)
 	}
 }
 
 func TestEvaluationResult_DenyFirst(t *testing.T) {
 	result := &EvaluationResult{
 		Decisions: []*Decision{
-			{Action: CompiledAction{Type: "allow"}, Matched: true, MatchedRule: "allow-rule"},
-			{Action: CompiledAction{Type: "deny"}, Matched: true, MatchedRule: "deny-rule"},
+			{Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}, Matched: true, MatchedRule: "allow-rule"},
+			{Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}, Matched: true, MatchedRule: "deny-rule"},
 		},
 	}
 	effective := result.EffectiveAction()
-	if effective.Type != "deny" {
-		t.Errorf("EffectiveAction().Type = %q, want %q (deny-first semantics)", effective.Type, "deny")
+	if effective.Type != v1alpha1.ActionTypeDeny {
+		t.Errorf("EffectiveAction().Type = %q, want %q (deny-first semantics)", effective.Type, v1alpha1.ActionTypeDeny)
 	}
 }
 
 func TestEvaluationResult_CollectsAll(t *testing.T) {
 	d1 := &Decision{Action: CompiledAction{Type: "alert"}, Matched: true, PolicyName: "pol-1"}
-	d2 := &Decision{Action: CompiledAction{Type: "deny"}, Matched: true, PolicyName: "pol-2"}
-	d3 := &Decision{Action: CompiledAction{Type: "allow"}, Matched: true, PolicyName: "pol-3"}
+	d2 := &Decision{Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}, Matched: true, PolicyName: "pol-2"}
+	d3 := &Decision{Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}, Matched: true, PolicyName: "pol-3"}
 	result := &EvaluationResult{
 		Decisions: []*Decision{d1, d2, d3},
 	}
@@ -223,7 +230,7 @@ func TestEvaluationResult_CollectsAll(t *testing.T) {
 func TestEvaluationResult_HasDeny(t *testing.T) {
 	result := &EvaluationResult{
 		Decisions: []*Decision{
-			{Action: CompiledAction{Type: "allow"}, Matched: true},
+			{Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}, Matched: true},
 		},
 	}
 	if result.HasDeny() {
@@ -231,7 +238,7 @@ func TestEvaluationResult_HasDeny(t *testing.T) {
 	}
 
 	result.Decisions = append(result.Decisions, &Decision{
-		Action: CompiledAction{Type: "deny"}, Matched: true,
+		Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}, Matched: true,
 	})
 	if !result.HasDeny() {
 		t.Error("HasDeny() = false, want true (has deny decision)")
@@ -241,8 +248,14 @@ func TestEvaluationResult_HasDeny(t *testing.T) {
 func TestEvaluationResult_MutatingDecisions(t *testing.T) {
 	result := &EvaluationResult{
 		Decisions: []*Decision{
-			{Action: CompiledAction{Type: "deny"}, Matched: true, MatchedRule: "deny-tool", Subcategory: "tool_call"},
-			{Action: CompiledAction{Type: "deny"}, Matched: true, MatchedRule: "deny-request", Subcategory: "llm_request"},
+			{
+				Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}, Matched: true,
+				MatchedRule: "deny-tool", Subcategory: "tool_call",
+			},
+			{
+				Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}, Matched: true,
+				MatchedRule: "deny-request", Subcategory: "llm_request",
+			},
 			{Action: CompiledAction{Type: "alert"}, Matched: true, MatchedRule: "alert-rule", Subcategory: "tool_call"},
 		},
 	}
@@ -257,8 +270,8 @@ func TestEvaluationResult_MutatingDecisions(t *testing.T) {
 
 func TestDefaultAllowDecision_ReturnsAllowAction(t *testing.T) {
 	d := DefaultAllowDecision()
-	if d.Action.Type != "allow" {
-		t.Errorf("DefaultAllowDecision().Action.Type = %q, want %q", d.Action.Type, "allow")
+	if d.Action.Type != v1alpha1.ActionTypeAllow {
+		t.Errorf("DefaultAllowDecision().Action.Type = %q, want %q", d.Action.Type, v1alpha1.ActionTypeAllow)
 	}
 }
 

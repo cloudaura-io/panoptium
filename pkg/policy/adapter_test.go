@@ -70,7 +70,7 @@ func TestEvaluatorAdapter_EmptyCache(t *testing.T) {
 	if decision.Matched {
 		t.Error("expected no match with empty cache")
 	}
-	if decision.Action.Type != "allow" {
+	if decision.Action.Type != v1alpha1.ActionTypeAllow {
 		t.Errorf("expected default allow action, got %q", decision.Action.Type)
 	}
 }
@@ -325,7 +325,7 @@ func TestEvaluatorAdapter_RateLimiting(t *testing.T) {
 		if decision.Matched {
 			t.Errorf("request %d: expected no match (within rate limit), got matched with action %q", i, decision.Action.Type)
 		}
-		if decision.Action.Type != "allow" {
+		if decision.Action.Type != v1alpha1.ActionTypeAllow {
 			t.Errorf("request %d: expected allow, got %q", i, decision.Action.Type)
 		}
 	}

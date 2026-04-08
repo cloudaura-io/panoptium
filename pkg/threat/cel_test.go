@@ -86,7 +86,8 @@ func TestCELEvaluator_ShannonEntropy(t *testing.T) {
 	}
 
 	// High entropy content (base64)
-	result, err := eval.Evaluate("entropy-check", "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Ugd2l0aCBoaWdoIGVudHJvcHk=")
+	highEntropy := "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Ugd2l0aCBoaWdoIGVudHJvcHk="
+	result, err := eval.Evaluate("entropy-check", highEntropy)
 	if err != nil {
 		t.Fatalf("Evaluate() error = %v", err)
 	}

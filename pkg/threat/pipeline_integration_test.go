@@ -252,8 +252,16 @@ func TestPipelineIntegration_DefaultSignaturesCoverHardcodedPatterns(t *testing.
 			Category:  "data_exfiltration",
 			Severity:  "HIGH",
 			Patterns: []PatternDef{
-				{Regex: `(?i)(output|print|display|reveal|show)\s+(all\s+)?(system\s+)?(secrets?|keys?|passwords?|credentials?|tokens?)`, Weight: 0.85, Target: "tool_description"},
-				{Regex: `(?i)(output|print|display|reveal|show)\s+(all\s+)?(system\s+)?(secrets?|keys?|passwords?|credentials?|tokens?)`, Weight: 0.85, Target: "message_content"},
+				{
+					Regex: `(?i)(output|print|display|reveal|show)\s+` +
+						`(all\s+)?(system\s+)?(secrets?|keys?|passwords?|credentials?|tokens?)`,
+					Weight: 0.85, Target: "tool_description",
+				},
+				{
+					Regex: `(?i)(output|print|display|reveal|show)\s+` +
+						`(all\s+)?(system\s+)?(secrets?|keys?|passwords?|credentials?|tokens?)`,
+					Weight: 0.85, Target: "message_content",
+				},
 			},
 		},
 		{
@@ -262,7 +270,10 @@ func TestPipelineIntegration_DefaultSignaturesCoverHardcodedPatterns(t *testing.
 			Category:  "prompt_injection",
 			Severity:  "CRITICAL",
 			Patterns: []PatternDef{
-				{Regex: `(?i)(disregard|forget|override)\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|constraints?)`, Weight: 0.9, Target: "tool_description"},
+				{
+					Regex:  `(?i)(disregard|forget|override)\s+(all\s+)?(previous|prior|above)\s+(instructions?|rules?|constraints?)`,
+					Weight: 0.9, Target: "tool_description",
+				},
 			},
 		},
 	}

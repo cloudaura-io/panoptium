@@ -45,10 +45,11 @@ func applyAgentClusterPolicy(yamlSpec string) error {
 	return err
 }
 
-// Safe to call on already-deleted resources.
-func deleteAgentPolicy(name, ns string) {
+// deleteAgentPolicy deletes a namespaced AgentPolicy by name.
+// Uses --ignore-not-found=true so it is safe to call on already-deleted resources.
+func deleteAgentPolicy(name string) {
 	cmd := exec.Command("kubectl", "delete", "agentpolicy", name,
-		"-n", ns, "--ignore-not-found=true")
+		"-n", namespace, "--ignore-not-found=true")
 	_, _ = utils.Run(cmd)
 }
 
@@ -58,12 +59,18 @@ func deleteAgentClusterPolicy(name string) {
 	_, _ = utils.Run(cmd)
 }
 
-// waitForPolicyReady polls until Ready=True or the timeout expires.
-func waitForPolicyReady(name, ns string, timeout time.Duration) {
-	By(fmt.Sprintf("waiting for AgentPolicy %s/%s to be Ready=True", ns, name))
+// ---------------------------------------------------------------------------
+// Status Polling Helpers
+// ---------------------------------------------------------------------------
+
+// waitForPolicyReady polls the AgentPolicy status until Ready=True or the
+// timeout expires. Uses Ginkgo Eventually for structured polling.
+func waitForPolicyReady(name string) {
+	const timeout = 2 * time.Minute
+	By(fmt.Sprintf("waiting for AgentPolicy %s/%s to be Ready=True", namespace, name))
 	verifyReady := func(g Gomega) {
 		cmd := exec.Command("kubectl", "get", "agentpolicy", name,
-			"-n", ns,
+			"-n", namespace,
 			"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
 		output, err := utils.Run(cmd)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -102,18 +109,18 @@ func persistentCurlPodName(contextName string) string {
 // createPersistentCurlPod creates a long-running curl pod that stays alive via
 // "sleep 3600". It waits for the pod to reach Ready state before returning.
 // Returns the pod name. Callers should defer deletePersistentCurlPod to clean up.
-func createPersistentCurlPod(ns string) string {
+func createPersistentCurlPod() string {
 	podName := persistentCurlPodName("ctx")
-	return createPersistentCurlPodWithName(podName, ns)
+	return createPersistentCurlPodWithName(podName)
 }
 
 // createPersistentCurlPodWithName creates a persistent curl pod with a specific name.
 // It waits for the pod to reach Ready state before returning.
-func createPersistentCurlPodWithName(podName, ns string) string {
+func createPersistentCurlPodWithName(podName string) string {
 	By(fmt.Sprintf("creating persistent curl pod %s", podName))
 	cmd := exec.Command("kubectl", "run", podName,
 		"--restart=Never",
-		"--namespace", ns,
+		"--namespace", namespace,
 		"--labels=app=e2e-agent",
 		"--image=curlimages/curl:7.78.0",
 		"--", "sleep", "3600")
@@ -124,7 +131,7 @@ func createPersistentCurlPodWithName(podName, ns string) string {
 	By(fmt.Sprintf("waiting for persistent curl pod %s to be Ready", podName))
 	waitCmd := exec.Command("kubectl", "wait", fmt.Sprintf("pod/%s", podName),
 		"--for=condition=Ready",
-		"--namespace", ns, "--timeout=120s")
+		"--namespace", namespace, "--timeout=120s")
 	_, err = utils.Run(waitCmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(),
 		fmt.Sprintf("persistent curl pod %s did not become Ready", podName))
@@ -134,10 +141,10 @@ func createPersistentCurlPodWithName(podName, ns string) string {
 
 // deletePersistentCurlPod deletes a persistent curl pod by name. Safe to call
 // on already-deleted pods.
-func deletePersistentCurlPod(podName, ns string) {
+func deletePersistentCurlPod(podName string) {
 	By(fmt.Sprintf("deleting persistent curl pod %s", podName))
 	cmd := exec.Command("kubectl", "delete", "pod", podName,
-		"--namespace", ns, "--ignore-not-found=true", "--grace-period=0")
+		"--namespace", namespace, "--ignore-not-found=true", "--grace-period=0")
 	_, _ = utils.Run(cmd)
 }
 
@@ -145,7 +152,11 @@ func deletePersistentCurlPod(podName, ns string) {
 // call request through an existing persistent curl pod. This is a pure function
 // that does not execute any commands, making it testable without a cluster.
 func buildCurlExecArgs(podName, gwIP, toolName string, extraHeaders map[string]string) []string {
-	payload := fmt.Sprintf(`{"model":"gpt-4","messages":[{"role":"user","content":"call tool"}],"tools":[{"type":"function","function":{"name":"%s","parameters":{}}}],"stream":false}`, toolName)
+	payload := fmt.Sprintf(
+		`{"model":"gpt-4","messages":[{"role":"user","content":"call tool"}],`+
+			`"tools":[{"type":"function","function":{"name":"%s","parameters":{}}}],"stream":false}`,
+		toolName,
+	)
 
 	args := []string{
 		"exec", podName,
@@ -195,11 +206,16 @@ func buildCurlExecArgsNoTools(podName, gwIP string, extraHeaders map[string]stri
 // request with multiple tools through an existing persistent curl pod. Returns
 // the full response body for inspection of tool stripping behavior.
 func buildCurlExecArgsMultiTool(podName, gwIP string, toolNames []string, extraHeaders map[string]string) []string {
-	var toolsJSON []string
+	toolsJSON := make([]string, 0, len(toolNames))
 	for _, name := range toolNames {
-		toolsJSON = append(toolsJSON, fmt.Sprintf(`{"type":"function","function":{"name":"%s","parameters":{}}}`, name))
+		toolsJSON = append(toolsJSON,
+			fmt.Sprintf(`{"type":"function","function":{"name":"%s","parameters":{}}}`, name))
 	}
-	payload := fmt.Sprintf(`{"model":"gpt-4","messages":[{"role":"user","content":"call tool"}],"tools":[%s],"stream":false}`, strings.Join(toolsJSON, ","))
+	payload := fmt.Sprintf(
+		`{"model":"gpt-4","messages":[{"role":"user","content":"call tool"}],`+
+			`"tools":[%s],"stream":false}`,
+		strings.Join(toolsJSON, ","),
+	)
 
 	args := []string{
 		"exec", podName,
@@ -252,8 +268,10 @@ func parseExecResponse(output string) (statusCode int, body string, err error) {
 // Tool name identification is derived from the request body (tools[].function.name),
 // not from HTTP headers. The x-panoptium-tool-name header is NOT sent because
 // policy decisions must use trusted body-parsed data only (NFR-3: Security).
-func execToolCallRequest(podName, gwIP, toolName string, extraHeaders map[string]string) (statusCode int, body string, err error) {
-	args := buildCurlExecArgs(podName, gwIP, toolName, extraHeaders)
+func execToolCallRequest(
+	podName, gwIP, toolName string,
+) (statusCode int, body string, err error) {
+	args := buildCurlExecArgs(podName, gwIP, toolName, nil)
 	cmd := exec.Command("kubectl", args...)
 	output, execErr := utils.Run(cmd)
 	if execErr != nil {
@@ -278,7 +296,9 @@ func execNoToolRequest(podName, gwIP string, extraHeaders map[string]string) (st
 
 // execMultiToolRequest sends a POST request with multiple tools through AgentGateway.
 // Used to test tool stripping behavior where some tools are denied/stripped.
-func execMultiToolRequest(podName, gwIP string, toolNames []string, extraHeaders map[string]string) (statusCode int, body string, err error) {
+func execMultiToolRequest(
+	podName, gwIP string, toolNames []string, extraHeaders map[string]string,
+) (statusCode int, body string, err error) {
 	args := buildCurlExecArgsMultiTool(podName, gwIP, toolNames, extraHeaders)
 	cmd := exec.Command("kubectl", args...)
 	output, execErr := utils.Run(cmd)
@@ -444,8 +464,9 @@ func TestAssertStructuredError(t *testing.T) {
 		expectErrSubstr string
 	}{
 		{
-			name:      "valid deny error",
-			body:      `{"error":"policy_violation","rule":"deny-dangerous-tool","message":"tool_call to dangerous_exec is blocked by policy"}`,
+			name: "valid deny error",
+			body: `{"error":"policy_violation","rule":"deny-dangerous-tool",` +
+				`"message":"tool_call to dangerous_exec is blocked by policy"}`,
 			errorType: "policy_violation",
 			ruleRef:   "deny-dangerous-tool",
 			expectErr: false,
@@ -594,7 +615,8 @@ func TestWaitForExtProcReady_SuccessAfterRetry(t *testing.T) {
 
 func TestStructuredErrorParsing(t *testing.T) {
 	// Test that the structuredError struct correctly unmarshals JSON
-	jsonBody := `{"error":"policy_violation","rule":"deny-exec","signature":"PAN-SIG-001","message":"blocked by policy","retry_after":60}`
+	jsonBody := `{"error":"policy_violation","rule":"deny-exec",` +
+		`"signature":"PAN-SIG-001","message":"blocked by policy","retry_after":60}`
 
 	var se structuredError
 	err := json.Unmarshal([]byte(jsonBody), &se)

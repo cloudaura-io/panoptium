@@ -26,6 +26,8 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
+const paramTrue = "true"
+
 // ActionContext provides the context for executing a policy action.
 type ActionContext struct {
 	// Event is the triggering policy event.
@@ -209,8 +211,8 @@ func (e *QuarantineExecutor) Execute(ctx *ActionContext) (*ActionResult, error) 
 		}
 	}
 
-	denyNetwork := ctx.CompiledAction.Parameters["denyNetwork"] == "true"
-	denyTools := ctx.CompiledAction.Parameters["denyTools"] == "true"
+	denyNetwork := ctx.CompiledAction.Parameters["denyNetwork"] == paramTrue
+	denyTools := ctx.CompiledAction.Parameters["denyTools"] == paramTrue
 
 	return &ActionResult{
 		ActionType:       "quarantine",

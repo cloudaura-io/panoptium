@@ -24,6 +24,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const testPolicyDenyCurl = "deny-curl"
+
 func makeTestPolicy(name, namespace string, priority int32) *v1alpha1.AgentPolicy {
 	return &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -56,7 +58,7 @@ func makeTestPolicy(name, namespace string, priority int32) *v1alpha1.AgentPolic
 func TestPolicyCache_OnAdd(t *testing.T) {
 	cache := NewPolicyCache(NewPolicyCompiler())
 
-	pol := makeTestPolicy("deny-curl", "default", 100)
+	pol := makeTestPolicy(testPolicyDenyCurl, "default", 100)
 	err := cache.OnAdd(pol)
 	if err != nil {
 		t.Fatalf("OnAdd: %v", err)
@@ -66,7 +68,7 @@ func TestPolicyCache_OnAdd(t *testing.T) {
 	if len(policies) != 1 {
 		t.Fatalf("expected 1 policy, got %d", len(policies))
 	}
-	if policies[0].Name != "deny-curl" {
+	if policies[0].Name != testPolicyDenyCurl {
 		t.Errorf("expected name deny-curl, got %q", policies[0].Name)
 	}
 }
@@ -78,8 +80,8 @@ func TestPolicyCache_OnUpdate_RecompilesChangedOnly(t *testing.T) {
 	pol1 := makeTestPolicy("pol-a", "default", 100)
 	pol2 := makeTestPolicy("pol-b", "default", 200)
 
-	cache.OnAdd(pol1)
-	cache.OnAdd(pol2)
+	_ = cache.OnAdd(pol1)
+	_ = cache.OnAdd(pol2)
 
 	// Update pol-a with a new rule
 	pol1Updated := makeTestPolicy("pol-a", "default", 150)
@@ -114,7 +116,7 @@ func TestPolicyCache_OnDelete(t *testing.T) {
 	cache := NewPolicyCache(NewPolicyCompiler())
 
 	pol := makeTestPolicy("delete-me", "default", 100)
-	cache.OnAdd(pol)
+	_ = cache.OnAdd(pol)
 
 	err := cache.OnDelete(pol)
 	if err != nil {
@@ -148,14 +150,14 @@ func TestPolicyCache_AtomicSwap(t *testing.T) {
 	cache := NewPolicyCache(NewPolicyCompiler())
 
 	pol := makeTestPolicy("pol-1", "default", 100)
-	cache.OnAdd(pol)
+	_ = cache.OnAdd(pol)
 
 	// Get policies before the update
 	before := cache.GetPolicies()
 
 	// Update the policy
 	polUpdated := makeTestPolicy("pol-1", "default", 200)
-	cache.OnUpdate(pol, polUpdated)
+	_ = cache.OnUpdate(pol, polUpdated)
 
 	// The before slice should still be the old snapshot
 	if before[0].Priority != 100 {
@@ -181,9 +183,9 @@ func TestPolicyCache_ConcurrentAccess(t *testing.T) {
 			pol := makeTestPolicy("pol", "default", int32(n))
 			pol.Name = "pol-concurrent"
 			pol.Namespace = "default"
-			cache.OnAdd(pol)
+			_ = cache.OnAdd(pol)
 			cache.GetPolicies()
-			cache.OnDelete(pol)
+			_ = cache.OnDelete(pol)
 		}(i)
 	}
 	wg.Wait()
@@ -201,10 +203,10 @@ func TestPolicyCache_InvalidationCallback_OnUpdate(t *testing.T) {
 	})
 
 	pol := makeTestPolicy("pol-x", "default", 100)
-	cache.OnAdd(pol)
+	_ = cache.OnAdd(pol)
 
 	polUpdated := makeTestPolicy("pol-x", "default", 200)
-	cache.OnUpdate(pol, polUpdated)
+	_ = cache.OnUpdate(pol, polUpdated)
 
 	if !callbackCalled {
 		t.Error("expected invalidation callback to be called on update")
@@ -224,8 +226,8 @@ func TestPolicyCache_InvalidationCallback_OnDelete(t *testing.T) {
 	})
 
 	pol := makeTestPolicy("pol-y", "ns-1", 100)
-	cache.OnAdd(pol)
-	cache.OnDelete(pol)
+	_ = cache.OnAdd(pol)
+	_ = cache.OnDelete(pol)
 
 	if !callbackCalled {
 		t.Error("expected invalidation callback to be called on delete")
@@ -238,7 +240,7 @@ func TestPolicyCache_OnAdd_CompileError(t *testing.T) {
 
 	// Add a valid policy first
 	goodPol := makeTestPolicy("good", "default", 100)
-	cache.OnAdd(goodPol)
+	_ = cache.OnAdd(goodPol)
 
 	// Try adding a policy with an invalid trigger
 	badPol := &v1alpha1.AgentPolicy{
@@ -283,11 +285,11 @@ func TestPolicyCache_OnAdd_CompileError(t *testing.T) {
 func TestPolicyCache_MultipleNamespaces(t *testing.T) {
 	cache := NewPolicyCache(NewPolicyCompiler())
 
-	pol1 := makeTestPolicy("deny-curl", "ns-a", 100)
-	pol2 := makeTestPolicy("deny-curl", "ns-b", 200)
+	pol1 := makeTestPolicy(testPolicyDenyCurl, "ns-a", 100)
+	pol2 := makeTestPolicy(testPolicyDenyCurl, "ns-b", 200)
 
-	cache.OnAdd(pol1)
-	cache.OnAdd(pol2)
+	_ = cache.OnAdd(pol1)
+	_ = cache.OnAdd(pol2)
 
 	policies := cache.GetPolicies()
 	if len(policies) != 2 {

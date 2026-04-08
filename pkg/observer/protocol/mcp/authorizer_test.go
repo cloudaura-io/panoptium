@@ -20,25 +20,30 @@ import (
 	"testing"
 )
 
+const testToolReadFile = "read_file"
+
+// --- Tool Authorization Tests ---
+
+
 // TestMCPToolAuthorizer_AllowedToolPassesThrough verifies allowed tool passes through.
 func TestMCPToolAuthorizer_AllowedToolPassesThrough(t *testing.T) {
 	authorizer := NewMCPToolAuthorizer()
-	authorizer.AddAllowPattern("read_file")
+	authorizer.AddAllowPattern(testToolReadFile)
 	authorizer.AddAllowPattern("write_file")
 
-	result := authorizer.Authorize("read_file")
+	result := authorizer.Authorize(testToolReadFile)
 	if !result.Allowed {
 		t.Error("Authorize(read_file) = denied, want allowed")
 	}
-	if result.ToolName != "read_file" {
-		t.Errorf("ToolName = %q, want %q", result.ToolName, "read_file")
+	if result.ToolName != testToolReadFile {
+		t.Errorf("ToolName = %q, want %q", result.ToolName, testToolReadFile)
 	}
 }
 
 // TestMCPToolAuthorizer_DeniedToolProducesDenyEvent verifies denied tool produces deny.
 func TestMCPToolAuthorizer_DeniedToolProducesDenyEvent(t *testing.T) {
 	authorizer := NewMCPToolAuthorizer()
-	authorizer.AddAllowPattern("read_file")
+	authorizer.AddAllowPattern(testToolReadFile)
 
 	result := authorizer.Authorize("dangerous_exec")
 	if result.Allowed {
@@ -110,7 +115,7 @@ func TestMCPToolAuthorizer_AllowAll(t *testing.T) {
 func TestMCPToolAuthorizer_NoPatterns_DefaultDeny(t *testing.T) {
 	authorizer := NewMCPToolAuthorizer()
 
-	result := authorizer.Authorize("read_file")
+	result := authorizer.Authorize(testToolReadFile)
 	if result.Allowed {
 		t.Error("Authorize with no patterns = allowed, want denied (default deny)")
 	}

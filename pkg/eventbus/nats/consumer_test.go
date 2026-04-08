@@ -32,7 +32,7 @@ func TestDurableConsumer_PersistAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MkdirTemp error: %v", err)
 	}
-	defer os.RemoveAll(storeDir)
+	defer func() { _ = os.RemoveAll(storeDir) }()
 
 	// Start server, publish events, then shut down
 	srv, err := NewServer(ServerConfig{StoreDir: storeDir})
@@ -107,7 +107,7 @@ func TestDurableConsumer_PersistAcrossRestart(t *testing.T) {
 
 // TestDurableConsumer_ReplayFromSequence verifies consumer can replay from a specific sequence.
 func TestDurableConsumer_ReplayFromSequence(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	_, err := js.AddStream(&natsgo.StreamConfig{
@@ -134,7 +134,7 @@ func TestDurableConsumer_ReplayFromSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Subscribe error: %v", err)
 	}
-	defer sub.Unsubscribe()
+	defer func() { _ = sub.Unsubscribe() }()
 
 	// Should receive events starting from sequence 6 (5 events: 6,7,8,9,10)
 	msgs, err := sub.Fetch(5, natsgo.MaxWait(5*time.Second))
@@ -152,14 +152,14 @@ func TestDurableConsumer_ReplayFromSequence(t *testing.T) {
 	}
 
 	for _, msg := range msgs {
-		msg.Ack()
+		_ = msg.Ack()
 	}
 }
 
 // TestDurableConsumer_ResumesFromLastAck verifies durable consumer resumes
 // from last acknowledged position.
 func TestDurableConsumer_ResumesFromLastAck(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	_, err := js.AddStream(&natsgo.StreamConfig{
@@ -192,16 +192,16 @@ func TestDurableConsumer_ResumesFromLastAck(t *testing.T) {
 		t.Fatalf("First Fetch error: %v", err)
 	}
 	for _, msg := range msgs {
-		msg.Ack()
+		_ = msg.Ack()
 	}
-	sub1.Unsubscribe()
+	_ = sub1.Unsubscribe()
 
 	// Re-subscribe with the same durable name
 	sub2, err := factory.Subscribe("TEST_DURABLE", "durable-test", DeliverAll())
 	if err != nil {
 		t.Fatalf("Re-subscribe error: %v", err)
 	}
-	defer sub2.Unsubscribe()
+	defer func() { _ = sub2.Unsubscribe() }()
 
 	// Should resume from event 6 (after the 5 acknowledged)
 	msgs2, err := sub2.Fetch(1, natsgo.MaxWait(5*time.Second))
@@ -212,7 +212,7 @@ func TestDurableConsumer_ResumesFromLastAck(t *testing.T) {
 	if len(msgs2) != 1 {
 		t.Fatalf("Received %d events, want 1", len(msgs2))
 	}
-	msgs2[0].Ack()
+	_ = msgs2[0].Ack()
 
 	if string(msgs2[0].Data) != "event-5" {
 		t.Errorf("Resumed event = %q, want %q", string(msgs2[0].Data), "event-5")

@@ -174,10 +174,7 @@ func ParseRequest(body []byte) (*MessagesRequest, error) {
 
 	messages := make([]Message, len(raw.Messages))
 	for i, m := range raw.Messages {
-		messages[i] = Message{
-			Role:    m.Role,
-			Content: m.Content,
-		}
+		messages[i] = Message(m)
 	}
 
 	// Extract tool names from tools array
@@ -253,10 +250,10 @@ func ParseSSEFrame(frame []byte) ([]*StreamEvent, error) {
 		return nil, nil
 	}
 
-	var events []*StreamEvent
-
 	// Split frame into individual SSE event blocks by double newline
 	blocks := bytes.Split(frame, []byte("\n\n"))
+
+	events := make([]*StreamEvent, 0, len(blocks))
 
 	for _, block := range blocks {
 		block = bytes.TrimSpace(block)

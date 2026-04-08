@@ -190,7 +190,10 @@ func (c *PolicyCompiler) compileRule(policyName string, index int, rule v1alpha1
 			RuleName:   rule.Name,
 			RuleIndex:  index,
 			Field:      "action.type",
-			Message:    fmt.Sprintf("unsupported action type %q; valid types: allow, deny, alert, quarantine, rateLimit", rule.Action.Type),
+			Message: fmt.Sprintf(
+				"unsupported action type %q; valid types: allow, deny, alert, quarantine, rateLimit",
+				rule.Action.Type,
+			),
 		}
 	}
 
@@ -256,7 +259,10 @@ func (c *PolicyCompiler) validateTrigger(policyName string, ruleIndex int, rule 
 
 // compilePredicate parses a CEL expression predicate and extracts regex, glob,
 // and CIDR patterns for pre-compilation.
-func (c *PolicyCompiler) compilePredicate(policyName, ruleName string, ruleIndex int, pred v1alpha1.Predicate, cr *CompiledRule) (CompiledPredicate, error) {
+func (c *PolicyCompiler) compilePredicate(
+	policyName, ruleName string, ruleIndex int,
+	pred v1alpha1.Predicate, cr *CompiledRule,
+) (CompiledPredicate, error) {
 	cp := CompiledPredicate{
 		RawCEL: pred.CEL,
 	}
@@ -382,7 +388,10 @@ func isCompoundExpression(expr string) bool {
 
 // compileCELPredicate compiles an expression using google/cel-go and stores
 // the compiled program in the CompiledPredicate.
-func (c *PolicyCompiler) compileCELPredicate(policyName, ruleName string, ruleIndex int, expr string, cp CompiledPredicate) (CompiledPredicate, error) {
+func (c *PolicyCompiler) compileCELPredicate(
+	policyName, ruleName string, ruleIndex int,
+	expr string, cp CompiledPredicate,
+) (CompiledPredicate, error) {
 	celEnv, err := getCELEnv()
 	if err != nil {
 		return cp, &CompilationError{

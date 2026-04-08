@@ -32,7 +32,9 @@ import (
 
 // setupEnforcementTestComponents creates test infrastructure with configurable
 // enforcement mode and PodCache entries.
-func setupEnforcementTestComponents(t *testing.T, mode enforce.EnforcementMode) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
+func setupEnforcementTestComponents(
+	t *testing.T, mode enforce.EnforcementMode,
+) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
 
 	bus := eventbus.NewSimpleBus()

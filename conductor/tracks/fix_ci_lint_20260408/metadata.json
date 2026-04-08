@@ -1,0 +1,8 @@
+{
+  "track_id": "fix_ci_lint_20260408",
+  "type": "chore",
+  "status": "new",
+  "created_at": "2026-04-08T00:00:00Z",
+  "updated_at": "2026-04-08T00:00:00Z",
+  "description": "Fix all CI lint failures from golangci-lint v1.64.8 and align local linter version"
+}

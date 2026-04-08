@@ -65,6 +65,17 @@ type TaskRequest struct {
 	Input       map[string]interface{} `json:"input,omitempty"`
 }
 
+const (
+	// parserName is the name of this parser.
+	parserName = "a2a"
+
+	// methodTasksSendSubscribe is the JSON-RPC method for subscribing tasks.
+	methodTasksSendSubscribe = "tasks/sendSubscribe"
+
+	// msgTypeTaskCreated is the message type for task creation.
+	msgTypeTaskCreated = "a2a.task.created"
+)
+
 // A2AParser implements protocol.ProtocolParser for A2A JSON-RPC 2.0 messages.
 type A2AParser struct {
 	mu            sync.RWMutex
@@ -88,7 +99,7 @@ func (p *A2AParser) SetThreatMatcher(matcher threat.ThreatMatcher) {
 
 // Name returns the parser name.
 func (p *A2AParser) Name() string {
-	return "a2a"
+	return parserName
 }
 
 // Detect checks if the request matches A2A patterns.
@@ -131,7 +142,9 @@ func idToString(raw json.RawMessage) string {
 }
 
 // ProcessRequest parses an A2A request.
-func (p *A2AParser) ProcessRequest(ctx context.Context, headers map[string]string, body []byte) (*protocol.ParsedRequest, error) {
+func (p *A2AParser) ProcessRequest(
+	ctx context.Context, headers map[string]string, body []byte,
+) (*protocol.ParsedRequest, error) {
 	if len(body) == 0 {
 		return nil, errors.New("empty request body")
 	}
@@ -149,14 +162,14 @@ func (p *A2AParser) ProcessRequest(ctx context.Context, headers map[string]strin
 	}
 
 	result := &protocol.ParsedRequest{
-		Protocol: "a2a",
+		Protocol: parserName,
 		Method:   msg.Method,
 		Metadata: make(map[string]interface{}),
 	}
 
 	switch msg.Method {
-	case "tasks/send", "tasks/sendSubscribe":
-		result.MessageType = "a2a.task.created"
+	case "tasks/send", methodTasksSendSubscribe:
+		result.MessageType = msgTypeTaskCreated
 		if msg.Params != nil {
 			var taskReq TaskRequest
 			if err := json.Unmarshal(msg.Params, &taskReq); err == nil {
@@ -166,7 +179,7 @@ func (p *A2AParser) ProcessRequest(ctx context.Context, headers map[string]strin
 				result.Metadata["input"] = taskReq.Input
 			}
 		}
-		if msg.Method == "tasks/sendSubscribe" {
+		if msg.Method == methodTasksSendSubscribe {
 			result.Metadata["subscribe"] = true
 		}
 
@@ -192,7 +205,7 @@ func (p *A2AParser) ProcessRequest(ctx context.Context, headers map[string]strin
 		}
 		if content != "" {
 			matches, err := matcher.Match(ctx, threat.MatchInput{
-				Protocol: "a2a",
+				Protocol: parserName,
 				Target:   "message_content",
 				Content:  content,
 				Metadata: map[string]any{"method": msg.Method},
@@ -208,7 +221,9 @@ func (p *A2AParser) ProcessRequest(ctx context.Context, headers map[string]strin
 
 // ProcessResponse parses an A2A response.
 // For Agent Card responses (non-JSON-RPC), it parses the card directly.
-func (p *A2AParser) ProcessResponse(_ context.Context, headers map[string]string, body []byte) (*protocol.ParsedResponse, error) {
+func (p *A2AParser) ProcessResponse(
+	_ context.Context, headers map[string]string, body []byte,
+) (*protocol.ParsedResponse, error) {
 	if len(body) == 0 {
 		return nil, errors.New("empty response body")
 	}
@@ -217,7 +232,7 @@ func (p *A2AParser) ProcessResponse(_ context.Context, headers map[string]string
 	var card AgentCard
 	if err := json.Unmarshal(body, &card); err == nil && card.Name != "" && card.URL != "" {
 		result := &protocol.ParsedResponse{
-			Protocol:    "a2a",
+			Protocol:    parserName,
 			MessageType: "a2a.agent.discovered",
 			Metadata: map[string]interface{}{
 				"agent_name":  card.Name,
@@ -247,7 +262,7 @@ func (p *A2AParser) ProcessResponse(_ context.Context, headers map[string]string
 	p.mu.Unlock()
 
 	result := &protocol.ParsedResponse{
-		Protocol: "a2a",
+		Protocol: parserName,
 		Method:   method,
 		Metadata: map[string]interface{}{"jsonrpc_id": id},
 	}
@@ -258,7 +273,7 @@ func (p *A2AParser) ProcessResponse(_ context.Context, headers map[string]string
 	}
 
 	switch method {
-	case "tasks/send", "tasks/sendSubscribe":
+	case "tasks/send", methodTasksSendSubscribe:
 		result.MessageType = "a2a.task.updated"
 	default:
 		result.MessageType = "a2a.response"
@@ -268,13 +283,15 @@ func (p *A2AParser) ProcessResponse(_ context.Context, headers map[string]string
 }
 
 // ProcessStreamChunk parses an SSE chunk from tasks/sendSubscribe responses.
-func (p *A2AParser) ProcessStreamChunk(_ context.Context, chunk []byte, state *protocol.StreamState) (*protocol.ParsedChunk, error) {
+func (p *A2AParser) ProcessStreamChunk(
+	_ context.Context, chunk []byte, state *protocol.StreamState,
+) (*protocol.ParsedChunk, error) {
 	if len(chunk) == 0 {
 		return nil, nil
 	}
 
 	result := &protocol.ParsedChunk{
-		Protocol: "a2a",
+		Protocol: parserName,
 		Metadata: make(map[string]interface{}),
 	}
 

@@ -72,7 +72,10 @@ func NewProtocolEventPublisher(bus eventbus.EventBus) *ProtocolEventPublisher {
 }
 
 // EmitParsedRequest emits an event for a parsed protocol request.
-func (p *ProtocolEventPublisher) EmitParsedRequest(proto string, requestID string, agentID eventbus.AgentIdentity, parsed *ParsedRequest) {
+func (p *ProtocolEventPublisher) EmitParsedRequest(
+	proto string, requestID string,
+	agentID eventbus.AgentIdentity, parsed *ParsedRequest,
+) {
 	if parsed == nil {
 		return
 	}
@@ -93,7 +96,10 @@ func (p *ProtocolEventPublisher) EmitParsedRequest(proto string, requestID strin
 }
 
 // EmitParsedResponse emits an event for a parsed protocol response.
-func (p *ProtocolEventPublisher) EmitParsedResponse(proto string, requestID string, agentID eventbus.AgentIdentity, parsed *ParsedResponse) {
+func (p *ProtocolEventPublisher) EmitParsedResponse(
+	proto string, requestID string,
+	agentID eventbus.AgentIdentity, parsed *ParsedResponse,
+) {
 	if parsed == nil {
 		return
 	}
@@ -114,7 +120,10 @@ func (p *ProtocolEventPublisher) EmitParsedResponse(proto string, requestID stri
 }
 
 // EmitParsedChunk emits an event for a parsed streaming chunk.
-func (p *ProtocolEventPublisher) EmitParsedChunk(proto string, requestID string, agentID eventbus.AgentIdentity, parsed *ParsedChunk) {
+func (p *ProtocolEventPublisher) EmitParsedChunk(
+	proto string, requestID string,
+	agentID eventbus.AgentIdentity, parsed *ParsedChunk,
+) {
 	if parsed == nil {
 		return
 	}

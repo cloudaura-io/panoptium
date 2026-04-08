@@ -371,9 +371,30 @@ func TestEscalationManager_ProcessesAllActions(t *testing.T) {
 	}
 }
 
-// TestEscalationManager_SeverityFromEvent verifies that the manager reads the
-// Severity field from EnforcementEvent and uses it for risk scoring.
-func TestEscalationManager_SeverityFromEvent(t *testing.T) {
+// escalationPhaseEvent describes a batch of events to emit during one phase of
+// a severity escalation test.
+type escalationPhaseEvent struct {
+	Count    int
+	Action   string
+	Severity string
+	ReqID    string
+	PodName  string
+	Policy   string
+}
+
+// escalationPhase groups emitted events with an expected quarantine count.
+type escalationPhase struct {
+	Events            escalationPhaseEvent
+	ExpectQuarantines int
+	ExpectAtLeastOne  bool
+	FailMsg           string
+}
+
+// runSeverityEscalationTest is a helper that sets up the escalation manager,
+// emits phases of enforcement events, and asserts quarantine creation.
+func runSeverityEscalationTest(t *testing.T, phases []escalationPhase) {
+	t.Helper()
+
 	scheme := runtime.NewScheme()
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
 		t.Fatalf("failed to add scheme: %v", err)
@@ -395,67 +416,43 @@ func TestEscalationManager_SeverityFromEvent(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	// 3 MEDIUM events = 3 * 20 = 60 points, below threshold 100
-	for i := 0; i < 3; i++ {
-		bus.Emit(&eventbus.EnforcementEvent{
-			BaseEvent: eventbus.BaseEvent{
-				Type:  eventbus.EventTypePolicyDecision,
-				Time:  time.Now(),
-				ReqID: "req-sev-med",
-				AgentInfo: eventbus.AgentIdentity{
-					PodName:   "sev-pod",
-					Namespace: "test-ns",
+	for _, phase := range phases {
+		ev := phase.Events
+		for i := 0; i < ev.Count; i++ {
+			bus.Emit(&eventbus.EnforcementEvent{
+				BaseEvent: eventbus.BaseEvent{
+					Type:  eventbus.EventTypePolicyDecision,
+					Time:  time.Now(),
+					ReqID: ev.ReqID,
+					AgentInfo: eventbus.AgentIdentity{
+						PodName:   ev.PodName,
+						Namespace: "test-ns",
+					},
 				},
-			},
-			Action:              "deny",
-			Severity:            "MEDIUM",
-			EscalationThreshold: 100,
-			EscalationWindow:    60 * time.Second,
-			EscalationAction:    "quarantine",
-			PolicyName:          "sev-policy",
-			PolicyNamespace:     "test-ns",
-		})
-	}
+				Action:              ev.Action,
+				Severity:            ev.Severity,
+				EscalationThreshold: 100,
+				EscalationWindow:    60 * time.Second,
+				EscalationAction:    "quarantine",
+				PolicyName:          ev.Policy,
+				PolicyNamespace:     "test-ns",
+			})
+		}
 
-	time.Sleep(200 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 
-	var quarantineList v1alpha1.AgentQuarantineList
-	if err := fakeClient.List(ctx, &quarantineList); err != nil {
-		t.Fatalf("failed to list quarantines: %v", err)
-	}
+		var quarantineList v1alpha1.AgentQuarantineList
+		if err := fakeClient.List(ctx, &quarantineList); err != nil {
+			t.Fatalf("failed to list quarantines: %v", err)
+		}
 
-	if len(quarantineList.Items) != 0 {
-		t.Errorf("expected no quarantine at 60 risk points (threshold 100), got %d", len(quarantineList.Items))
-	}
-
-	// 1 CRITICAL event = 100 points, total now 160 >= 100
-	bus.Emit(&eventbus.EnforcementEvent{
-		BaseEvent: eventbus.BaseEvent{
-			Type:  eventbus.EventTypePolicyDecision,
-			Time:  time.Now(),
-			ReqID: "req-sev-crit",
-			AgentInfo: eventbus.AgentIdentity{
-				PodName:   "sev-pod",
-				Namespace: "test-ns",
-			},
-		},
-		Action:              "deny",
-		Severity:            "CRITICAL",
-		EscalationThreshold: 100,
-		EscalationWindow:    60 * time.Second,
-		EscalationAction:    "quarantine",
-		PolicyName:          "sev-policy",
-		PolicyNamespace:     "test-ns",
-	})
-
-	time.Sleep(200 * time.Millisecond)
-
-	if err := fakeClient.List(ctx, &quarantineList); err != nil {
-		t.Fatalf("failed to list quarantines: %v", err)
-	}
-
-	if len(quarantineList.Items) == 0 {
-		t.Fatal("expected quarantine after CRITICAL event pushed total over threshold")
+		if phase.ExpectAtLeastOne {
+			if len(quarantineList.Items) == 0 {
+				t.Fatal(phase.FailMsg)
+			}
+		} else if len(quarantineList.Items) != phase.ExpectQuarantines {
+			t.Errorf("%s, got %d", phase.FailMsg, len(quarantineList.Items))
+		}
 	}
 
 	cancel()
@@ -464,97 +461,50 @@ func TestEscalationManager_SeverityFromEvent(t *testing.T) {
 	}
 }
 
+// TestEscalationManager_SeverityFromEvent verifies that the manager reads the
+// Severity field from EnforcementEvent and uses it for risk scoring.
+func TestEscalationManager_SeverityFromEvent(t *testing.T) {
+	runSeverityEscalationTest(t, []escalationPhase{
+		{
+			Events: escalationPhaseEvent{
+				Count: 3, Action: "deny", Severity: "MEDIUM",
+				ReqID: "req-sev-med", PodName: "sev-pod", Policy: "sev-policy",
+			},
+			ExpectQuarantines: 0,
+			FailMsg:           "expected no quarantine at 60 risk points (threshold 100)",
+		},
+		{
+			Events: escalationPhaseEvent{
+				Count: 1, Action: "deny", Severity: "CRITICAL",
+				ReqID: "req-sev-crit", PodName: "sev-pod", Policy: "sev-policy",
+			},
+			ExpectAtLeastOne: true,
+			FailMsg:          "expected quarantine after CRITICAL event pushed total over threshold",
+		},
+	})
+}
+
 // TestEscalationManager_AuditEventHalfWeight verifies that audit-prefixed
 // actions ("audit:deny") are recorded with AuditOnly=true and weighted at 50%.
 func TestEscalationManager_AuditEventHalfWeight(t *testing.T) {
-	scheme := runtime.NewScheme()
-	if err := v1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatalf("failed to add scheme: %v", err)
-	}
-
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	bus := eventbus.NewSimpleBus()
-	defer bus.Close()
-
-	mgr := NewEscalationManager(bus, fakeClient)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- mgr.Start(ctx)
-	}()
-
-	time.Sleep(50 * time.Millisecond)
-
-	// 2 audit:deny HIGH events = 2 * 50 * 0.5 = 50 points, below threshold 100
-	for i := 0; i < 2; i++ {
-		bus.Emit(&eventbus.EnforcementEvent{
-			BaseEvent: eventbus.BaseEvent{
-				Type:  eventbus.EventTypePolicyDecision,
-				Time:  time.Now(),
-				ReqID: "req-audit-half",
-				AgentInfo: eventbus.AgentIdentity{
-					PodName:   "audit-pod",
-					Namespace: "test-ns",
-				},
+	runSeverityEscalationTest(t, []escalationPhase{
+		{
+			Events: escalationPhaseEvent{
+				Count: 2, Action: "audit:deny", Severity: "HIGH",
+				ReqID: "req-audit-half", PodName: "audit-pod", Policy: "audit-policy",
 			},
-			Action:              "audit:deny",
-			Severity:            "HIGH",
-			EscalationThreshold: 100,
-			EscalationWindow:    60 * time.Second,
-			EscalationAction:    "quarantine",
-			PolicyName:          "audit-policy",
-			PolicyNamespace:     "test-ns",
-		})
-	}
-
-	time.Sleep(200 * time.Millisecond)
-
-	var quarantineList v1alpha1.AgentQuarantineList
-	if err := fakeClient.List(ctx, &quarantineList); err != nil {
-		t.Fatalf("failed to list quarantines: %v", err)
-	}
-
-	if len(quarantineList.Items) != 0 {
-		t.Errorf("expected no quarantine at 50 audit-weighted points (threshold 100), got %d", len(quarantineList.Items))
-	}
-
-	// 1 enforced HIGH event = 50 points, total now 100 >= 100
-	bus.Emit(&eventbus.EnforcementEvent{
-		BaseEvent: eventbus.BaseEvent{
-			Type:  eventbus.EventTypePolicyDecision,
-			Time:  time.Now(),
-			ReqID: "req-audit-enforced",
-			AgentInfo: eventbus.AgentIdentity{
-				PodName:   "audit-pod",
-				Namespace: "test-ns",
-			},
+			ExpectQuarantines: 0,
+			FailMsg:           "expected no quarantine at 50 audit-weighted points (threshold 100)",
 		},
-		Action:              "deny",
-		Severity:            "HIGH",
-		EscalationThreshold: 100,
-		EscalationWindow:    60 * time.Second,
-		EscalationAction:    "quarantine",
-		PolicyName:          "audit-policy",
-		PolicyNamespace:     "test-ns",
+		{
+			Events: escalationPhaseEvent{
+				Count: 1, Action: "deny", Severity: "HIGH",
+				ReqID: "req-audit-enforced", PodName: "audit-pod", Policy: "audit-policy",
+			},
+			ExpectAtLeastOne: true,
+			FailMsg:          "expected quarantine after enforced HIGH event pushed total to 100",
+		},
 	})
-
-	time.Sleep(200 * time.Millisecond)
-
-	if err := fakeClient.List(ctx, &quarantineList); err != nil {
-		t.Fatalf("failed to list quarantines: %v", err)
-	}
-
-	if len(quarantineList.Items) == 0 {
-		t.Fatal("expected quarantine after enforced HIGH event pushed total to 100")
-	}
-
-	cancel()
-	if err := <-errCh; err != nil {
-		t.Errorf("manager returned error: %v", err)
-	}
 }
 
 // Ensure the quarantine namespace falls back to policy namespace.

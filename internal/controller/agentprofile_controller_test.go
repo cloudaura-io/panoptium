@@ -64,7 +64,7 @@ var _ = Describe("AgentProfile Controller", func() {
 					return false
 				}
 				for _, c := range createdProfile.Status.Conditions {
-					if c.Type == "Ready" && c.Status == metav1.ConditionTrue {
+					if c.Type == conditionTypeReady && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}
@@ -164,7 +164,7 @@ var _ = Describe("AgentProfile Controller", func() {
 					return false
 				}
 				for _, c := range createdProfile.Status.Conditions {
-					if c.Type == "Ready" && c.Status == metav1.ConditionTrue {
+					if c.Type == conditionTypeReady && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}

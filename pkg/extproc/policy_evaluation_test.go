@@ -60,7 +60,9 @@ func (m *mockPolicyEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.Ev
 }
 
 // setupPolicyEvalTestComponents creates test infrastructure with a mock PolicyEvaluator.
-func setupPolicyEvalTestComponents(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
+func setupPolicyEvalTestComponents(
+	t *testing.T, evaluator PolicyEvaluator,
+) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
 
 	bus := eventbus.NewSimpleBus()
@@ -210,8 +212,8 @@ func TestPolicyEvaluation_EventContextExtraction(t *testing.T) {
 	if event.Category != "llm" {
 		t.Errorf("expected Category 'llm', got %q", event.Category)
 	}
-	if event.Subcategory != "llm_request" {
-		t.Errorf("expected Subcategory 'llm_request', got %q", event.Subcategory)
+	if event.Subcategory != subcategoryLLMRequest {
+		t.Errorf("expected Subcategory %q, got %q", subcategoryLLMRequest, event.Subcategory)
 	}
 }
 

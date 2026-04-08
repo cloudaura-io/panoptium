@@ -26,35 +26,35 @@ import (
 func setupMixedDetector() *ProtocolDetector {
 	detector := NewProtocolDetector()
 
-	mcp := newMockParser("mcp", false, 0)
-	a2a := newMockParser("a2a", false, 0)
-	gemini := newMockParser("gemini", false, 0)
-	openai := newMockParser("openai", false, 0)
-	anthropic := newMockParser("anthropic", false, 0)
+	mcpParser := newMockParser(ProtocolMCP, false, 0)
+	a2aParser := newMockParser(ProtocolA2A, false, 0)
+	geminiParser := newMockParser(ProtocolGemini, false, 0)
+	openaiParser := newMockParser("openai", false, 0)
+	anthropicParser := newMockParser("anthropic", false, 0)
 
-	detector.Register(mcp)
-	detector.Register(a2a)
-	detector.Register(gemini)
-	detector.Register(openai)
-	detector.Register(anthropic)
+	_ = detector.Register(mcpParser)
+	_ = detector.Register(a2aParser)
+	_ = detector.Register(geminiParser)
+	_ = detector.Register(openaiParser)
+	_ = detector.Register(anthropicParser)
 
 	// Path patterns
-	detector.RegisterPathPattern("/.well-known/agent-card.json", "a2a")
-	detector.RegisterPathPattern("/v1beta/models/", "gemini")
-	detector.RegisterPathPattern("/v1/models/", "gemini")
+	detector.RegisterPathPattern("/.well-known/agent-card.json", ProtocolA2A)
+	detector.RegisterPathPattern("/v1beta/models/", ProtocolGemini)
+	detector.RegisterPathPattern("/v1/models/", ProtocolGemini)
 	detector.RegisterPathPattern("/v1/chat/completions", "openai")
 	detector.RegisterPathPattern("/v1/messages", "anthropic")
 
 	// JSON-RPC methods for MCP
-	detector.RegisterJSONRPCMethod("initialize", "mcp")
-	detector.RegisterJSONRPCMethod("tools/list", "mcp")
-	detector.RegisterJSONRPCMethod("tools/call", "mcp")
-	detector.RegisterJSONRPCMethod("notifications/initialized", "mcp")
+	detector.RegisterJSONRPCMethod("initialize", ProtocolMCP)
+	detector.RegisterJSONRPCMethod("tools/list", ProtocolMCP)
+	detector.RegisterJSONRPCMethod("tools/call", ProtocolMCP)
+	detector.RegisterJSONRPCMethod("notifications/initialized", ProtocolMCP)
 
 	// JSON-RPC methods for A2A
-	detector.RegisterJSONRPCMethod("tasks/send", "a2a")
-	detector.RegisterJSONRPCMethod("tasks/sendSubscribe", "a2a")
-	detector.RegisterJSONRPCMethod("tasks/get", "a2a")
+	detector.RegisterJSONRPCMethod("tasks/send", ProtocolA2A)
+	detector.RegisterJSONRPCMethod("tasks/sendSubscribe", ProtocolA2A)
+	detector.RegisterJSONRPCMethod("tasks/get", ProtocolA2A)
 
 	return detector
 }
@@ -85,8 +85,8 @@ func TestMixedDetect_MCP_ViaJSONRPC(t *testing.T) {
 			if result.Parser == nil {
 				t.Fatalf("Detect() returned nil parser for MCP %s", tt.name)
 			}
-			if result.Parser.Name() != "mcp" {
-				t.Errorf("Parser = %q, want %q", result.Parser.Name(), "mcp")
+			if result.Parser.Name() != ProtocolMCP {
+				t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolMCP)
 			}
 			if result.Confidence != ConfidenceJSONRPC {
 				t.Errorf("Confidence = %f, want %f", result.Confidence, ConfidenceJSONRPC)
@@ -109,8 +109,8 @@ func TestMixedDetect_A2A_AgentCard(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser for A2A Agent Card")
 	}
-	if result.Parser.Name() != "a2a" {
-		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "a2a")
+	if result.Parser.Name() != ProtocolA2A {
+		t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolA2A)
 	}
 	if result.Confidence != ConfidencePath {
 		t.Errorf("Confidence = %f, want %f", result.Confidence, ConfidencePath)
@@ -132,8 +132,8 @@ func TestMixedDetect_A2A_TaskSend(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser for A2A tasks/send")
 	}
-	if result.Parser.Name() != "a2a" {
-		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "a2a")
+	if result.Parser.Name() != ProtocolA2A {
+		t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolA2A)
 	}
 }
 
@@ -151,8 +151,8 @@ func TestMixedDetect_Gemini_V1Beta(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser for Gemini v1beta")
 	}
-	if result.Parser.Name() != "gemini" {
-		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "gemini")
+	if result.Parser.Name() != ProtocolGemini {
+		t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolGemini)
 	}
 	if result.Confidence != ConfidencePath {
 		t.Errorf("Confidence = %f, want %f", result.Confidence, ConfidencePath)
@@ -173,8 +173,8 @@ func TestMixedDetect_Gemini_V1(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser for Gemini v1")
 	}
-	if result.Parser.Name() != "gemini" {
-		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "gemini")
+	if result.Parser.Name() != ProtocolGemini {
+		t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolGemini)
 	}
 }
 
@@ -224,7 +224,7 @@ func TestMixedDetect_AnnotationOverridesPath(t *testing.T) {
 	detector := setupMixedDetector()
 
 	// Path matches OpenAI, but annotation says MCP
-	annotations := map[string]string{"panoptium.io/protocol": "mcp"}
+	annotations := map[string]string{"panoptium.io/protocol": ProtocolMCP}
 	result := detector.Detect(
 		map[string]string{},
 		"/v1/chat/completions",
@@ -235,8 +235,8 @@ func TestMixedDetect_AnnotationOverridesPath(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser")
 	}
-	if result.Parser.Name() != "mcp" {
-		t.Errorf("Parser = %q, want %q (annotation override)", result.Parser.Name(), "mcp")
+	if result.Parser.Name() != ProtocolMCP {
+		t.Errorf("Parser = %q, want %q (annotation override)", result.Parser.Name(), ProtocolMCP)
 	}
 	if result.Confidence != ConfidenceAnnotation {
 		t.Errorf("Confidence = %f, want %f", result.Confidence, ConfidenceAnnotation)
@@ -248,7 +248,7 @@ func TestMixedDetect_AnnotationOverridesJSONRPC(t *testing.T) {
 	detector := setupMixedDetector()
 
 	// Body contains MCP JSON-RPC, but annotation says Gemini
-	annotations := map[string]string{"panoptium.io/protocol": "gemini"}
+	annotations := map[string]string{"panoptium.io/protocol": ProtocolGemini}
 	body := []byte(`{"jsonrpc":"2.0","method":"tools/call","id":1}`)
 	result := detector.Detect(
 		map[string]string{},
@@ -260,8 +260,8 @@ func TestMixedDetect_AnnotationOverridesJSONRPC(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser")
 	}
-	if result.Parser.Name() != "gemini" {
-		t.Errorf("Parser = %q, want %q (annotation override)", result.Parser.Name(), "gemini")
+	if result.Parser.Name() != ProtocolGemini {
+		t.Errorf("Parser = %q, want %q (annotation override)", result.Parser.Name(), ProtocolGemini)
 	}
 }
 
@@ -270,7 +270,11 @@ func TestMixedDetect_Latency_SubMillisecond(t *testing.T) {
 	detector := setupMixedDetector()
 
 	headers := map[string]string{"Content-Type": "application/json"}
-	body := []byte(`{"jsonrpc":"2.0","method":"tools/call","id":1,"params":{"name":"fs_read","arguments":{"path":"/etc/passwd"}}}`)
+	body := []byte(
+		`{"jsonrpc":"2.0","method":"tools/call","id":1,` +
+			`"params":{"name":"fs_read",` +
+			`"arguments":{"path":"/etc/passwd"}}}`,
+	)
 
 	// Run 1000 iterations to get a stable measurement
 	start := time.Now()
@@ -290,7 +294,7 @@ func TestMixedDetect_Latency_SubMillisecond(t *testing.T) {
 func TestMixedDetect_Latency_AnnotationFastPath(t *testing.T) {
 	detector := setupMixedDetector()
 
-	annotations := map[string]string{"panoptium.io/protocol": "mcp"}
+	annotations := map[string]string{"panoptium.io/protocol": ProtocolMCP}
 
 	start := time.Now()
 	iterations := 1000

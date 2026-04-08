@@ -31,7 +31,7 @@ func TestProtocolDetector_NewProtocolDetector(t *testing.T) {
 // TestProtocolDetector_Register verifies parser registration.
 func TestProtocolDetector_Register(t *testing.T) {
 	detector := NewProtocolDetector()
-	parser := newMockParser("mcp", true, 0.9)
+	parser := newMockParser(ProtocolMCP, true, 0.9)
 
 	err := detector.Register(parser)
 	if err != nil {
@@ -42,16 +42,16 @@ func TestProtocolDetector_Register(t *testing.T) {
 	if len(parsers) != 1 {
 		t.Fatalf("Parsers() returned %d, want 1", len(parsers))
 	}
-	if parsers[0] != "mcp" {
-		t.Errorf("Parsers()[0] = %q, want %q", parsers[0], "mcp")
+	if parsers[0] != ProtocolMCP {
+		t.Errorf("Parsers()[0] = %q, want %q", parsers[0], ProtocolMCP)
 	}
 }
 
 // TestProtocolDetector_Register_Duplicate verifies duplicate name rejection.
 func TestProtocolDetector_Register_Duplicate(t *testing.T) {
 	detector := NewProtocolDetector()
-	p1 := newMockParser("mcp", true, 0.9)
-	p2 := newMockParser("mcp", true, 0.8)
+	p1 := newMockParser(ProtocolMCP, true, 0.9)
+	p2 := newMockParser(ProtocolMCP, true, 0.8)
 
 	if err := detector.Register(p1); err != nil {
 		t.Fatalf("First Register() error = %v", err)
@@ -69,21 +69,21 @@ func TestProtocolDetector_Cascade_AnnotationHighestPriority(t *testing.T) {
 	detector := NewProtocolDetector()
 
 	// Register MCP parser that detects via JSON-RPC (lower confidence)
-	mcp := newMockParser("mcp", true, 0.6)
+	mcp := newMockParser(ProtocolMCP, true, 0.6)
 	if err := detector.Register(mcp); err != nil {
 		t.Fatalf("Register mcp: %v", err)
 	}
 
 	// Detect with explicit annotation — should override
 	headers := map[string]string{}
-	annotations := map[string]string{"panoptium.io/protocol": "mcp"}
+	annotations := map[string]string{"panoptium.io/protocol": ProtocolMCP}
 
 	result := detector.Detect(headers, "/some/path", "POST", annotations, nil)
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser with annotation")
 	}
-	if result.Parser.Name() != "mcp" {
-		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "mcp")
+	if result.Parser.Name() != ProtocolMCP {
+		t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolMCP)
 	}
 	if result.Confidence != 1.0 {
 		t.Errorf("Confidence = %f, want 1.0", result.Confidence)
@@ -128,13 +128,13 @@ func TestProtocolDetector_Cascade_PathDetection(t *testing.T) {
 func TestProtocolDetector_Cascade_ContentTypeDetection(t *testing.T) {
 	detector := NewProtocolDetector()
 
-	mcp := newMockParser("mcp", false, 0)
+	mcp := newMockParser(ProtocolMCP, false, 0)
 	if err := detector.Register(mcp); err != nil {
 		t.Fatalf("Register mcp: %v", err)
 	}
 
 	// Register content type pattern
-	detector.RegisterContentType("application/json-rpc", "mcp")
+	detector.RegisterContentType("application/json-rpc", ProtocolMCP)
 
 	headers := map[string]string{"Content-Type": "application/json-rpc"}
 	result := detector.Detect(headers, "/unknown/path", "POST", nil, nil)
@@ -142,8 +142,8 @@ func TestProtocolDetector_Cascade_ContentTypeDetection(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser for Content-Type match")
 	}
-	if result.Parser.Name() != "mcp" {
-		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "mcp")
+	if result.Parser.Name() != ProtocolMCP {
+		t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolMCP)
 	}
 	if result.Confidence != 0.7 {
 		t.Errorf("Confidence = %f, want 0.7", result.Confidence)
@@ -158,15 +158,15 @@ func TestProtocolDetector_Cascade_ContentTypeDetection(t *testing.T) {
 func TestProtocolDetector_Cascade_JSONRPCDetection(t *testing.T) {
 	detector := NewProtocolDetector()
 
-	mcp := newMockParser("mcp", false, 0)
+	mcp := newMockParser(ProtocolMCP, false, 0)
 	if err := detector.Register(mcp); err != nil {
 		t.Fatalf("Register mcp: %v", err)
 	}
 
 	// Register JSON-RPC methods for MCP
-	detector.RegisterJSONRPCMethod("tools/list", "mcp")
-	detector.RegisterJSONRPCMethod("tools/call", "mcp")
-	detector.RegisterJSONRPCMethod("initialize", "mcp")
+	detector.RegisterJSONRPCMethod("tools/list", ProtocolMCP)
+	detector.RegisterJSONRPCMethod("tools/call", ProtocolMCP)
+	detector.RegisterJSONRPCMethod("initialize", ProtocolMCP)
 
 	headers := map[string]string{"Content-Type": "application/json"}
 	body := []byte(`{"jsonrpc":"2.0","method":"tools/list","id":1}`)
@@ -175,8 +175,8 @@ func TestProtocolDetector_Cascade_JSONRPCDetection(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser for JSON-RPC method match")
 	}
-	if result.Parser.Name() != "mcp" {
-		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "mcp")
+	if result.Parser.Name() != ProtocolMCP {
+		t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolMCP)
 	}
 	if result.Confidence != 0.6 {
 		t.Errorf("Confidence = %f, want 0.6", result.Confidence)
@@ -192,7 +192,7 @@ func TestProtocolDetector_Cascade_Fallback(t *testing.T) {
 	detector := NewProtocolDetector()
 
 	// Register parsers that don't match
-	mcp := newMockParser("mcp", false, 0)
+	mcp := newMockParser(ProtocolMCP, false, 0)
 	if err := detector.Register(mcp); err != nil {
 		t.Fatalf("Register mcp: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestProtocolDetector_Cascade_PriorityOrder(t *testing.T) {
 	detector := NewProtocolDetector()
 
 	// Register two parsers: MCP and Gemini
-	mcp := newMockParser("mcp", false, 0)
+	mcp := newMockParser(ProtocolMCP, false, 0)
 	gemini := newMockParser("gemini", false, 0)
 	if err := detector.Register(mcp); err != nil {
 		t.Fatalf("Register mcp: %v", err)
@@ -229,10 +229,10 @@ func TestProtocolDetector_Cascade_PriorityOrder(t *testing.T) {
 	// Register path that would match Gemini
 	detector.RegisterPathPattern("/v1beta/models/", "gemini")
 	// Also register JSON-RPC method that would match MCP
-	detector.RegisterJSONRPCMethod("tools/list", "mcp")
+	detector.RegisterJSONRPCMethod("tools/list", ProtocolMCP)
 
 	// When annotation says "mcp", annotation should win over path match for Gemini
-	annotations := map[string]string{"panoptium.io/protocol": "mcp"}
+	annotations := map[string]string{"panoptium.io/protocol": ProtocolMCP}
 	body := []byte(`{"jsonrpc":"2.0","method":"tools/list","id":1}`)
 
 	result := detector.Detect(
@@ -246,8 +246,8 @@ func TestProtocolDetector_Cascade_PriorityOrder(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser")
 	}
-	if result.Parser.Name() != "mcp" {
-		t.Errorf("Parser = %q, want %q (annotation should override path)", result.Parser.Name(), "mcp")
+	if result.Parser.Name() != ProtocolMCP {
+		t.Errorf("Parser = %q, want %q (annotation should override path)", result.Parser.Name(), ProtocolMCP)
 	}
 	if result.Confidence != 1.0 {
 		t.Errorf("Confidence = %f, want 1.0 (annotation)", result.Confidence)
@@ -263,7 +263,7 @@ func TestProtocolDetector_Cascade_PathBeatsJSONRPC(t *testing.T) {
 	detector := NewProtocolDetector()
 
 	a2a := newMockParser("a2a", false, 0)
-	mcp := newMockParser("mcp", false, 0)
+	mcp := newMockParser(ProtocolMCP, false, 0)
 	if err := detector.Register(a2a); err != nil {
 		t.Fatalf("Register a2a: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestProtocolDetector_Cascade_PathBeatsJSONRPC(t *testing.T) {
 	}
 
 	detector.RegisterPathPattern("/.well-known/agent-card.json", "a2a")
-	detector.RegisterJSONRPCMethod("tools/list", "mcp")
+	detector.RegisterJSONRPCMethod("tools/list", ProtocolMCP)
 
 	body := []byte(`{"jsonrpc":"2.0","method":"tools/list","id":1}`)
 	result := detector.Detect(
@@ -364,7 +364,7 @@ func TestProtocolDetector_EmptyDetector(t *testing.T) {
 func TestProtocolDetector_Annotation_UnknownProtocol(t *testing.T) {
 	detector := NewProtocolDetector()
 
-	mcp := newMockParser("mcp", true, 0.6)
+	mcp := newMockParser(ProtocolMCP, true, 0.6)
 	if err := detector.Register(mcp); err != nil {
 		t.Fatalf("Register mcp: %v", err)
 	}
@@ -377,8 +377,8 @@ func TestProtocolDetector_Annotation_UnknownProtocol(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser — should fall through to parser Detect()")
 	}
-	if result.Parser.Name() != "mcp" {
-		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "mcp")
+	if result.Parser.Name() != ProtocolMCP {
+		t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolMCP)
 	}
 	// Confidence should come from the parser's own Detect, not annotation
 	if result.Confidence == 1.0 {
@@ -390,13 +390,13 @@ func TestProtocolDetector_Annotation_UnknownProtocol(t *testing.T) {
 func TestProtocolDetector_JSONRPCBatch(t *testing.T) {
 	detector := NewProtocolDetector()
 
-	mcp := newMockParser("mcp", false, 0)
+	mcp := newMockParser(ProtocolMCP, false, 0)
 	if err := detector.Register(mcp); err != nil {
 		t.Fatalf("Register mcp: %v", err)
 	}
 
-	detector.RegisterJSONRPCMethod("tools/list", "mcp")
-	detector.RegisterJSONRPCMethod("tools/call", "mcp")
+	detector.RegisterJSONRPCMethod("tools/list", ProtocolMCP)
+	detector.RegisterJSONRPCMethod("tools/call", ProtocolMCP)
 
 	// Batched JSON-RPC: array of requests
 	body := []byte(`[{"jsonrpc":"2.0","method":"tools/list","id":1},{"jsonrpc":"2.0","method":"tools/call","id":2}]`)
@@ -405,8 +405,8 @@ func TestProtocolDetector_JSONRPCBatch(t *testing.T) {
 	if result.Parser == nil {
 		t.Fatal("Detect() returned nil parser for batched JSON-RPC")
 	}
-	if result.Parser.Name() != "mcp" {
-		t.Errorf("Parser = %q, want %q", result.Parser.Name(), "mcp")
+	if result.Parser.Name() != ProtocolMCP {
+		t.Errorf("Parser = %q, want %q", result.Parser.Name(), ProtocolMCP)
 	}
 	if result.Confidence != 0.6 {
 		t.Errorf("Confidence = %f, want 0.6", result.Confidence)

@@ -34,8 +34,8 @@ func TestLLMParserAdapter_Name(t *testing.T) {
 	defer bus.Close()
 
 	adapter := NewLLMParserAdapter(NewLLMObserver(bus))
-	if adapter.Name() != "llm" {
-		t.Errorf("Name() = %q, want %q", adapter.Name(), "llm")
+	if adapter.Name() != observerName {
+		t.Errorf("Name() = %q, want %q", adapter.Name(), observerName)
 	}
 }
 
@@ -159,8 +159,8 @@ func TestLLMParserAdapter_ProcessResponse(t *testing.T) {
 	if result == nil {
 		t.Fatal("ProcessResponse() returned nil")
 	}
-	if result.Protocol != "llm" {
-		t.Errorf("Protocol = %q, want %q", result.Protocol, "llm")
+	if result.Protocol != observerName {
+		t.Errorf("Protocol = %q, want %q", result.Protocol, observerName)
 	}
 }
 
@@ -171,7 +171,7 @@ func TestLLMParserAdapter_ProcessStreamChunk(t *testing.T) {
 
 	adapter := NewLLMParserAdapter(NewLLMObserver(bus))
 	ctx := context.Background()
-	state := protocol.NewStreamState("llm")
+	state := protocol.NewStreamState(observerName)
 
 	result, err := adapter.ProcessStreamChunk(ctx, []byte("data"), state)
 	if err != nil {
@@ -180,8 +180,8 @@ func TestLLMParserAdapter_ProcessStreamChunk(t *testing.T) {
 	if result == nil {
 		t.Fatal("ProcessStreamChunk() returned nil")
 	}
-	if result.Protocol != "llm" {
-		t.Errorf("Protocol = %q, want %q", result.Protocol, "llm")
+	if result.Protocol != observerName {
+		t.Errorf("Protocol = %q, want %q", result.Protocol, observerName)
 	}
 }
 

@@ -28,7 +28,7 @@ import (
 )
 
 // makeToolCallSSEData builds an SSE data line for a tool call chunk.
-func makeToolCallSSEData(index int, id, name, args string) []byte {
+func makeToolCallSSEData(index int, id, name string) []byte {
 	tc := map[string]interface{}{
 		"index": index,
 	}
@@ -40,7 +40,7 @@ func makeToolCallSSEData(index int, id, name, args string) []byte {
 	if name != "" {
 		fn["name"] = name
 	}
-	fn["arguments"] = args
+	fn["arguments"] = ""
 	tc["function"] = fn
 
 	chunk := map[string]interface{}{
@@ -93,7 +93,7 @@ func TestAccumulateToolCalls_SingleTool(t *testing.T) {
 	ctx := context.Background()
 
 	// Send tool call with name "bash"
-	err := obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(0, "call_1", "bash", ""))
+	err := obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(0, "call_1", "bash"))
 	if err != nil {
 		t.Fatalf("ProcessResponseStream error: %v", err)
 	}
@@ -139,13 +139,13 @@ func TestAccumulateToolCalls_FragmentedName(t *testing.T) {
 	ctx := context.Background()
 
 	// Send partial name
-	err := obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(0, "call_1", "get_", ""))
+	err := obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(0, "call_1", "get_"))
 	if err != nil {
 		t.Fatalf("ProcessResponseStream error: %v", err)
 	}
 
 	// Send rest of name
-	err = obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(0, "", "weather", ""))
+	err = obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(0, "", "weather"))
 	if err != nil {
 		t.Fatalf("ProcessResponseStream error: %v", err)
 	}
@@ -190,13 +190,13 @@ func TestAccumulateToolCalls_MultipleConcurrent(t *testing.T) {
 	ctx := context.Background()
 
 	// Send first tool call
-	err := obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(0, "call_1", "bash", ""))
+	err := obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(0, "call_1", "bash"))
 	if err != nil {
 		t.Fatalf("ProcessResponseStream error: %v", err)
 	}
 
 	// Send second tool call with different index
-	err = obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(1, "call_2", "read_file", ""))
+	err = obs.ProcessResponseStream(ctx, streamCtx, makeToolCallSSEData(1, "call_2", "read_file"))
 	if err != nil {
 		t.Fatalf("ProcessResponseStream error: %v", err)
 	}

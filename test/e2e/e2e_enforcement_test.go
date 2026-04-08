@@ -73,8 +73,8 @@ var _ = Describe("Gateway Enforcement E2E", Label("e2e-enforcement"), Ordered, f
 	Context("GE-1: Deny Rule Enforcement", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should return 403 with structured error when request matches deny rule", func() {
@@ -108,10 +108,10 @@ spec:
 
 			By("applying AgentPolicy with deny rule")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
 
 			By("waiting for policy to be compiled")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 
 			By("sending request without tools that matches deny rule through gateway")
 			statusCode, body, err := execNoToolRequest(curlPod, gwIP, nil)
@@ -134,8 +134,8 @@ spec:
 	Context("GE-2: Throttle Enforcement with Rate Limiting", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should return 429 with Retry-After after exceeding rate limit", func() {
@@ -169,16 +169,16 @@ spec:
 
 			By("applying AgentPolicy with throttle rule")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
 
 			By("waiting for policy to be compiled")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 
 			By("sending requests through gateway and checking for 429")
 			// Send multiple requests; when rate limit is enforced, we expect 429
 			var got429 bool
 			for range 10 {
-				statusCode, body, err := execToolCallRequest(curlPod, gwIP, "api_call", nil)
+				statusCode, body, err := execToolCallRequest(curlPod, gwIP, "api_call")
 				Expect(err).NotTo(HaveOccurred())
 
 				if statusCode == 429 {
@@ -199,8 +199,8 @@ spec:
 	Context("GE-3: Fail-Open Degradation", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should pass traffic through when policy engine is unavailable in fail-open mode", func() {
@@ -209,7 +209,7 @@ spec:
 			// even when a policy evaluation might error
 
 			By("sending request through gateway")
-			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "safe_tool", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "safe_tool")
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying request passes through (not blocked)")
@@ -228,8 +228,8 @@ spec:
 	Context("GE-4: Backward Compatibility", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should allow all traffic when no deny policies are applied", func() {
@@ -242,7 +242,7 @@ spec:
 			}
 
 			By("sending a standard request through gateway")
-			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "standard_tool", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "standard_tool")
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying request is not blocked (backward compatibility)")
@@ -256,8 +256,8 @@ spec:
 	Context("GE-5: Tool Stripping Enforcement", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should strip banned tool from request and allow remaining tools through", func() {
@@ -289,10 +289,10 @@ spec:
 
 			By("applying AgentPolicy with tool_call deny rule")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
 
 			By("waiting for policy to be compiled")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 
 			By("sending request with 3 tools (1 banned) through gateway")
 			statusCode, _, err := execMultiToolRequest(curlPod, gwIP,
@@ -339,13 +339,13 @@ spec:
 
 			By("applying AgentPolicy that strips the only tool")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
 
 			By("waiting for policy to be compiled")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 
 			By("sending request with single banned tool through gateway")
-			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "banned_tool", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "banned_tool")
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying request succeeds as plain chat (all tools stripped)")
@@ -358,8 +358,8 @@ spec:
 	Context("GE-6: Multi-Policy Composition", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should deny when allow and deny policies exist at equal priority", func() {
@@ -414,16 +414,16 @@ spec:
 
 			By("applying both allow and deny policies at equal priority")
 			Expect(applyAgentPolicy(allowYAML)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(allowPolicyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(allowPolicyName) })
 			Expect(applyAgentPolicy(denyYAML)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(denyPolicyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(denyPolicyName) })
 
 			By("waiting for policies to be compiled")
-			waitForPolicyReady(allowPolicyName, namespace, 2*time.Minute)
-			waitForPolicyReady(denyPolicyName, namespace, 2*time.Minute)
+			waitForPolicyReady(allowPolicyName)
+			waitForPolicyReady(denyPolicyName)
 
 			By("sending tool_call request with bash tool")
-			statusCode, body, err := execToolCallRequest(curlPod, gwIP, "bash", nil)
+			statusCode, body, err := execToolCallRequest(curlPod, gwIP, "bash")
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying deny-first: bash should be stripped (deny wins over allow at equal priority)")
@@ -439,8 +439,8 @@ spec:
 	Context("GE-7: Dual Event Emission", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should block entire request when llm_request policy denies, even with tools", func() {
@@ -471,13 +471,13 @@ spec:
 
 			By("applying llm_request deny policy")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
 
 			By("waiting for policy to be compiled")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 
 			By("sending request WITH tools through gateway")
-			statusCode, body, err := execToolCallRequest(curlPod, gwIP, "safe_tool", nil)
+			statusCode, body, err := execToolCallRequest(curlPod, gwIP, "safe_tool")
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying llm_request deny blocks the entire request (FR-2 dual emission)")

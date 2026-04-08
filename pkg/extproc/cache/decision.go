@@ -182,7 +182,11 @@ func (c *PolicyDecisionCache) Stop() {
 
 // Store stores a decision in the specified cache tier. For TierOnce,
 // the store is a no-op.
-func (c *PolicyDecisionCache) Store(key CacheKey, tier CacheTier, decision *policy.Decision, policyKey, policyVersion string) {
+func (c *PolicyDecisionCache) Store(
+	key CacheKey, tier CacheTier,
+	decision *policy.Decision,
+	policyKey, policyVersion string,
+) {
 	if tier == TierOnce {
 		return
 	}

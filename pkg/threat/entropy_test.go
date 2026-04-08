@@ -20,6 +20,9 @@ import (
 	"testing"
 )
 
+// highEntropyBase64 is a base64-encoded string used across multiple tests.
+const highEntropyBase64 = "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Ugd2l0aCBoaWdoIGVudHJvcHk="
+
 // TestShannonEntropy_Empty verifies entropy of empty string is 0.
 func TestShannonEntropy_Empty(t *testing.T) {
 	e := ShannonEntropy("")
@@ -38,7 +41,7 @@ func TestShannonEntropy_SingleChar(t *testing.T) {
 
 // TestShannonEntropy_HighEntropy verifies high entropy for base64-like content.
 func TestShannonEntropy_HighEntropy(t *testing.T) {
-	text := "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Ugd2l0aCBoaWdoIGVudHJvcHk="
+	text := highEntropyBase64
 	e := ShannonEntropy(text)
 	if e < 4.0 {
 		t.Errorf("ShannonEntropy(base64) = %f, want >= 4.0", e)
@@ -59,7 +62,7 @@ func TestEntropyDetector_Flagged(t *testing.T) {
 	ed := NewEntropyDetector(4.5, "tool_description")
 
 	// High entropy content (base64 encoded)
-	text := "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Ugd2l0aCBoaWdoIGVudHJvcHk="
+	text := highEntropyBase64
 	result := ed.Evaluate("tool_description", text)
 	if !result.Flagged {
 		t.Error("EntropyDetector should flag high-entropy content")
@@ -85,7 +88,7 @@ func TestEntropyDetector_TargetFiltering(t *testing.T) {
 	ed := NewEntropyDetector(4.5, "tool_description")
 
 	// High entropy content but wrong target
-	text := "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Ugd2l0aCBoaWdoIGVudHJvcHk="
+	text := highEntropyBase64
 	result := ed.Evaluate("message_content", text)
 	if result.Flagged {
 		t.Error("EntropyDetector should not flag for wrong target")

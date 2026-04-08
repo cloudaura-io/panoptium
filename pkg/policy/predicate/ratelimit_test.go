@@ -535,7 +535,7 @@ func TestRateLimitEvaluator_GroupByField(t *testing.T) {
 	}
 
 	// Evaluate twice with agent-based evaluator: counter key = "agent-1"
-	evalByAgent.Evaluate(event)
+	_, _ = evalByAgent.Evaluate(event)
 	matched, _ := evalByAgent.Evaluate(event)
 	if !matched {
 		t.Error("agent-based evaluator: expected true (count 2 >= limit 2)")

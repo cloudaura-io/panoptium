@@ -148,7 +148,10 @@ func (m *LifecycleManager) Start(ctx context.Context) error {
 	m.mu.Unlock()
 
 	// Create the gRPC server with interceptors for observability
-	streamInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	streamInterceptor := func(
+		srv interface{}, ss grpc.ServerStream,
+		info *grpc.StreamServerInfo, handler grpc.StreamHandler,
+	) error {
 		logger.Info("gRPC stream opened", "method", info.FullMethod)
 		err := handler(srv, ss)
 		if err != nil {
@@ -158,7 +161,10 @@ func (m *LifecycleManager) Start(ctx context.Context) error {
 		}
 		return err
 	}
-	unaryInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	unaryInterceptor := func(
+		ctx context.Context, req interface{},
+		info *grpc.UnaryServerInfo, handler grpc.UnaryHandler,
+	) (interface{}, error) {
 		logger.V(1).Info("gRPC unary call", "method", info.FullMethod)
 		return handler(ctx, req)
 	}

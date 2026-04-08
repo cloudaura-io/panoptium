@@ -82,7 +82,7 @@ func TestIntegration_CompileEvaluateDecisionTrace(t *testing.T) {
 	if !decision.Matched {
 		t.Fatal("expected Matched=true")
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny, got %q", decision.Action.Type)
 	}
 	if decision.EvaluationDuration == 0 {
@@ -176,7 +176,7 @@ func TestIntegration_MultiPolicyComposition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Evaluate() error: %v", err)
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny from high-priority policy, got %q", decision.Action.Type)
 	}
 	if decision.PolicyName != "deny-policy" {

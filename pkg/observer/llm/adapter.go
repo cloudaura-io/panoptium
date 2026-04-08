@@ -60,7 +60,9 @@ func (a *LLMParserAdapter) Detect(headers map[string]string, path string, method
 }
 
 // ProcessRequest delegates to LLMObserver.ProcessRequestStream.
-func (a *LLMParserAdapter) ProcessRequest(ctx context.Context, headers map[string]string, body []byte) (*protocol.ParsedRequest, error) {
+func (a *LLMParserAdapter) ProcessRequest(
+	ctx context.Context, headers map[string]string, body []byte,
+) (*protocol.ParsedRequest, error) {
 	httpHeaders := http.Header{}
 	for k, v := range headers {
 		httpHeaders.Set(k, v)
@@ -90,7 +92,9 @@ func (a *LLMParserAdapter) ProcessRequest(ctx context.Context, headers map[strin
 
 // ProcessResponse is a no-op for the LLM adapter since LLM streaming responses
 // are handled via ProcessResponseStream on the underlying observer.
-func (a *LLMParserAdapter) ProcessResponse(_ context.Context, _ map[string]string, _ []byte) (*protocol.ParsedResponse, error) {
+func (a *LLMParserAdapter) ProcessResponse(
+	_ context.Context, _ map[string]string, _ []byte,
+) (*protocol.ParsedResponse, error) {
 	return &protocol.ParsedResponse{
 		Protocol:    "llm",
 		MessageType: "llm.response",
@@ -99,7 +103,9 @@ func (a *LLMParserAdapter) ProcessResponse(_ context.Context, _ map[string]strin
 
 // ProcessStreamChunk is a no-op for the LLM adapter since LLM stream processing
 // is handled by the existing ProtocolObserver pipeline (ProcessResponseStream).
-func (a *LLMParserAdapter) ProcessStreamChunk(_ context.Context, _ []byte, _ *protocol.StreamState) (*protocol.ParsedChunk, error) {
+func (a *LLMParserAdapter) ProcessStreamChunk(
+	_ context.Context, _ []byte, _ *protocol.StreamState,
+) (*protocol.ParsedChunk, error) {
 	return &protocol.ParsedChunk{
 		Protocol: "llm",
 	}, nil

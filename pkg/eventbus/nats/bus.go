@@ -144,7 +144,7 @@ func (b *NATSBus) SubscribeWithFilter(filter eventbus.EventFilter, eventTypes ..
 		if err != nil {
 			// Clean up already-created subscriptions on error
 			for _, s := range ns.natsSubs {
-				s.Unsubscribe()
+				_ = s.Unsubscribe()
 			}
 			return nil
 		}
@@ -174,7 +174,7 @@ func (b *NATSBus) Unsubscribe(sub *eventbus.Subscription) {
 		ns.closed = true
 		ns.mu.Unlock()
 		for _, s := range ns.natsSubs {
-			s.Unsubscribe()
+			_ = s.Unsubscribe()
 		}
 		sub.Close()
 	}
@@ -197,7 +197,7 @@ func (b *NATSBus) Emit(event eventbus.Event) {
 		return
 	}
 
-	b.nc.Publish(subject, data)
+	_ = b.nc.Publish(subject, data) // best-effort publish
 }
 
 // Close shuts down the event bus and closes all subscriber channels.
@@ -217,14 +217,14 @@ func (b *NATSBus) Close() {
 		ns.closed = true
 		ns.mu.Unlock()
 		for _, s := range ns.natsSubs {
-			s.Unsubscribe()
+			_ = s.Unsubscribe()
 		}
 		sub.Close()
 		delete(b.subscribers, sub)
 	}
 
 	if b.nc != nil {
-		b.nc.Drain()
+		_ = b.nc.Drain()
 		b.nc.Close()
 	}
 }

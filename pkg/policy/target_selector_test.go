@@ -19,6 +19,7 @@ package policy
 import (
 	"testing"
 
+	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -39,7 +40,7 @@ func TestTargetSelector_MatchLabelsFiltering(t *testing.T) {
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -62,7 +63,7 @@ func TestTargetSelector_MatchLabelsFiltering(t *testing.T) {
 	if !decision.Matched {
 		t.Error("expected match for event with matching PodLabels")
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny, got %q", decision.Action.Type)
 	}
 
@@ -83,7 +84,7 @@ func TestTargetSelector_MatchLabelsFiltering(t *testing.T) {
 	if decision2.Matched {
 		t.Error("expected no match for event with non-matching PodLabels")
 	}
-	if decision2.Action.Type != "allow" {
+	if decision2.Action.Type != v1alpha1.ActionTypeAllow {
 		t.Errorf("expected default allow, got %q", decision2.Action.Type)
 	}
 }
@@ -103,7 +104,7 @@ func TestTargetSelector_EmptySelectorMatchesAll(t *testing.T) {
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -242,7 +243,7 @@ func TestTargetSelector_MatchExpressions(t *testing.T) {
 							Name:         "test-rule",
 							TriggerLayer: "kernel",
 							TriggerEvent: "process_exec",
-							Action:       CompiledAction{Type: "deny"},
+							Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 						},
 					},
 				},
@@ -287,7 +288,7 @@ func TestTargetSelector_ClusterPolicyNoSelectorMatchesAll(t *testing.T) {
 					Name:         "cluster-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -344,7 +345,7 @@ func TestTargetSelector_MixedNamespaceAndCluster(t *testing.T) {
 					Name:         "ns-deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -364,7 +365,7 @@ func TestTargetSelector_MixedNamespaceAndCluster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny from ns-deny (higher priority), got %q", decision.Action.Type)
 	}
 	if decision.PolicyName != "ns-deny" {

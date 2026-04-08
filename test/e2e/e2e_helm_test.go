@@ -181,9 +181,9 @@ spec:
 				// actual data-path readiness through AgentGateway.
 				gwIP := gatewayServiceIP()
 				if gwIP != "" {
-					probePod := createPersistentCurlPod(namespace)
+					probePod := createPersistentCurlPod()
 					waitForExtProcReady(probePod, gwIP)
-					deletePersistentCurlPod(probePod, namespace)
+					deletePersistentCurlPod(probePod)
 				}
 			})
 

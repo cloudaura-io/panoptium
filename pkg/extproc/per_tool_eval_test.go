@@ -80,8 +80,12 @@ func (m *perToolMockEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.E
 	return result, nil
 }
 
+const subcategoryLLMRequest = "llm_request"
+
 // setupPerToolTestComponents creates test infrastructure with a perToolMockEvaluator.
-func setupPerToolTestComponents(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
+func setupPerToolTestComponents(
+	t *testing.T, evaluator PolicyEvaluator,
+) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
 
 	bus := eventbus.NewSimpleBus()
@@ -152,8 +156,8 @@ func TestPerToolEval_FiresOneEventPerTool(t *testing.T) {
 	}
 
 	// First event is llm_request
-	if evaluator.events[0].Subcategory != "llm_request" {
-		t.Errorf("expected first event Subcategory='llm_request', got %q", evaluator.events[0].Subcategory)
+	if evaluator.events[0].Subcategory != subcategoryLLMRequest {
+		t.Errorf("expected first event Subcategory=%q, got %q", subcategoryLLMRequest, evaluator.events[0].Subcategory)
 	}
 
 	// Remaining 3 events should have a different toolName each
@@ -319,8 +323,8 @@ func TestPerToolEval_DenyAllToolsRemovesToolsAndToolChoice(t *testing.T) {
 	}
 
 	// model and messages should still be present
-	if parsed["model"] != "gpt-4" {
-		t.Errorf("expected model 'gpt-4', got %v", parsed["model"])
+	if parsed["model"] != testModelGPT4 {
+		t.Errorf("expected model %q, got %v", testModelGPT4, parsed["model"])
 	}
 }
 

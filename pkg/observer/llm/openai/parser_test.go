@@ -20,6 +20,15 @@ import (
 	"testing"
 )
 
+const (
+	testContentHello   = "Hello"
+	testFinishStop     = "stop"
+	testToolGetWeather = "get_weather"
+)
+
+// --- Request Parsing Tests ---
+
+
 // TestParseRequest_Basic verifies parsing a basic OpenAI chat completion request.
 func TestParseRequest_Basic(t *testing.T) {
 	body := []byte(`{
@@ -109,7 +118,11 @@ func TestParseRequest_InvalidJSON(t *testing.T) {
 
 // TestParseSSEChunk_SingleToken verifies parsing a single SSE data line with a token.
 func TestParseSSEChunk_SingleToken(t *testing.T) {
-	data := []byte(`{"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}`)
+	data := []byte(
+		`{"id":"chatcmpl-123","object":"chat.completion.chunk",` +
+			`"choices":[{"index":0,"delta":{"content":"Hello"},` +
+			`"finish_reason":null}]}`,
+	)
 
 	chunk, err := ParseSSEChunk(data)
 	if err != nil {
@@ -118,8 +131,8 @@ func TestParseSSEChunk_SingleToken(t *testing.T) {
 	if chunk == nil {
 		t.Fatal("ParseSSEChunk() returned nil")
 	}
-	if chunk.Content != "Hello" {
-		t.Errorf("Content = %q, want %q", chunk.Content, "Hello")
+	if chunk.Content != testContentHello {
+		t.Errorf("Content = %q, want %q", chunk.Content, testContentHello)
 	}
 	if chunk.Done {
 		t.Error("Done = true, want false")
@@ -131,20 +144,29 @@ func TestParseSSEChunk_SingleToken(t *testing.T) {
 
 // TestParseSSEChunk_WithFinishReason verifies parsing a chunk with finish_reason set.
 func TestParseSSEChunk_WithFinishReason(t *testing.T) {
-	data := []byte(`{"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`)
+	data := []byte(
+		`{"id":"chatcmpl-123","object":"chat.completion.chunk",` +
+			`"choices":[{"index":0,"delta":{},` +
+			`"finish_reason":"stop"}]}`,
+	)
 
 	chunk, err := ParseSSEChunk(data)
 	if err != nil {
 		t.Fatalf("ParseSSEChunk() error = %v", err)
 	}
-	if chunk.FinishReason != "stop" {
-		t.Errorf("FinishReason = %q, want %q", chunk.FinishReason, "stop")
+	if chunk.FinishReason != testFinishStop {
+		t.Errorf("FinishReason = %q, want %q", chunk.FinishReason, testFinishStop)
 	}
 }
 
 // TestParseSSEChunk_EmptyDelta verifies parsing a chunk with an empty delta (e.g., role-only).
 func TestParseSSEChunk_EmptyDelta(t *testing.T) {
-	data := []byte(`{"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}`)
+	data := []byte(
+		`{"id":"chatcmpl-123","object":"chat.completion.chunk",` +
+			`"choices":[{"index":0,` +
+			`"delta":{"role":"assistant"},` +
+			`"finish_reason":null}]}`,
+	)
 
 	chunk, err := ParseSSEChunk(data)
 	if err != nil {
@@ -157,7 +179,13 @@ func TestParseSSEChunk_EmptyDelta(t *testing.T) {
 
 // TestParseSSEFrame_SingleEvent verifies parsing an SSE frame with a single event.
 func TestParseSSEFrame_SingleEvent(t *testing.T) {
-	frame := []byte("data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n")
+	frame := []byte(
+		`data: {"id":"chatcmpl-123",` +
+			`"object":"chat.completion.chunk",` +
+			`"choices":[{"index":0,` +
+			`"delta":{"content":"Hello"},` +
+			`"finish_reason":null}]}` + "\n\n",
+	)
 
 	chunks, err := ParseSSEFrame(frame)
 	if err != nil {
@@ -166,14 +194,25 @@ func TestParseSSEFrame_SingleEvent(t *testing.T) {
 	if len(chunks) != 1 {
 		t.Fatalf("ParseSSEFrame() returned %d chunks, want 1", len(chunks))
 	}
-	if chunks[0].Content != "Hello" {
-		t.Errorf("chunks[0].Content = %q, want %q", chunks[0].Content, "Hello")
+	if chunks[0].Content != testContentHello {
+		t.Errorf("chunks[0].Content = %q, want %q", chunks[0].Content, testContentHello)
 	}
 }
 
 // TestParseSSEFrame_MultipleEvents verifies parsing an SSE frame with multiple events in one HTTP frame.
 func TestParseSSEFrame_MultipleEvents(t *testing.T) {
-	frame := []byte("data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"finish_reason\":null}]}\n\n")
+	frame := []byte(
+		`data: {"id":"chatcmpl-123",` +
+			`"object":"chat.completion.chunk",` +
+			`"choices":[{"index":0,` +
+			`"delta":{"content":"Hello"},` +
+			`"finish_reason":null}]}` + "\n\n" +
+			`data: {"id":"chatcmpl-123",` +
+			`"object":"chat.completion.chunk",` +
+			`"choices":[{"index":0,` +
+			`"delta":{"content":" world"},` +
+			`"finish_reason":null}]}` + "\n\n",
+	)
 
 	chunks, err := ParseSSEFrame(frame)
 	if err != nil {
@@ -182,8 +221,8 @@ func TestParseSSEFrame_MultipleEvents(t *testing.T) {
 	if len(chunks) != 2 {
 		t.Fatalf("ParseSSEFrame() returned %d chunks, want 2", len(chunks))
 	}
-	if chunks[0].Content != "Hello" {
-		t.Errorf("chunks[0].Content = %q, want %q", chunks[0].Content, "Hello")
+	if chunks[0].Content != testContentHello {
+		t.Errorf("chunks[0].Content = %q, want %q", chunks[0].Content, testContentHello)
 	}
 	if chunks[1].Content != " world" {
 		t.Errorf("chunks[1].Content = %q, want %q", chunks[1].Content, " world")
@@ -208,7 +247,14 @@ func TestParseSSEFrame_DoneMarker(t *testing.T) {
 
 // TestParseSSEFrame_MixedEventsWithDone verifies multi-event frames ending with [DONE].
 func TestParseSSEFrame_MixedEventsWithDone(t *testing.T) {
-	frame := []byte("data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"!\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+	frame := []byte(
+		`data: {"id":"chatcmpl-123",` +
+			`"object":"chat.completion.chunk",` +
+			`"choices":[{"index":0,` +
+			`"delta":{"content":"!"},` +
+			`"finish_reason":"stop"}]}` + "\n\n" +
+			"data: [DONE]\n\n",
+	)
 
 	chunks, err := ParseSSEFrame(frame)
 	if err != nil {
@@ -217,8 +263,8 @@ func TestParseSSEFrame_MixedEventsWithDone(t *testing.T) {
 	if len(chunks) != 2 {
 		t.Fatalf("ParseSSEFrame() returned %d chunks, want 2", len(chunks))
 	}
-	if chunks[0].FinishReason != "stop" {
-		t.Errorf("chunks[0].FinishReason = %q, want %q", chunks[0].FinishReason, "stop")
+	if chunks[0].FinishReason != testFinishStop {
+		t.Errorf("chunks[0].FinishReason = %q, want %q", chunks[0].FinishReason, testFinishStop)
 	}
 	if !chunks[1].Done {
 		t.Error("chunks[1].Done = false, want true for [DONE] marker")
@@ -274,8 +320,8 @@ func TestParseNonStreamingResponse(t *testing.T) {
 	if resp.Model != "gpt-4" {
 		t.Errorf("Model = %q, want %q", resp.Model, "gpt-4")
 	}
-	if resp.FinishReason != "stop" {
-		t.Errorf("FinishReason = %q, want %q", resp.FinishReason, "stop")
+	if resp.FinishReason != testFinishStop {
+		t.Errorf("FinishReason = %q, want %q", resp.FinishReason, testFinishStop)
 	}
 	if resp.TotalTokens != 18 {
 		t.Errorf("TotalTokens = %d, want 18", resp.TotalTokens)
@@ -314,8 +360,8 @@ func TestParseRequest_ToolExtraction_SingleTool(t *testing.T) {
 	if len(req.ToolNames) != 1 {
 		t.Fatalf("ToolNames count = %d, want 1", len(req.ToolNames))
 	}
-	if req.ToolNames[0] != "get_weather" {
-		t.Errorf("ToolNames[0] = %q, want %q", req.ToolNames[0], "get_weather")
+	if req.ToolNames[0] != testToolGetWeather {
+		t.Errorf("ToolNames[0] = %q, want %q", req.ToolNames[0], testToolGetWeather)
 	}
 }
 
@@ -339,7 +385,7 @@ func TestParseRequest_ToolExtraction_MultipleTools(t *testing.T) {
 	if len(req.ToolNames) != 3 {
 		t.Fatalf("ToolNames count = %d, want 3", len(req.ToolNames))
 	}
-	expected := []string{"get_weather", "dangerous_exec", "send_email"}
+	expected := []string{testToolGetWeather, "dangerous_exec", "send_email"}
 	for i, name := range expected {
 		if req.ToolNames[i] != name {
 			t.Errorf("ToolNames[%d] = %q, want %q", i, req.ToolNames[i], name)

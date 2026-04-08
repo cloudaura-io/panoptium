@@ -38,7 +38,7 @@ func TestProtocolEventPublisher_EmitParsedRequest_MCP(t *testing.T) {
 	}
 
 	parsed := &ParsedRequest{
-		Protocol:    "mcp",
+		Protocol:    ProtocolMCP,
 		MessageType: EventTypeMCPToolCall,
 		Method:      "tools/call",
 		Metadata: map[string]interface{}{
@@ -49,15 +49,15 @@ func TestProtocolEventPublisher_EmitParsedRequest_MCP(t *testing.T) {
 		},
 	}
 
-	publisher.EmitParsedRequest("mcp", "req-1", agentID, parsed)
+	publisher.EmitParsedRequest(ProtocolMCP, "req-1", agentID, parsed)
 
 	select {
 	case event := <-sub.Events():
 		if event.EventType() != EventTypeMCPToolCall {
 			t.Errorf("EventType = %q, want %q", event.EventType(), EventTypeMCPToolCall)
 		}
-		if event.Protocol() != "mcp" {
-			t.Errorf("Protocol = %q, want %q", event.Protocol(), "mcp")
+		if event.Protocol() != ProtocolMCP {
+			t.Errorf("Protocol = %q, want %q", event.Protocol(), ProtocolMCP)
 		}
 		if event.RequestID() != "req-1" {
 			t.Errorf("RequestID = %q, want %q", event.RequestID(), "req-1")
@@ -117,7 +117,7 @@ func TestProtocolEventPublisher_EmitParsedRequest_Gemini(t *testing.T) {
 	publisher := NewProtocolEventPublisher(bus)
 
 	parsed := &ParsedRequest{
-		Protocol:    "gemini",
+		Protocol:    ProtocolGemini,
 		MessageType: EventTypeGeminiRequestStart,
 		Metadata: map[string]interface{}{
 			"model":      "gemini-pro",
@@ -125,15 +125,15 @@ func TestProtocolEventPublisher_EmitParsedRequest_Gemini(t *testing.T) {
 		},
 	}
 
-	publisher.EmitParsedRequest("gemini", "req-3", eventbus.AgentIdentity{}, parsed)
+	publisher.EmitParsedRequest(ProtocolGemini, "req-3", eventbus.AgentIdentity{}, parsed)
 
 	select {
 	case event := <-sub.Events():
 		if event.EventType() != EventTypeGeminiRequestStart {
 			t.Errorf("EventType = %q, want %q", event.EventType(), EventTypeGeminiRequestStart)
 		}
-		if event.Protocol() != "gemini" {
-			t.Errorf("Protocol = %q, want %q", event.Protocol(), "gemini")
+		if event.Protocol() != ProtocolGemini {
+			t.Errorf("Protocol = %q, want %q", event.Protocol(), ProtocolGemini)
 		}
 		pe := event.(*ProtocolEvent)
 		if pe.Metadata["model"] != "gemini-pro" {
@@ -160,13 +160,13 @@ func TestProtocolEventPublisher_CommonFields(t *testing.T) {
 	}
 
 	parsed := &ParsedRequest{
-		Protocol:    "mcp",
+		Protocol:    ProtocolMCP,
 		MessageType: "mcp.session.init",
 		Metadata:    map[string]interface{}{},
 	}
 
 	before := time.Now()
-	publisher.EmitParsedRequest("mcp", "req-common", agentID, parsed)
+	publisher.EmitParsedRequest(ProtocolMCP, "req-common", agentID, parsed)
 
 	select {
 	case event := <-sub.Events():
@@ -197,7 +197,7 @@ func TestProtocolEventPublisher_NonBlocking(t *testing.T) {
 
 	publisher := NewProtocolEventPublisher(bus)
 	parsed := &ParsedRequest{
-		Protocol:    "mcp",
+		Protocol:    ProtocolMCP,
 		MessageType: EventTypeMCPToolCall,
 		Metadata:    map[string]interface{}{},
 	}
@@ -206,7 +206,7 @@ func TestProtocolEventPublisher_NonBlocking(t *testing.T) {
 	done := make(chan bool, 1)
 	go func() {
 		for i := 0; i < 1000; i++ {
-			publisher.EmitParsedRequest("mcp", "req-overflow", eventbus.AgentIdentity{}, parsed)
+			publisher.EmitParsedRequest(ProtocolMCP, "req-overflow", eventbus.AgentIdentity{}, parsed)
 		}
 		done <- true
 	}()
@@ -227,7 +227,7 @@ func TestProtocolEventPublisher_NilParsed(t *testing.T) {
 	publisher := NewProtocolEventPublisher(bus)
 
 	// These should not panic
-	publisher.EmitParsedRequest("mcp", "req-nil", eventbus.AgentIdentity{}, nil)
+	publisher.EmitParsedRequest(ProtocolMCP, "req-nil", eventbus.AgentIdentity{}, nil)
 	publisher.EmitParsedResponse("a2a", "req-nil", eventbus.AgentIdentity{}, nil)
-	publisher.EmitParsedChunk("gemini", "req-nil", eventbus.AgentIdentity{}, nil)
+	publisher.EmitParsedChunk(ProtocolGemini, "req-nil", eventbus.AgentIdentity{}, nil)
 }

@@ -150,7 +150,10 @@ func queryMetric(metricName string, labels map[string]string) (float64, bool) {
 // waitForMetric polls the metrics endpoint until the specified metric reaches
 // the minimum value or the timeout expires. Returns the final value and whether
 // the threshold was met.
-func waitForMetric(metricName string, labels map[string]string, minValue float64, timeout time.Duration) (float64, bool) {
+func waitForMetric(
+	metricName string, labels map[string]string, minValue float64,
+) (float64, bool) {
+	const timeout = 2 * time.Minute
 	By(fmt.Sprintf("waiting for metric %s >= %v (timeout: %s)", metricName, minValue, timeout))
 
 	deadline := time.Now().Add(timeout)

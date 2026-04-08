@@ -181,7 +181,7 @@ func (c *Client) Start(ctx context.Context) {
 
 		// Read events from the stream.
 		if err := c.consumeStream(ctx, stream); err != nil {
-			stream.Close()
+			_ = stream.Close()
 			c.state.Store(StateReconnecting)
 			c.metrics.ReconnectCount.Add(1)
 

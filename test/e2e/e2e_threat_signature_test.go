@@ -100,7 +100,7 @@ spec:
 			})
 
 			By("waiting for Ready=True status condition")
-			waitForThreatSignatureReady(sigName, 2*time.Minute)
+			waitForThreatSignatureReady(sigName)
 		})
 
 		It("should delete a ThreatSignature and verify resource is fully removed", func() {
@@ -129,7 +129,7 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "Failed to apply ThreatSignature")
 
 			By("waiting for Ready=True status condition")
-			waitForThreatSignatureReady(sigName, 2*time.Minute)
+			waitForThreatSignatureReady(sigName)
 
 			By("deleting the ThreatSignature resource")
 			cmd = exec.Command("kubectl", "delete", "threatsignature", sigName)
@@ -177,7 +177,7 @@ spec:
 			})
 
 			By("waiting for initial Ready=True")
-			waitForThreatSignatureReady(sigName, 2*time.Minute)
+			waitForThreatSignatureReady(sigName)
 
 			By("recording the original observedGeneration")
 			originalGen := getThreatSignatureObservedGeneration(sigName)
@@ -373,7 +373,7 @@ var _ = Describe("Default Helm ThreatSignature E2E", Label("e2e-threat-sig"), Or
 
 		By("waiting for operator to reconcile default signatures")
 		for _, sigName := range expectedDefaultSignatures {
-			waitForThreatSignatureReady(sigName, 2*time.Minute)
+			waitForThreatSignatureReady(sigName)
 		}
 	})
 
@@ -496,7 +496,7 @@ spec:
 			})
 
 			By("waiting for Ready=True status (confirms reconciler picked it up)")
-			waitForThreatSignatureReady(sigName, 2*time.Minute)
+			waitForThreatSignatureReady(sigName)
 
 			By("verifying the compiledPatterns count in status")
 			verifyPatternCount := func(g Gomega) {
@@ -533,7 +533,7 @@ spec:
 			cmd.Stdin = strings.NewReader(yaml)
 			_, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
-			waitForThreatSignatureReady(sigName, 2*time.Minute)
+			waitForThreatSignatureReady(sigName)
 
 			By("deleting the ThreatSignature")
 			cmd = exec.Command("kubectl", "delete", "threatsignature", sigName)
@@ -581,7 +581,7 @@ spec:
 			})
 
 			By("waiting for Ready=True with 1 compiled pattern")
-			waitForThreatSignatureReady(sigName, 2*time.Minute)
+			waitForThreatSignatureReady(sigName)
 			originalGen := getThreatSignatureObservedGeneration(sigName)
 
 			updatedYAML := fmt.Sprintf(`apiVersion: panoptium.io/v1alpha1
@@ -690,7 +690,7 @@ spec:
 			cmd.Stdin = strings.NewReader(sigYAML)
 			_, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
-			waitForThreatSignatureReady(sigName, 2*time.Minute)
+			waitForThreatSignatureReady(sigName)
 
 			DeferCleanup(func() {
 				cmd := exec.Command("kubectl", "delete", "threatsignature", sigName,
@@ -729,11 +729,11 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "Failed to create AgentPolicy with threatSignatures.names")
 
 			DeferCleanup(func() {
-				deleteAgentPolicy(policyName, namespace)
+				deleteAgentPolicy(policyName)
 			})
 
 			By("waiting for the policy to reach Ready=True")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 		})
 
 		It("should create a AgentPolicy matching by category selector and reach Ready=True", func() {
@@ -770,11 +770,11 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "Failed to create AgentPolicy with threatSignatures.categories")
 
 			DeferCleanup(func() {
-				deleteAgentPolicy(policyName, namespace)
+				deleteAgentPolicy(policyName)
 			})
 
 			By("waiting for the policy to reach Ready=True")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 		})
 
 		It("should create a AgentPolicy matching by severity selector and reach Ready=True", func() {
@@ -812,17 +812,22 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "Failed to create AgentPolicy with threatSignatures.severities")
 
 			DeferCleanup(func() {
-				deleteAgentPolicy(policyName, namespace)
+				deleteAgentPolicy(policyName)
 			})
 
 			By("waiting for the policy to reach Ready=True")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 		})
 	})
 })
 
-// waitForThreatSignatureReady polls until Ready=True or the timeout expires.
-func waitForThreatSignatureReady(name string, timeout time.Duration) {
+// ---------------------------------------------------------------------------
+// ThreatSignature Helper Functions
+// ---------------------------------------------------------------------------
+
+// waitForThreatSignatureReady polls the ThreatSignature status until
+// Ready=True or the timeout expires.
+func waitForThreatSignatureReady(name string) {
 	By(fmt.Sprintf("waiting for ThreatSignature %s to be Ready=True", name))
 	verifyReady := func(g Gomega) {
 		cmd := exec.Command("kubectl", "get", "threatsignature", name,
@@ -832,7 +837,7 @@ func waitForThreatSignatureReady(name string, timeout time.Duration) {
 		g.Expect(output).To(Equal("True"),
 			fmt.Sprintf("ThreatSignature %s should have Ready=True", name))
 	}
-	Eventually(verifyReady, timeout, 5*time.Second).Should(Succeed())
+	Eventually(verifyReady, 2*time.Minute, 5*time.Second).Should(Succeed())
 }
 
 // getThreatSignatureObservedGeneration returns the observedGeneration from the

@@ -23,13 +23,16 @@ import (
 	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
 )
 
+// rateLimitCanonicalName is the canonical string representation of the rateLimit action type.
+const rateLimitCanonicalName = "rateLimit"
+
 // --- ActionType Consistency Tests (FR-5) ---
 
 // TestActionType_RateLimitCanonicalNameInAPI verifies that the API uses "rateLimit"
 // as the canonical ActionType constant.
 func TestActionType_RateLimitCanonicalNameInAPI(t *testing.T) {
-	if string(v1alpha1.ActionTypeRateLimit) != "rateLimit" {
-		t.Errorf("ActionTypeRateLimit = %q, want %q", v1alpha1.ActionTypeRateLimit, "rateLimit")
+	if string(v1alpha1.ActionTypeRateLimit) != rateLimitCanonicalName {
+		t.Errorf("ActionTypeRateLimit = %q, want %q", v1alpha1.ActionTypeRateLimit, rateLimitCanonicalName)
 	}
 }
 
@@ -37,7 +40,7 @@ func TestActionType_RateLimitCanonicalNameInAPI(t *testing.T) {
 // ActionType "rateLimit" compiles successfully and produces a decision with
 // ActionType "rateLimit" throughout the pipeline.
 func TestActionType_RateLimitCompilesAndEvaluates(t *testing.T) {
-	policy := newTestPolicy("rate-consistency", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("rate-consistency", []v1alpha1.PolicyRule{
 		{
 			Name: "rate-rule",
 			Trigger: v1alpha1.Trigger{
@@ -102,7 +105,7 @@ func TestActionType_UnknownTypeCausesCompilationError(t *testing.T) {
 
 	for _, actionType := range unknownTypes {
 		t.Run(string(actionType), func(t *testing.T) {
-			policy := newTestPolicy("unknown-action-test", "default", 100, []v1alpha1.PolicyRule{
+			policy := newTestPolicy("unknown-action-test", []v1alpha1.PolicyRule{
 				{
 					Name: "bad-action-rule",
 					Trigger: v1alpha1.Trigger{
@@ -135,7 +138,7 @@ func TestActionType_UnknownTypeCausesCompilationError(t *testing.T) {
 // a valid ActionType in the API enum and causes a CompilationError.
 func TestActionType_CustomWebhookRemoved(t *testing.T) {
 	compiler := NewPolicyCompiler()
-	policy := newTestPolicy("webhook-removed", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("webhook-removed", []v1alpha1.PolicyRule{
 		{
 			Name: "webhook-rule",
 			Trigger: v1alpha1.Trigger{
@@ -174,7 +177,7 @@ func TestActionType_AllValidTypesCompile(t *testing.T) {
 
 	for _, actionType := range validTypes {
 		t.Run(string(actionType), func(t *testing.T) {
-			policy := newTestPolicy("valid-action-"+string(actionType), "default", 100, []v1alpha1.PolicyRule{
+			policy := newTestPolicy("valid-action-"+string(actionType), []v1alpha1.PolicyRule{
 				{
 					Name: "valid-rule",
 					Trigger: v1alpha1.Trigger{
@@ -201,7 +204,7 @@ func TestActionType_AllValidTypesCompile(t *testing.T) {
 // unification.
 func TestActionType_RateLimitBackwardCompatibility(t *testing.T) {
 	// Simulate an existing CRD that uses the string "rateLimit" directly
-	policy := newTestPolicy("backward-compat", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("backward-compat", []v1alpha1.PolicyRule{
 		{
 			Name: "rate-rule",
 			Trigger: v1alpha1.Trigger{
@@ -209,7 +212,7 @@ func TestActionType_RateLimitBackwardCompatibility(t *testing.T) {
 				EventSubcategory: "tool_call",
 			},
 			Action: v1alpha1.Action{
-				Type: "rateLimit", // Direct string, simulating existing CRD
+				Type: v1alpha1.ActionType(rateLimitCanonicalName), // Direct string, simulating existing CRD
 				Parameters: map[string]string{
 					"requestsPerMinute": "60",
 					"burstSize":         "10",
@@ -273,7 +276,8 @@ func TestActionType_ExtProcHandlesRateLimit(t *testing.T) {
 	// This is verified by the existing test TestPolicyEvaluation_ThrottleDecision
 	// in policy_evaluation_test.go, which uses v1alpha1.ActionTypeRateLimit.
 	// Here we verify the constant value matches what ExtProc switches on.
-	if v1alpha1.ActionTypeRateLimit != "rateLimit" {
-		t.Errorf("ActionTypeRateLimit = %q, ExtProc enforcement expects 'rateLimit'", v1alpha1.ActionTypeRateLimit)
+	if v1alpha1.ActionTypeRateLimit != rateLimitCanonicalName {
+		t.Errorf("ActionTypeRateLimit = %q, ExtProc enforcement expects %q",
+			v1alpha1.ActionTypeRateLimit, rateLimitCanonicalName)
 	}
 }

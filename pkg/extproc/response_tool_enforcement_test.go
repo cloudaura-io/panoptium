@@ -45,7 +45,7 @@ func (m *responseToolEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.Dec
 	m.events = append(m.events, event)
 
 	toolName := event.GetStringField("toolName")
-	if event.Subcategory == "tool_call" && toolName != "" && m.denyTools[toolName] {
+	if event.Subcategory == subcategoryToolCall && toolName != "" && m.denyTools[toolName] {
 		return &policy.Decision{
 			Action: policy.CompiledAction{
 				Type:       v1alpha1.ActionTypeDeny,
@@ -75,7 +75,9 @@ func (m *responseToolEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.
 	return result, nil
 }
 
-func setupResponseToolTestComponents(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
+func setupResponseToolTestComponents(
+	t *testing.T, evaluator PolicyEvaluator,
+) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
 
 	bus := eventbus.NewSimpleBus()
@@ -149,7 +151,11 @@ func makeFinishReasonSSE() []byte {
 
 // sendFullRequestAndGetResponseStream sends request headers + body, then
 // response headers, returns the stream ready for response body chunks.
-func sendFullRequestAndGetResponseStream(t *testing.T, stream extprocv3.ExternalProcessor_ProcessClient, toolNames []string) {
+func sendFullRequestAndGetResponseStream(
+	t *testing.T,
+	stream extprocv3.ExternalProcessor_ProcessClient,
+	toolNames []string,
+) {
 	t.Helper()
 
 	// Send request headers

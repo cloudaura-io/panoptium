@@ -150,8 +150,9 @@ func TestParseExecResponse(t *testing.T) {
 		wantErr        bool
 	}{
 		{
-			name:           "standard 403 response",
-			output:         `{"error":"policy_violation","rule":"deny-exec","message":"blocked"}` + "\n---HTTP_STATUS_CODE:403---",
+			name: "standard 403 response",
+			output: `{"error":"policy_violation","rule":"deny-exec","message":"blocked"}` +
+				"\n---HTTP_STATUS_CODE:403---",
 			wantStatusCode: 403,
 			wantBody:       `{"error":"policy_violation","rule":"deny-exec","message":"blocked"}`,
 			wantErr:        false,
@@ -185,8 +186,10 @@ func TestParseExecResponse(t *testing.T) {
 			wantErr:        false,
 		},
 		{
-			name:           "body with leading kubectl warnings",
-			output:         "W0402 warning message\n" + `{"error":"policy_violation","rule":"r1","message":"blocked"}` + "\n---HTTP_STATUS_CODE:403---",
+			name: "body with leading kubectl warnings",
+			output: "W0402 warning message\n" +
+				`{"error":"policy_violation","rule":"r1","message":"blocked"}` +
+				"\n---HTTP_STATUS_CODE:403---",
 			wantStatusCode: 403,
 			wantBody:       `{"error":"policy_violation","rule":"r1","message":"blocked"}`,
 			wantErr:        false,

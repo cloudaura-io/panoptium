@@ -95,8 +95,16 @@ func (r *PolicyCompositionResolver) Evaluate(policies []*CompiledPolicy, event *
 	return best, nil
 }
 
-// EvaluateAll evaluates all policies and returns every matching decision across all priority tiers.
-func (r *PolicyCompositionResolver) EvaluateAll(policies []*CompiledPolicy, event *PolicyEvent) (*EvaluationResult, error) {
+// EvaluateAll evaluates the given event against ALL provided compiled policies
+// and returns an EvaluationResult containing decisions from ALL matching
+// policies across ALL priority tiers. This replaces the single-winner Evaluate
+// for multi-phase evaluation with deny-first semantics.
+//
+// Unlike Evaluate, EvaluateAll does NOT stop at the first matching priority
+// level. It evaluates every policy and collects all decisions.
+func (r *PolicyCompositionResolver) EvaluateAll(
+	policies []*CompiledPolicy, event *PolicyEvent,
+) (*EvaluationResult, error) {
 	start := time.Now()
 
 	result := &EvaluationResult{}
