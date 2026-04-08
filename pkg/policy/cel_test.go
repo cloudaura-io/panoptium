@@ -53,249 +53,104 @@ func makePredicatePolicy(name, celExpr string) *v1alpha1.AgentPolicy {
 	}
 }
 
-// Test: Basic equality -- event.toolName == "bash".
-func TestCEL_BasicEquality(t *testing.T) {
+// TestCEL_MatchAndNoMatch covers basic CEL predicate evaluation across
+// multiple operator types using a table-driven approach.
+func TestCEL_MatchAndNoMatch(t *testing.T) {
+	tests := []struct {
+		name          string
+		policyName    string
+		celExpr       string
+		matchFields   map[string]interface{}
+		noMatchFields map[string]interface{}
+	}{
+		{
+			name:          "BasicEquality",
+			policyName:    "equality",
+			celExpr:       `event.toolName == "bash"`,
+			matchFields:   map[string]interface{}{"toolName": "bash"},
+			noMatchFields: map[string]interface{}{"toolName": "python"},
+		},
+		{
+			name:          "Inequality",
+			policyName:    "inequality",
+			celExpr:       `event.toolName != "safe_tool"`,
+			matchFields:   map[string]interface{}{"toolName": "bash"},
+			noMatchFields: map[string]interface{}{"toolName": "safe_tool"},
+		},
+		{
+			name:          "NumericComparison",
+			policyName:    "numeric",
+			celExpr:       `event.tokenCount > 1000`,
+			matchFields:   map[string]interface{}{"tokenCount": 2000},
+			noMatchFields: map[string]interface{}{"tokenCount": 500},
+		},
+		{
+			name:       "MatchesFunction",
+			policyName: "regex",
+			celExpr:    `event.processName.matches(".*malicious.*")`,
+			matchFields: map[string]interface{}{
+				"processName": "run_malicious_script",
+			},
+			noMatchFields: map[string]interface{}{
+				"processName": "safe_tool",
+			},
+		},
+		{
+			name:          "GlobFunction",
+			policyName:    "glob-test",
+			celExpr:       `event.path.glob("/etc/**")`,
+			matchFields:   map[string]interface{}{"path": "/etc/passwd"},
+			noMatchFields: map[string]interface{}{"path": "/var/log/syslog"},
+		},
+		{
+			name:          "InCIDRFunction",
+			policyName:    "cidr-test",
+			celExpr:       `event.sourceIP.inCIDR("10.0.0.0/8")`,
+			matchFields:   map[string]interface{}{"sourceIP": "10.1.2.3"},
+			noMatchFields: map[string]interface{}{"sourceIP": "192.168.1.1"},
+		},
+	}
+
 	compiler := NewPolicyCompiler()
-	pol := makePredicatePolicy("equality", `event.toolName == "bash"`)
 
-	compiled, err := compiler.Compile(pol)
-	if err != nil {
-		t.Fatalf("Compile: %v", err)
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pol := makePredicatePolicy(tc.policyName, tc.celExpr)
+			compiled, err := compiler.Compile(pol)
+			if err != nil {
+				t.Fatalf("Compile: %v", err)
+			}
 
-	dt := NewDecisionTree(compiled)
+			dt := NewDecisionTree(compiled)
 
-	// Should match
-	event := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"toolName": "bash"},
-	}
-	decision, err := dt.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if !decision.Matched {
-		t.Error("expected match for toolName==bash")
-	}
+			// Should match
+			matchEvent := &PolicyEvent{
+				Category:    "protocol",
+				Subcategory: "tool_call",
+				Fields:      tc.matchFields,
+			}
+			decision, err := dt.Evaluate(matchEvent)
+			if err != nil {
+				t.Fatalf("Evaluate (match): %v", err)
+			}
+			if !decision.Matched {
+				t.Errorf("expected match for %v", tc.matchFields)
+			}
 
-	// Should not match
-	event2 := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"toolName": "python"},
-	}
-	decision2, err := dt.Evaluate(event2)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if decision2.Matched {
-		t.Error("expected no match for toolName==python")
-	}
-}
-
-// Test: Inequality -- event.toolName != "safe_tool".
-func TestCEL_Inequality(t *testing.T) {
-	compiler := NewPolicyCompiler()
-	pol := makePredicatePolicy("inequality", `event.toolName != "safe_tool"`)
-
-	compiled, err := compiler.Compile(pol)
-	if err != nil {
-		t.Fatalf("Compile: %v", err)
-	}
-
-	dt := NewDecisionTree(compiled)
-
-	// "bash" != "safe_tool" => should match
-	event := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"toolName": "bash"},
-	}
-	decision, err := dt.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if !decision.Matched {
-		t.Error("expected match (bash != safe_tool)")
-	}
-
-	// "safe_tool" != "safe_tool" => should NOT match
-	event2 := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"toolName": "safe_tool"},
-	}
-	decision2, err := dt.Evaluate(event2)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if decision2.Matched {
-		t.Error("expected no match (safe_tool != safe_tool is false)")
-	}
-}
-
-// Test: Numeric comparison -- event.tokenCount > 1000.
-func TestCEL_NumericComparison(t *testing.T) {
-	compiler := NewPolicyCompiler()
-	pol := makePredicatePolicy("numeric", `event.tokenCount > 1000`)
-
-	compiled, err := compiler.Compile(pol)
-	if err != nil {
-		t.Fatalf("Compile: %v", err)
-	}
-
-	dt := NewDecisionTree(compiled)
-
-	// 2000 > 1000 => match
-	event := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"tokenCount": 2000},
-	}
-	decision, err := dt.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if !decision.Matched {
-		t.Error("expected match (2000 > 1000)")
-	}
-
-	// 500 > 1000 => no match
-	event2 := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"tokenCount": 500},
-	}
-	decision2, err := dt.Evaluate(event2)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if decision2.Matched {
-		t.Error("expected no match (500 > 1000 is false)")
-	}
-}
-
-// Test: Custom function matches() -- event.processName.matches(".*malicious.*").
-func TestCEL_MatchesFunction(t *testing.T) {
-	compiler := NewPolicyCompiler()
-	pol := makePredicatePolicy("regex", `event.processName.matches(".*malicious.*")`)
-
-	compiled, err := compiler.Compile(pol)
-	if err != nil {
-		t.Fatalf("Compile: %v", err)
-	}
-
-	dt := NewDecisionTree(compiled)
-
-	// Should match
-	event := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"processName": "run_malicious_script"},
-	}
-	decision, err := dt.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if !decision.Matched {
-		t.Error("expected match for malicious process name")
-	}
-
-	// Should not match
-	event2 := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"processName": "safe_tool"},
-	}
-	decision2, err := dt.Evaluate(event2)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if decision2.Matched {
-		t.Error("expected no match for safe_tool")
-	}
-}
-
-// Test: Custom function glob() -- event.path.glob("/etc/**").
-func TestCEL_GlobFunction(t *testing.T) {
-	compiler := NewPolicyCompiler()
-	pol := makePredicatePolicy("glob-test", `event.path.glob("/etc/**")`)
-
-	compiled, err := compiler.Compile(pol)
-	if err != nil {
-		t.Fatalf("Compile: %v", err)
-	}
-
-	dt := NewDecisionTree(compiled)
-
-	// Should match
-	event := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"path": "/etc/passwd"},
-	}
-	decision, err := dt.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if !decision.Matched {
-		t.Error("expected match for /etc/passwd against /etc/**")
-	}
-
-	// Should not match
-	event2 := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"path": "/var/log/syslog"},
-	}
-	decision2, err := dt.Evaluate(event2)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if decision2.Matched {
-		t.Error("expected no match for /var/log/syslog against /etc/**")
-	}
-}
-
-// Test: Custom function inCIDR() -- event.sourceIP.inCIDR("10.0.0.0/8").
-func TestCEL_InCIDRFunction(t *testing.T) {
-	compiler := NewPolicyCompiler()
-	pol := makePredicatePolicy("cidr-test", `event.sourceIP.inCIDR("10.0.0.0/8")`)
-
-	compiled, err := compiler.Compile(pol)
-	if err != nil {
-		t.Fatalf("Compile: %v", err)
-	}
-
-	dt := NewDecisionTree(compiled)
-
-	// Should match
-	event := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"sourceIP": "10.1.2.3"},
-	}
-	decision, err := dt.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if !decision.Matched {
-		t.Error("expected match for 10.1.2.3 in 10.0.0.0/8")
-	}
-
-	// Should not match
-	event2 := &PolicyEvent{
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Fields:      map[string]interface{}{"sourceIP": "192.168.1.1"},
-	}
-	decision2, err := dt.Evaluate(event2)
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if decision2.Matched {
-		t.Error("expected no match for 192.168.1.1 in 10.0.0.0/8")
+			// Should not match
+			noMatchEvent := &PolicyEvent{
+				Category:    "protocol",
+				Subcategory: "tool_call",
+				Fields:      tc.noMatchFields,
+			}
+			decision2, err := dt.Evaluate(noMatchEvent)
+			if err != nil {
+				t.Fatalf("Evaluate (no-match): %v", err)
+			}
+			if decision2.Matched {
+				t.Errorf("expected no match for %v", tc.noMatchFields)
+			}
+		})
 	}
 }
 
@@ -409,7 +264,7 @@ func BenchmarkCEL_PredicateEvaluation(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		dt.Evaluate(event)
+		_, _ = dt.Evaluate(event)
 	}
 
 	// Verify that per-evaluation time is < 1ms

@@ -25,26 +25,40 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Test constants to avoid repeated string literals.
+const (
+	testTriggerKernel = "kernel"
+	testTriggerLLM    = "llm"
+	testValueCurl     = "curl"
+	testNamespace     = "default"
+)
+
+// --- Test Helpers ---
+
+// testDefaultPriority is the default priority used in test policies.
+const testDefaultPriority int32 = 100
+
+
 // newTestPolicy creates a AgentPolicy with the given rules for testing.
-func newTestPolicy(name, namespace string, priority int32, rules []v1alpha1.PolicyRule) *v1alpha1.AgentPolicy {
+func newTestPolicy(name string, rules []v1alpha1.PolicyRule) *v1alpha1.AgentPolicy {
 	return &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: testNamespace,
 		},
 		Spec: v1alpha1.AgentPolicySpec{
 			TargetSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{"app": "agent"},
 			},
 			EnforcementMode: v1alpha1.EnforcementModeEnforcing,
-			Priority:        priority,
+			Priority:        testDefaultPriority,
 			Rules:           rules,
 		},
 	}
 }
 
 func TestPolicyCompiler_ValidPolicy(t *testing.T) {
-	policy := newTestPolicy("test-policy", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("test-policy", []v1alpha1.PolicyRule{
 		{
 			Name: "deny-curl",
 			Trigger: v1alpha1.Trigger{
@@ -88,7 +102,7 @@ func TestPolicyCompiler_TriggerParsing_KernelLayer(t *testing.T) {
 	}
 	for _, evt := range kernelEvents {
 		t.Run(evt, func(t *testing.T) {
-			policy := newTestPolicy("kernel-"+evt, "default", 100, []v1alpha1.PolicyRule{
+			policy := newTestPolicy("kernel-"+evt, []v1alpha1.PolicyRule{
 				{
 					Name: "rule-" + evt,
 					Trigger: v1alpha1.Trigger{
@@ -104,8 +118,8 @@ func TestPolicyCompiler_TriggerParsing_KernelLayer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Compile() error for kernel/%s: %v", evt, err)
 			}
-			if compiled.Rules[0].TriggerLayer != "kernel" {
-				t.Errorf("TriggerLayer = %q, want %q", compiled.Rules[0].TriggerLayer, "kernel")
+			if compiled.Rules[0].TriggerLayer != testTriggerKernel {
+				t.Errorf("TriggerLayer = %q, want %q", compiled.Rules[0].TriggerLayer, testTriggerKernel)
 			}
 			if compiled.Rules[0].TriggerEvent != evt {
 				t.Errorf("TriggerEvent = %q, want %q", compiled.Rules[0].TriggerEvent, evt)
@@ -121,7 +135,7 @@ func TestPolicyCompiler_TriggerParsing_NetworkLayer(t *testing.T) {
 	}
 	for _, evt := range networkEvents {
 		t.Run(evt, func(t *testing.T) {
-			policy := newTestPolicy("network-"+evt, "default", 100, []v1alpha1.PolicyRule{
+			policy := newTestPolicy("network-"+evt, []v1alpha1.PolicyRule{
 				{
 					Name: "rule-" + evt,
 					Trigger: v1alpha1.Trigger{
@@ -150,7 +164,7 @@ func TestPolicyCompiler_TriggerParsing_ProtocolLayer(t *testing.T) {
 	}
 	for _, evt := range protocolEvents {
 		t.Run(evt, func(t *testing.T) {
-			policy := newTestPolicy("protocol-"+evt, "default", 100, []v1alpha1.PolicyRule{
+			policy := newTestPolicy("protocol-"+evt, []v1alpha1.PolicyRule{
 				{
 					Name: "rule-" + evt,
 					Trigger: v1alpha1.Trigger{
@@ -179,7 +193,7 @@ func TestPolicyCompiler_TriggerParsing_LLMLayer(t *testing.T) {
 	}
 	for _, evt := range llmEvents {
 		t.Run(evt, func(t *testing.T) {
-			policy := newTestPolicy("llm-"+evt, "default", 100, []v1alpha1.PolicyRule{
+			policy := newTestPolicy("llm-"+evt, []v1alpha1.PolicyRule{
 				{
 					Name: "rule-" + evt,
 					Trigger: v1alpha1.Trigger{
@@ -195,8 +209,8 @@ func TestPolicyCompiler_TriggerParsing_LLMLayer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Compile() error for llm/%s: %v", evt, err)
 			}
-			if compiled.Rules[0].TriggerLayer != "llm" {
-				t.Errorf("TriggerLayer = %q, want %q", compiled.Rules[0].TriggerLayer, "llm")
+			if compiled.Rules[0].TriggerLayer != testTriggerLLM {
+				t.Errorf("TriggerLayer = %q, want %q", compiled.Rules[0].TriggerLayer, testTriggerLLM)
 			}
 		})
 	}
@@ -208,7 +222,7 @@ func TestPolicyCompiler_TriggerParsing_LifecycleLayer(t *testing.T) {
 	}
 	for _, evt := range lifecycleEvents {
 		t.Run(evt, func(t *testing.T) {
-			policy := newTestPolicy("lifecycle-"+evt, "default", 100, []v1alpha1.PolicyRule{
+			policy := newTestPolicy("lifecycle-"+evt, []v1alpha1.PolicyRule{
 				{
 					Name: "rule-" + evt,
 					Trigger: v1alpha1.Trigger{
@@ -232,7 +246,7 @@ func TestPolicyCompiler_TriggerParsing_LifecycleLayer(t *testing.T) {
 }
 
 func TestPolicyCompiler_PrecompiledRegex(t *testing.T) {
-	policy := newTestPolicy("regex-test", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("regex-test", []v1alpha1.PolicyRule{
 		{
 			Name: "regex-rule",
 			Trigger: v1alpha1.Trigger{
@@ -258,7 +272,7 @@ func TestPolicyCompiler_PrecompiledRegex(t *testing.T) {
 }
 
 func TestPolicyCompiler_PrecompiledGlob(t *testing.T) {
-	policy := newTestPolicy("glob-test", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("glob-test", []v1alpha1.PolicyRule{
 		{
 			Name: "glob-rule",
 			Trigger: v1alpha1.Trigger{
@@ -284,7 +298,7 @@ func TestPolicyCompiler_PrecompiledGlob(t *testing.T) {
 }
 
 func TestPolicyCompiler_PrecompiledCIDR(t *testing.T) {
-	policy := newTestPolicy("cidr-test", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("cidr-test", []v1alpha1.PolicyRule{
 		{
 			Name: "cidr-rule",
 			Trigger: v1alpha1.Trigger{
@@ -310,7 +324,7 @@ func TestPolicyCompiler_PrecompiledCIDR(t *testing.T) {
 }
 
 func TestPolicyCompiler_InvalidRegex(t *testing.T) {
-	policy := newTestPolicy("bad-regex", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("bad-regex", []v1alpha1.PolicyRule{
 		{
 			Name: "bad-regex-rule",
 			Trigger: v1alpha1.Trigger{
@@ -337,7 +351,7 @@ func TestPolicyCompiler_InvalidRegex(t *testing.T) {
 }
 
 func TestPolicyCompiler_UnknownTriggerType(t *testing.T) {
-	policy := newTestPolicy("unknown-trigger", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("unknown-trigger", []v1alpha1.PolicyRule{
 		{
 			Name: "bad-trigger-rule",
 			Trigger: v1alpha1.Trigger{
@@ -361,7 +375,7 @@ func TestPolicyCompiler_UnknownTriggerType(t *testing.T) {
 }
 
 func TestPolicyCompiler_MalformedCIDR(t *testing.T) {
-	policy := newTestPolicy("bad-cidr", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("bad-cidr", []v1alpha1.PolicyRule{
 		{
 			Name: "bad-cidr-rule",
 			Trigger: v1alpha1.Trigger{
@@ -417,7 +431,7 @@ func TestPolicyCompiler_LatencyUnder100ms(t *testing.T) {
 		}
 	}
 
-	policy := newTestPolicy("latency-test", "default", 100, rules)
+	policy := newTestPolicy("latency-test", rules)
 	compiler := NewPolicyCompiler()
 
 	start := time.Now()
@@ -433,7 +447,7 @@ func TestPolicyCompiler_LatencyUnder100ms(t *testing.T) {
 }
 
 func TestPolicyCompiler_MultipleRules(t *testing.T) {
-	policy := newTestPolicy("multi-rule", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("multi-rule", []v1alpha1.PolicyRule{
 		{
 			Name: "rule-1",
 			Trigger: v1alpha1.Trigger{
@@ -481,7 +495,7 @@ func TestPolicyCompiler_EnforcementMode(t *testing.T) {
 	}
 	for _, mode := range modes {
 		t.Run(string(mode), func(t *testing.T) {
-			policy := newTestPolicy("mode-test", "default", 100, []v1alpha1.PolicyRule{
+			policy := newTestPolicy("mode-test", []v1alpha1.PolicyRule{
 				{
 					Name: "rule-1",
 					Trigger: v1alpha1.Trigger{
@@ -578,10 +592,10 @@ func TestCompileCluster_RulesCompileCorrectly(t *testing.T) {
 	if len(compiled.Rules) != 1 {
 		t.Fatalf("expected 1 rule, got %d", len(compiled.Rules))
 	}
-	if compiled.Rules[0].Name != "deny-curl" {
-		t.Errorf("expected rule name \"deny-curl\", got %q", compiled.Rules[0].Name)
+	if compiled.Rules[0].Name != testPolicyDenyCurl {
+		t.Errorf("expected rule name %q, got %q", testPolicyDenyCurl, compiled.Rules[0].Name)
 	}
-	if compiled.Rules[0].TriggerLayer != "kernel" {
+	if compiled.Rules[0].TriggerLayer != testTriggerKernel {
 		t.Errorf("expected TriggerLayer \"kernel\", got %q", compiled.Rules[0].TriggerLayer)
 	}
 }
@@ -637,135 +651,90 @@ func TestCompileCluster_InvalidRegex(t *testing.T) {
 	}
 }
 
-func TestPredicateParsing_EqualityOperator(t *testing.T) {
-	policy := newTestPolicy("eq-parse", "default", 100, []v1alpha1.PolicyRule{
+// --- Predicate Parsing Tests ---
+
+func TestPredicateParsing_Operators(t *testing.T) {
+	tests := []struct {
+		name       string
+		celExpr    string
+		actionType v1alpha1.ActionType
+		severity   v1alpha1.Severity
+		wantField  string
+		wantOp     string
+		wantValue  string
+	}{
 		{
-			Name: "eq-rule",
-			Trigger: v1alpha1.Trigger{
-				EventCategory:    "kernel",
-				EventSubcategory: "process_exec",
-			},
-			Predicates: []v1alpha1.Predicate{
-				{CEL: `event.processName == "curl"`},
-			},
-			Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeDeny},
-			Severity: v1alpha1.SeverityHigh,
+			name:       "EqualityOperator",
+			celExpr:    `event.processName == "curl"`,
+			actionType: v1alpha1.ActionTypeDeny,
+			severity:   v1alpha1.SeverityHigh,
+			wantField:  "event.processName",
+			wantOp:     "==",
+			wantValue:  testValueCurl,
 		},
-	})
+		{
+			name:       "InequalityOperator",
+			celExpr:    `event.processName != "safe"`,
+			actionType: v1alpha1.ActionTypeDeny,
+			severity:   v1alpha1.SeverityHigh,
+			wantField:  "event.processName",
+			wantOp:     "!=",
+			wantValue:  "safe",
+		},
+		{
+			name:       "GreaterThanOperator",
+			celExpr:    `event.fileSize > 1024`,
+			actionType: v1alpha1.ActionTypeAlert,
+			severity:   v1alpha1.SeverityMedium,
+			wantField:  "event.fileSize",
+			wantOp:     ">",
+			wantValue:  "1024",
+		},
+		{
+			name:       "LessThanOperator",
+			celExpr:    `event.fileSize < 512`,
+			actionType: v1alpha1.ActionTypeAlert,
+			severity:   v1alpha1.SeverityLow,
+			wantField:  "event.fileSize",
+			wantOp:     "<",
+			wantValue:  "512",
+		},
+	}
 
 	compiler := NewPolicyCompiler()
-	compiled, err := compiler.Compile(policy)
-	if err != nil {
-		t.Fatalf("Compile() unexpected error: %v", err)
-	}
-	pred := compiled.Rules[0].Predicates[0]
-	if pred.FieldPath != "event.processName" {
-		t.Errorf("FieldPath = %q, want %q", pred.FieldPath, "event.processName")
-	}
-	if pred.Operator != "==" {
-		t.Errorf("Operator = %q, want %q", pred.Operator, "==")
-	}
-	if pred.Value != "curl" {
-		t.Errorf("Value = %q, want %q", pred.Value, "curl")
-	}
-}
 
-func TestPredicateParsing_InequalityOperator(t *testing.T) {
-	policy := newTestPolicy("neq-parse", "default", 100, []v1alpha1.PolicyRule{
-		{
-			Name: "neq-rule",
-			Trigger: v1alpha1.Trigger{
-				EventCategory:    "kernel",
-				EventSubcategory: "process_exec",
-			},
-			Predicates: []v1alpha1.Predicate{
-				{CEL: `event.processName != "safe"`},
-			},
-			Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeDeny},
-			Severity: v1alpha1.SeverityHigh,
-		},
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pol := newTestPolicy(tc.name+"-parse", []v1alpha1.PolicyRule{
+				{
+					Name: tc.name + "-rule",
+					Trigger: v1alpha1.Trigger{
+						EventCategory:    testTriggerKernel,
+						EventSubcategory: "process_exec",
+					},
+					Predicates: []v1alpha1.Predicate{
+						{CEL: tc.celExpr},
+					},
+					Action:   v1alpha1.Action{Type: tc.actionType},
+					Severity: tc.severity,
+				},
+			})
 
-	compiler := NewPolicyCompiler()
-	compiled, err := compiler.Compile(policy)
-	if err != nil {
-		t.Fatalf("Compile() unexpected error: %v", err)
-	}
-	pred := compiled.Rules[0].Predicates[0]
-	if pred.FieldPath != "event.processName" {
-		t.Errorf("FieldPath = %q, want %q", pred.FieldPath, "event.processName")
-	}
-	if pred.Operator != "!=" {
-		t.Errorf("Operator = %q, want %q", pred.Operator, "!=")
-	}
-	if pred.Value != "safe" {
-		t.Errorf("Value = %q, want %q", pred.Value, "safe")
-	}
-}
-
-func TestPredicateParsing_GreaterThanOperator(t *testing.T) {
-	policy := newTestPolicy("gt-parse", "default", 100, []v1alpha1.PolicyRule{
-		{
-			Name: "gt-rule",
-			Trigger: v1alpha1.Trigger{
-				EventCategory:    "kernel",
-				EventSubcategory: "process_exec",
-			},
-			Predicates: []v1alpha1.Predicate{
-				{CEL: `event.fileSize > 1024`},
-			},
-			Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeAlert},
-			Severity: v1alpha1.SeverityMedium,
-		},
-	})
-
-	compiler := NewPolicyCompiler()
-	compiled, err := compiler.Compile(policy)
-	if err != nil {
-		t.Fatalf("Compile() unexpected error: %v", err)
-	}
-	pred := compiled.Rules[0].Predicates[0]
-	if pred.FieldPath != "event.fileSize" {
-		t.Errorf("FieldPath = %q, want %q", pred.FieldPath, "event.fileSize")
-	}
-	if pred.Operator != ">" {
-		t.Errorf("Operator = %q, want %q", pred.Operator, ">")
-	}
-	if pred.Value != "1024" {
-		t.Errorf("Value = %q, want %q", pred.Value, "1024")
-	}
-}
-
-func TestPredicateParsing_LessThanOperator(t *testing.T) {
-	policy := newTestPolicy("lt-parse", "default", 100, []v1alpha1.PolicyRule{
-		{
-			Name: "lt-rule",
-			Trigger: v1alpha1.Trigger{
-				EventCategory:    "kernel",
-				EventSubcategory: "process_exec",
-			},
-			Predicates: []v1alpha1.Predicate{
-				{CEL: `event.fileSize < 512`},
-			},
-			Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeAlert},
-			Severity: v1alpha1.SeverityLow,
-		},
-	})
-
-	compiler := NewPolicyCompiler()
-	compiled, err := compiler.Compile(policy)
-	if err != nil {
-		t.Fatalf("Compile() unexpected error: %v", err)
-	}
-	pred := compiled.Rules[0].Predicates[0]
-	if pred.FieldPath != "event.fileSize" {
-		t.Errorf("FieldPath = %q, want %q", pred.FieldPath, "event.fileSize")
-	}
-	if pred.Operator != "<" {
-		t.Errorf("Operator = %q, want %q", pred.Operator, "<")
-	}
-	if pred.Value != "512" {
-		t.Errorf("Value = %q, want %q", pred.Value, "512")
+			compiled, err := compiler.Compile(pol)
+			if err != nil {
+				t.Fatalf("Compile() unexpected error: %v", err)
+			}
+			pred := compiled.Rules[0].Predicates[0]
+			if pred.FieldPath != tc.wantField {
+				t.Errorf("FieldPath = %q, want %q", pred.FieldPath, tc.wantField)
+			}
+			if pred.Operator != tc.wantOp {
+				t.Errorf("Operator = %q, want %q", pred.Operator, tc.wantOp)
+			}
+			if pred.Value != tc.wantValue {
+				t.Errorf("Value = %q, want %q", pred.Value, tc.wantValue)
+			}
+		})
 	}
 }
 
@@ -773,7 +742,7 @@ func TestPredicateParsing_LessThanOperator(t *testing.T) {
 // expressions (which previously fell through to "raw" operator) now produce
 // a CompilationError instead of silently passing.
 func TestPredicateParsing_InvalidCELReturnsError(t *testing.T) {
-	policy := newTestPolicy("raw-parse", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("raw-parse", []v1alpha1.PolicyRule{
 		{
 			Name: "raw-rule",
 			Trigger: v1alpha1.Trigger{
@@ -799,7 +768,7 @@ func TestPredicateParsing_InvalidCELReturnsError(t *testing.T) {
 }
 
 func TestCompiler_UnknownEventSubcategory(t *testing.T) {
-	policy := newTestPolicy("unknown-sub", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("unknown-sub", []v1alpha1.PolicyRule{
 		{
 			Name: "bad-sub-rule",
 			Trigger: v1alpha1.Trigger{
@@ -823,7 +792,7 @@ func TestCompiler_UnknownEventSubcategory(t *testing.T) {
 }
 
 func TestCompiler_GlobWildcardSubcategory(t *testing.T) {
-	policy := newTestPolicy("glob-sub", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("glob-sub", []v1alpha1.PolicyRule{
 		{
 			Name: "glob-sub-rule",
 			Trigger: v1alpha1.Trigger{
@@ -843,7 +812,7 @@ func TestCompiler_GlobWildcardSubcategory(t *testing.T) {
 }
 
 func TestCompiler_EmptySubcategory(t *testing.T) {
-	policy := newTestPolicy("empty-sub", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("empty-sub", []v1alpha1.PolicyRule{
 		{
 			Name: "empty-sub-rule",
 			Trigger: v1alpha1.Trigger{
@@ -863,7 +832,7 @@ func TestCompiler_EmptySubcategory(t *testing.T) {
 }
 
 func TestCompiler_TargetSelectorPreserved(t *testing.T) {
-	policy := newTestPolicy("labels-test", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("labels-test", []v1alpha1.PolicyRule{
 		{
 			Name: "rule-1",
 			Trigger: v1alpha1.Trigger{
@@ -896,7 +865,7 @@ func TestCompiler_TargetSelectorPreserved(t *testing.T) {
 }
 
 func TestCompiler_ActionParametersPreserved(t *testing.T) {
-	policy := newTestPolicy("params-test", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("params-test", []v1alpha1.PolicyRule{
 		{
 			Name: "rate-limit-rule",
 			Trigger: v1alpha1.Trigger{
@@ -929,7 +898,7 @@ func TestCompiler_ActionParametersPreserved(t *testing.T) {
 }
 
 func TestCompiler_RuleIndexAssignment(t *testing.T) {
-	policy := newTestPolicy("index-test", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("index-test", []v1alpha1.PolicyRule{
 		{
 			Name:     "rule-0",
 			Trigger:  v1alpha1.Trigger{EventCategory: "kernel", EventSubcategory: "process_exec"},
@@ -963,7 +932,7 @@ func TestCompiler_RuleIndexAssignment(t *testing.T) {
 }
 
 func TestCompiler_SeverityPreserved(t *testing.T) {
-	policy := newTestPolicy("severity-test", "default", 100, []v1alpha1.PolicyRule{
+	policy := newTestPolicy("severity-test", []v1alpha1.PolicyRule{
 		{
 			Name:     "critical-rule",
 			Trigger:  v1alpha1.Trigger{EventCategory: "kernel", EventSubcategory: "process_exec"},
@@ -983,7 +952,7 @@ func TestCompiler_SeverityPreserved(t *testing.T) {
 }
 
 func TestCompiler_EmptyRulesListCompiles(t *testing.T) {
-	policy := newTestPolicy("empty-rules", "default", 100, []v1alpha1.PolicyRule{})
+	policy := newTestPolicy("empty-rules", []v1alpha1.PolicyRule{})
 
 	compiler := NewPolicyCompiler()
 	compiled, err := compiler.Compile(policy)
@@ -1004,7 +973,8 @@ func TestCompilationError_ErrorWithRuleName(t *testing.T) {
 		Message:    "unknown layer",
 	}
 	got := err.Error()
-	want := `compilation error in policy "my-policy", rule "my-rule" (index 2), field "trigger.eventCategory": unknown layer`
+	want := `compilation error in policy "my-policy", ` +
+		`rule "my-rule" (index 2), field "trigger.eventCategory": unknown layer`
 	if got != want {
 		t.Errorf("Error() = %q, want %q", got, want)
 	}
@@ -1051,7 +1021,7 @@ func TestCompilationError_UnwrapNilCause(t *testing.T) {
 func TestCompileRateLimit_GroupByParameter(t *testing.T) {
 	for _, groupBy := range []string{"agent", "tool", "agent+tool"} {
 		t.Run("groupBy="+groupBy, func(t *testing.T) {
-			pol := newTestPolicy("rate-policy", "default", 100, []v1alpha1.PolicyRule{
+			pol := newTestPolicy("rate-policy", []v1alpha1.PolicyRule{
 				{
 					Name: "rate-rule",
 					Trigger: v1alpha1.Trigger{
@@ -1084,7 +1054,7 @@ func TestCompileRateLimit_GroupByParameter(t *testing.T) {
 }
 
 func TestCompileRateLimit_DefaultGroupBy(t *testing.T) {
-	pol := newTestPolicy("rate-policy", "default", 100, []v1alpha1.PolicyRule{
+	pol := newTestPolicy("rate-policy", []v1alpha1.PolicyRule{
 		{
 			Name: "rate-rule",
 			Trigger: v1alpha1.Trigger{
@@ -1117,7 +1087,7 @@ func TestValidTriggerLayers_LLMLayer(t *testing.T) {
 	// Verify llm_request, llm_response, llm_response_chunk are valid under "llm" layer
 	llmSubcategories := []string{"llm_request", "llm_response", "llm_response_chunk"}
 	for _, sub := range llmSubcategories {
-		pol := newTestPolicy("llm-layer-test", "default", 100, []v1alpha1.PolicyRule{
+		pol := newTestPolicy("llm-layer-test", []v1alpha1.PolicyRule{
 			{
 				Name: "test-rule",
 				Trigger: v1alpha1.Trigger{
@@ -1141,7 +1111,7 @@ func TestValidTriggerLayers_ProtocolLayer_NoLLM(t *testing.T) {
 	// Verify llm_request, llm_response, llm_response_chunk are NOT valid under "protocol" layer
 	llmSubcategories := []string{"llm_request", "llm_response", "llm_response_chunk"}
 	for _, sub := range llmSubcategories {
-		pol := newTestPolicy("protocol-no-llm-test", "default", 100, []v1alpha1.PolicyRule{
+		pol := newTestPolicy("protocol-no-llm-test", []v1alpha1.PolicyRule{
 			{
 				Name: "test-rule",
 				Trigger: v1alpha1.Trigger{
@@ -1162,7 +1132,7 @@ func TestValidTriggerLayers_ProtocolLayer_NoLLM(t *testing.T) {
 }
 
 func TestCompile_RejectsOldProtocolLLM(t *testing.T) {
-	pol := newTestPolicy("old-protocol-test", "default", 100, []v1alpha1.PolicyRule{
+	pol := newTestPolicy("old-protocol-test", []v1alpha1.PolicyRule{
 		{
 			Name: "old-style-rule",
 			Trigger: v1alpha1.Trigger{
@@ -1186,7 +1156,7 @@ func TestCompile_RejectsOldProtocolLLM(t *testing.T) {
 }
 
 func TestCompile_AcceptsNewLLMLayer(t *testing.T) {
-	pol := newTestPolicy("new-llm-test", "default", 100, []v1alpha1.PolicyRule{
+	pol := newTestPolicy("new-llm-test", []v1alpha1.PolicyRule{
 		{
 			Name: "llm-layer-rule",
 			Trigger: v1alpha1.Trigger{
@@ -1203,7 +1173,7 @@ func TestCompile_AcceptsNewLLMLayer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected successful compilation for llm/llm_request, got error: %v", err)
 	}
-	if compiled.Rules[0].TriggerLayer != "llm" {
+	if compiled.Rules[0].TriggerLayer != testTriggerLLM {
 		t.Errorf("expected TriggerLayer=%q, got %q", "llm", compiled.Rules[0].TriggerLayer)
 	}
 	if compiled.Rules[0].TriggerEvent != "llm_request" {

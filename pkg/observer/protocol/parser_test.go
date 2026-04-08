@@ -21,6 +21,11 @@ import (
 	"testing"
 )
 
+const testMethodToolsCall = "tools/call"
+
+// --- Mock ProtocolParser Implementation ---
+
+
 // mockParser is a test double implementing ProtocolParser.
 type mockParser struct {
 	name        string
@@ -54,7 +59,9 @@ func (m *mockParser) Detect(headers map[string]string, path string, method strin
 	return m.canDetect, m.confidence
 }
 
-func (m *mockParser) ProcessRequest(ctx context.Context, headers map[string]string, body []byte) (*ParsedRequest, error) {
+func (m *mockParser) ProcessRequest(
+	ctx context.Context, headers map[string]string, body []byte,
+) (*ParsedRequest, error) {
 	m.reqCalled++
 	if m.reqErr != nil {
 		return nil, m.reqErr
@@ -68,7 +75,9 @@ func (m *mockParser) ProcessRequest(ctx context.Context, headers map[string]stri
 	}, nil
 }
 
-func (m *mockParser) ProcessResponse(ctx context.Context, headers map[string]string, body []byte) (*ParsedResponse, error) {
+func (m *mockParser) ProcessResponse(
+	ctx context.Context, headers map[string]string, body []byte,
+) (*ParsedResponse, error) {
 	m.respCalled++
 	if m.respErr != nil {
 		return nil, m.respErr
@@ -216,15 +225,15 @@ func TestStreamState_StatefulTracking(t *testing.T) {
 
 	// Simulate buffering a partial JSON payload
 	state.Buffer = []byte(`{"jsonrpc":"2.0","method":"tools`)
-	state.PendingIDs["req-1"] = "tools/call"
+	state.PendingIDs["req-1"] = testMethodToolsCall
 	state.Metadata["chunk_count"] = "1"
 
 	// Verify state is preserved
 	if string(state.Buffer) != `{"jsonrpc":"2.0","method":"tools` {
 		t.Errorf("Buffer = %q, want partial JSON", string(state.Buffer))
 	}
-	if state.PendingIDs["req-1"] != "tools/call" {
-		t.Errorf("PendingIDs[req-1] = %q, want %q", state.PendingIDs["req-1"], "tools/call")
+	if state.PendingIDs["req-1"] != testMethodToolsCall {
+		t.Errorf("PendingIDs[req-1] = %q, want %q", state.PendingIDs["req-1"], testMethodToolsCall)
 	}
 	if state.Metadata["chunk_count"] != "1" {
 		t.Errorf("Metadata[chunk_count] = %q, want %q", state.Metadata["chunk_count"], "1")
@@ -248,7 +257,7 @@ func TestStreamState_MultipleRequestCorrelation(t *testing.T) {
 
 	state.PendingIDs["1"] = "initialize"
 	state.PendingIDs["2"] = "tools/list"
-	state.PendingIDs["3"] = "tools/call"
+	state.PendingIDs["3"] = testMethodToolsCall
 
 	if len(state.PendingIDs) != 3 {
 		t.Fatalf("PendingIDs length = %d, want 3", len(state.PendingIDs))

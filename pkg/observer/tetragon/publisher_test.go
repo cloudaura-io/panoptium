@@ -81,9 +81,23 @@ func TestPublisherPipeline(t *testing.T) {
 
 	// Feed events through the pipeline.
 	rawEvents := []*RawEvent{
-		{Type: EventTypeProcessExec, ProcessPID: 100, ProcessComm: "proc1", Namespace: "default", PodName: "pod1", Timestamp: 1000000000},
-		{Type: EventTypeProcessKprobe, ProcessPID: 200, ProcessComm: "proc2", KprobeFunc: "sys_openat", Namespace: "default", PodName: "pod2", Timestamp: 2000000000},
-		{Type: EventTypeProcessKprobe, ProcessPID: 300, ProcessComm: "proc3", KprobeFunc: "sys_connect", Namespace: "default", PodName: "pod3", Timestamp: 3000000000},
+		{
+			Type: EventTypeProcessExec, ProcessPID: 100,
+			ProcessComm: "proc1", Namespace: "default",
+			PodName: "pod1", Timestamp: 1000000000,
+		},
+		{
+			Type: EventTypeProcessKprobe, ProcessPID: 200,
+			ProcessComm: "proc2", KprobeFunc: "sys_openat",
+			Namespace: "default", PodName: "pod2",
+			Timestamp: 2000000000,
+		},
+		{
+			Type: EventTypeProcessKprobe, ProcessPID: 300,
+			ProcessComm: "proc3", KprobeFunc: "sys_connect",
+			Namespace: "default", PodName: "pod3",
+			Timestamp: 3000000000,
+		},
 	}
 
 	for _, evt := range rawEvents {

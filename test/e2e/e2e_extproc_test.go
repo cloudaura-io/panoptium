@@ -129,9 +129,9 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 
 			By("creating a persistent curl pod for the streaming request")
 			podName := fmt.Sprintf("openai-test-%d", time.Now().UnixNano()%100000)
-			createPersistentCurlPodWithName(podName, namespace)
+			createPersistentCurlPodWithName(podName)
 			DeferCleanup(func() {
-				deletePersistentCurlPod(podName, namespace)
+				deletePersistentCurlPod(podName)
 			})
 
 			By("sending a streaming /v1/chat/completions request through AgentGateway")
@@ -161,9 +161,9 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 
 			By("creating a persistent curl pod for the second streaming request")
 			podName := fmt.Sprintf("second-test-%d", time.Now().UnixNano()%100000)
-			createPersistentCurlPodWithName(podName, namespace)
+			createPersistentCurlPodWithName(podName)
 			DeferCleanup(func() {
-				deletePersistentCurlPod(podName, namespace)
+				deletePersistentCurlPod(podName)
 			})
 
 			By("sending a second streaming /v1/chat/completions request with a different agent ID")
@@ -191,7 +191,6 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 				"panoptium_extproc_requests_total",
 				map[string]string{"provider": "openai"},
 				1,
-				2*time.Minute,
 			)
 			Expect(met).To(BeTrue(),
 				fmt.Sprintf("Expected panoptium_extproc_requests_total{provider=openai} >= 1, got %v", value))
@@ -203,7 +202,6 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 				"panoptium_extproc_tokens_observed_total",
 				map[string]string{"provider": "openai"},
 				1,
-				2*time.Minute,
 			)
 			Expect(met).To(BeTrue(),
 				fmt.Sprintf("Expected panoptium_extproc_tokens_observed_total{provider=openai} > 0, got %v", value))
@@ -215,7 +213,6 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 				"panoptium_extproc_requests_total",
 				map[string]string{"provider": "openai"},
 				2,
-				2*time.Minute,
 			)
 			Expect(met).To(BeTrue(),
 				fmt.Sprintf("Expected panoptium_extproc_requests_total{provider=openai} >= 2, got %v", value))
@@ -227,7 +224,6 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 				"panoptium_agent_identity_resolution_total",
 				nil, // match any labels
 				1,
-				2*time.Minute,
 			)
 			Expect(met).To(BeTrue(),
 				fmt.Sprintf("Expected panoptium_agent_identity_resolution_total >= 1, got %v", value))
@@ -269,12 +265,12 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 			Expect(gwIP).NotTo(BeEmpty(), "Gateway service IP should be available")
 
 			By("sending a request from an enrolled persistent curl pod")
-			podName := createPersistentCurlPod(namespace)
+			podName := createPersistentCurlPod()
 			DeferCleanup(func() {
-				deletePersistentCurlPod(podName, namespace)
+				deletePersistentCurlPod(podName)
 			})
 
-			statusCode, _, err := execToolCallRequest(podName, gwIP, "test-identity-tool", nil)
+			statusCode, _, err := execToolCallRequest(podName, gwIP, "test-identity-tool")
 			Expect(err).NotTo(HaveOccurred(), "request via persistent pod should succeed")
 			Expect(statusCode).To(Or(Equal(200), Equal(0)),
 				"enrolled pod request should not be rejected")
@@ -284,7 +280,6 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 				"panoptium_agent_identity_resolution_total",
 				map[string]string{"method": "pod", "result": "success"},
 				1,
-				2*time.Minute,
 			)
 			Expect(met).To(BeTrue(),
 				fmt.Sprintf("Expected panoptium_agent_identity_resolution_total{method=pod,result=success} >= 1, got %v", value))
@@ -308,9 +303,9 @@ var _ = Describe("ExtProc E2E", Label("e2e-extproc"), Ordered, func() {
 
 			By("creating a persistent curl pod for concurrent requests")
 			podName := fmt.Sprintf("concurrent-test-%d", time.Now().UnixNano()%100000)
-			createPersistentCurlPodWithName(podName, namespace)
+			createPersistentCurlPodWithName(podName)
 			DeferCleanup(func() {
-				deletePersistentCurlPod(podName, namespace)
+				deletePersistentCurlPod(podName)
 			})
 
 			agentIDs := []string{"agent-alpha", "agent-beta", "agent-gamma"}

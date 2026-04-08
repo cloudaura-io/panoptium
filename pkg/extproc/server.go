@@ -43,6 +43,13 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
+const (
+	// subcategoryLLMResponseChunk is the policy event subcategory for streaming response chunks.
+	subcategoryLLMResponseChunk = "llm_response_chunk"
+	// subcategoryLLMResponse is the policy event subcategory for complete responses.
+	subcategoryLLMResponse = "llm_response"
+)
+
 // PolicyEvaluator is the interface used by the ExtProc server to evaluate
 // request events against compiled policies. It decouples the ExtProc server
 // from the policy engine implementation, enabling testability via mock
@@ -76,7 +83,11 @@ type ExtProcServer struct {
 // NewExtProcServer creates a new ExtProcServer with the given dependencies.
 // The default enforcement mode is audit (observe-only, no blocking).
 // The default failure mode is fail-open (pass traffic on engine errors).
-func NewExtProcServer(registry *observer.ObserverRegistry, resolver *identity.Resolver, bus eventbus.EventBus) *ExtProcServer {
+func NewExtProcServer(
+	registry *observer.ObserverRegistry,
+	resolver *identity.Resolver,
+	bus eventbus.EventBus,
+) *ExtProcServer {
 	return &ExtProcServer{
 		registry:        registry,
 		resolver:        resolver,
@@ -220,7 +231,12 @@ func (s *ExtProcServer) Process(stream extprocv3.ExternalProcessor_ProcessServer
 // resolves agent identity via PodCache, and builds the initial ObserverContext.
 // Unknown source IPs proceed with degraded identity; network admission is
 // delegated to Kubernetes NetworkPolicy.
-func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamState, headers *extprocv3.HttpHeaders, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
+func (s *ExtProcServer) handleRequestHeaders(
+	ctx context.Context,
+	state *streamState,
+	headers *extprocv3.HttpHeaders,
+	logger interface{ Info(string, ...interface{}) },
+) *extprocv3.ProcessingResponse {
 	httpHeaders := envoyHeadersToHTTP(headers.GetHeaders())
 
 	path := httpHeaders.Get(":path")
@@ -240,12 +256,8 @@ func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamS
 	// exclusively on semantic/protocol-level enforcement (tool authorization,
 	// rate limiting, threat signatures, content inspection).
 	if agentIdentity.Confidence == eventbus.ConfidenceLow && agentIdentity.SourceIP != "" {
-		if l, ok := logger.(interface {
-			Info(string, ...interface{})
-		}); ok {
-			l.Info("PodCache miss, proceeding with degraded identity",
-				"sourceIP", agentIdentity.SourceIP, "requestID", requestID)
-		}
+		logger.Info("PodCache miss, proceeding with degraded identity",
+			"sourceIP", agentIdentity.SourceIP, "requestID", requestID)
 	}
 
 	// Build observer context
@@ -261,11 +273,8 @@ func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamS
 	if err != nil {
 		if errors.Is(err, observer.ErrNoMatchingObserver) {
 			// No observer matches — log and pass through
-			if l, ok := logger.(interface {
-				Info(string, ...interface{})
-			}); ok {
-				l.Info("no matching observer for request", "path", path, "requestID", requestID)
-			}
+			logger.Info("no matching observer for request",
+				"path", path, "requestID", requestID)
 		}
 		// No observer — all subsequent calls will be pass-through
 		state.obs = nil
@@ -294,7 +303,12 @@ func (s *ExtProcServer) handleRequestHeaders(ctx context.Context, state *streamS
 // handleRequestBody processes incoming request body chunks. It accumulates
 // streamed body data and, when the body is complete, delegates to the observer
 // for parsing and emits the LLMRequestStart event.
-func (s *ExtProcServer) handleRequestBody(ctx context.Context, state *streamState, body *extprocv3.HttpBody, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
+func (s *ExtProcServer) handleRequestBody(
+	ctx context.Context,
+	state *streamState,
+	body *extprocv3.HttpBody,
+	logger interface{ Info(string, ...interface{}) },
+) *extprocv3.ProcessingResponse {
 	// Accumulate body chunks
 	state.requestBody = append(state.requestBody, body.GetBody()...)
 
@@ -308,11 +322,7 @@ func (s *ExtProcServer) handleRequestBody(ctx context.Context, state *streamStat
 
 		streamCtx, err := state.obs.ProcessRequestStream(ctx, state.obsCtx)
 		if err != nil {
-			if l, ok := logger.(interface {
-				Info(string, ...interface{})
-			}); ok {
-				l.Info("error processing request stream", "error", err)
-			}
+			logger.Info("error processing request stream", "error", err)
 			RecordParseError(state.streamCtx.Provider, "request")
 		}
 
@@ -385,15 +395,16 @@ func (s *ExtProcServer) handleResponseHeaders(_ *streamState, _ *extprocv3.HttpH
 
 // handleResponseBody processes response body chunks. Each chunk is delegated
 // to the observer for SSE/token parsing.
-func (s *ExtProcServer) handleResponseBody(ctx context.Context, state *streamState, body *extprocv3.HttpBody, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
+func (s *ExtProcServer) handleResponseBody(
+	ctx context.Context,
+	state *streamState,
+	body *extprocv3.HttpBody,
+	logger interface{ Info(string, ...interface{}) },
+) *extprocv3.ProcessingResponse {
 	if state.obs != nil && state.streamCtx != nil {
 		prevTokenCount := state.streamCtx.TokenCount
 		if err := state.obs.ProcessResponseStream(ctx, state.streamCtx, body.GetBody()); err != nil {
-			if l, ok := logger.(interface {
-				Info(string, ...interface{})
-			}); ok {
-				l.Info("error processing response stream", "error", err)
-			}
+			logger.Info("error processing response stream", "error", err)
 			RecordParseError(state.streamCtx.Provider, "response")
 		}
 		// Record any new tokens observed in this chunk
@@ -414,9 +425,9 @@ func (s *ExtProcServer) handleResponseBody(ctx context.Context, state *streamSta
 
 	// Response-path policy evaluation: evaluate each response chunk
 	if s.policyEvaluator != nil && state.streamCtx != nil {
-		subcategory := "llm_response_chunk"
+		subcategory := subcategoryLLMResponseChunk
 		if body.GetEndOfStream() {
-			subcategory = "llm_response"
+			subcategory = subcategoryLLMResponse
 		}
 
 		policyEvent := &policy.PolicyEvent{
@@ -487,7 +498,9 @@ func (s *ExtProcServer) finalizeStream(ctx context.Context, state *streamState) 
 	// Nil out to prevent double-finalize
 	state.obs = nil
 
-	obs.Finalize(ctx, streamCtx, nil)
+	// Finalize error is intentionally ignored: the stream is already ending,
+	// and the observer has emitted all events it can at this point.
+	_ = obs.Finalize(ctx, streamCtx, nil)
 }
 
 // emitRequestStartEvent publishes an LLMRequestStart event using data
@@ -523,7 +536,10 @@ func (s *ExtProcServer) emitRequestStartEvent(state *streamState) {
 // The PolicyEvent is populated with body-derived fields (model, provider,
 // toolName, toolNames) rather than agent-controlled headers, ensuring
 // policy decisions are based on trusted data.
-func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
+func (s *ExtProcServer) evaluateRequestPolicy(
+	state *streamState,
+	logger interface{ Info(string, ...interface{}) },
+) *extprocv3.ProcessingResponse {
 	sc := state.streamCtx
 	agentIdentity := sc.AgentIdentity
 	requestID := sc.RequestID
@@ -596,13 +612,17 @@ func (s *ExtProcServer) evaluateRequestPolicy(state *streamState, logger interfa
 // independently. ALL tools are evaluated without short-circuiting (FR-4).
 // Deny decisions collect tools for stripping. Non-deny decisions (rateLimit,
 // alert) are collected and applied after all tools are evaluated.
-func (s *ExtProcServer) evaluatePerToolPolicy(state *streamState, baseFields map[string]interface{}, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
+func (s *ExtProcServer) evaluatePerToolPolicy(
+	state *streamState,
+	baseFields map[string]interface{},
+	logger interface{ Info(string, ...interface{}) },
+) *extprocv3.ProcessingResponse {
 	sc := state.streamCtx
 	agentIdentity := sc.AgentIdentity
 	requestID := sc.RequestID
 
 	var bannedTools []string
-	var nonDenyDecisions []*policy.Decision // collected for post-loop processing
+	nonDenyDecisions := make([]*policy.Decision, 0, len(sc.ToolNames))
 
 	// FR-4: evaluate ALL tools without short-circuiting
 	for _, toolName := range sc.ToolNames {
@@ -665,29 +685,24 @@ func (s *ExtProcServer) evaluatePerToolPolicy(state *streamState, baseFields map
 				})
 
 				// Increment Prometheus metric
-				RecordToolStripped(toolName, decision.PolicyName, agentIdentity.Namespace, agentIdentity.PodName)
+				RecordToolStripped(
+					toolName, decision.PolicyName,
+					agentIdentity.Namespace, agentIdentity.PodName,
+				)
 
-				if l, ok := logger.(interface {
-					Info(string, ...interface{})
-				}); ok {
-					l.Info("tool stripped by policy",
-						"tool", toolName,
-						"policy", decision.PolicyName,
-						"rule", decision.MatchedRule,
-						"requestID", requestID,
-					)
-				}
+				logger.Info("tool stripped by policy",
+					"tool", toolName,
+					"policy", decision.PolicyName,
+					"rule", decision.MatchedRule,
+					"requestID", requestID,
+				)
 			} else {
-				if l, ok := logger.(interface {
-					Info(string, ...interface{})
-				}); ok {
-					l.Info("tool deny (audit-only, not stripped)",
-						"tool", toolName,
-						"policy", decision.PolicyName,
-						"rule", decision.MatchedRule,
-						"requestID", requestID,
-					)
-				}
+				logger.Info("tool deny (audit-only, not stripped)",
+					"tool", toolName,
+					"policy", decision.PolicyName,
+					"rule", decision.MatchedRule,
+					"requestID", requestID,
+				)
 			}
 			continue
 		}
@@ -711,14 +726,10 @@ func (s *ExtProcServer) evaluatePerToolPolicy(state *streamState, baseFields map
 	if len(bannedTools) > 0 {
 		modified, err := stripToolsFromBody(state.requestBody, bannedTools)
 		if err != nil {
-			if l, ok := logger.(interface {
-				Info(string, ...interface{})
-			}); ok {
-				l.Info("failed to strip tools from request body",
-					"error", err,
-					"requestID", requestID,
-				)
-			}
+			logger.Info("failed to strip tools from request body",
+				"error", err,
+				"requestID", requestID,
+			)
 			// On strip failure, forward original body
 			return nil
 		}
@@ -731,7 +742,11 @@ func (s *ExtProcServer) evaluatePerToolPolicy(state *streamState, baseFields map
 
 // emitPerToolDecisionEvent emits a policy.decision event for a per-tool
 // deny decision, including tool name in the reason and escalation parameters.
-func (s *ExtProcServer) emitPerToolDecisionEvent(decision *policy.Decision, agentIdentity eventbus.AgentIdentity, requestID, toolName string) {
+func (s *ExtProcServer) emitPerToolDecisionEvent(
+	decision *policy.Decision,
+	agentIdentity eventbus.AgentIdentity,
+	requestID, toolName string,
+) {
 	ruleRef := formatRuleReference(decision.PolicyNamespace, decision.PolicyName, decision.MatchedRuleIndex)
 
 	// Parse escalation parameters from the policy action (if present)
@@ -778,7 +793,11 @@ func (s *ExtProcServer) emitPerToolDecisionEvent(decision *policy.Decision, agen
 // evaluateResponseToolCalls checks the StreamContext for newly completed
 // tool calls in the response stream and evaluates each against the policy
 // engine. Returns an ImmediateResponse if a tool call should be blocked.
-func (s *ExtProcServer) evaluateResponseToolCalls(ctx context.Context, state *streamState, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
+func (s *ExtProcServer) evaluateResponseToolCalls(
+	ctx context.Context,
+	state *streamState,
+	logger interface{ Info(string, ...interface{}) },
+) *extprocv3.ProcessingResponse {
 	sc := state.streamCtx
 	if sc == nil {
 		return nil
@@ -837,15 +856,17 @@ func (s *ExtProcServer) evaluateResponseToolCalls(ctx context.Context, state *st
 // configured failure mode. In fail-open mode, it emits a warning event
 // and returns nil (pass-through). In fail-closed mode, it emits an error
 // event and returns a 503 ImmediateResponse.
-func (s *ExtProcServer) handleEvaluationError(err error, agentIdentity eventbus.AgentIdentity, requestID string, logger interface{ Info(string, ...interface{}) }) *extprocv3.ProcessingResponse {
+func (s *ExtProcServer) handleEvaluationError(
+	err error,
+	agentIdentity eventbus.AgentIdentity,
+	requestID string,
+	logger interface{ Info(string, ...interface{}) },
+) *extprocv3.ProcessingResponse {
 	switch s.failureMode {
 	case enforce.FailClosed:
-		if l, ok := logger.(interface {
-			Info(string, ...interface{})
-		}); ok {
-			l.Info("policy evaluation error (fail-closed: returning 503)",
-				"error", err, "requestID", requestID)
-		}
+		logger.Info(
+			"policy evaluation error (fail-closed: returning 503)",
+			"error", err, "requestID", requestID)
 		s.bus.Emit(&eventbus.EnforcementEvent{
 			BaseEvent: eventbus.BaseEvent{
 				Type:      eventbus.EventTypeEnforcementUnavailable,
@@ -861,12 +882,9 @@ func (s *ExtProcServer) handleEvaluationError(err error, agentIdentity eventbus.
 		)
 
 	default: // FailOpen
-		if l, ok := logger.(interface {
-			Info(string, ...interface{})
-		}); ok {
-			l.Info("policy evaluation error (fail-open: passing through)",
-				"error", err, "requestID", requestID)
-		}
+		logger.Info(
+			"policy evaluation error (fail-open: passing through)",
+			"error", err, "requestID", requestID)
 		s.bus.Emit(&eventbus.EnforcementEvent{
 			BaseEvent: eventbus.BaseEvent{
 				Type:      eventbus.EventTypeEnforcementBypass,
@@ -888,7 +906,11 @@ func (s *ExtProcServer) handleEvaluationError(err error, agentIdentity eventbus.
 //
 // Global enforcement mode takes precedence: if the server-level mode is "audit",
 // all decisions are treated as audit-only regardless of per-policy enforcement mode.
-func (s *ExtProcServer) applyEnforcementDecision(decision *policy.Decision, agentIdentity eventbus.AgentIdentity, requestID string) *extprocv3.ProcessingResponse {
+func (s *ExtProcServer) applyEnforcementDecision(
+	decision *policy.Decision,
+	agentIdentity eventbus.AgentIdentity,
+	requestID string,
+) *extprocv3.ProcessingResponse {
 	// Global audit mode override: when the server is in audit mode, force all
 	// decisions to audit-only, even if the per-policy mode is "enforcing".
 	if s.enforcementMode == enforce.ModeAudit {

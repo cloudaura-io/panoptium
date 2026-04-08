@@ -136,7 +136,7 @@ func (p *Publisher) Metrics() *PublisherMetrics {
 }
 
 // worker processes events from the channel.
-func (p *Publisher) worker(ctx context.Context, id int) {
+func (p *Publisher) worker(ctx context.Context, _ int) {
 	defer p.wg.Done()
 
 	for {

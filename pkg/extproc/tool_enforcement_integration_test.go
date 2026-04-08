@@ -33,7 +33,9 @@ import (
 )
 
 // setupIntegrationTestComponents creates test infrastructure for integration tests.
-func setupIntegrationTestComponents(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
+func setupIntegrationTestComponents(
+	t *testing.T, evaluator PolicyEvaluator,
+) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
 
 	bus := eventbus.NewSimpleBus()
@@ -338,65 +340,6 @@ func TestIntegration_ResponsePath_AllowedToolCallPassThrough(t *testing.T) {
 	// Should also pass through
 	if resp2.GetImmediateResponse() != nil {
 		t.Fatal("expected pass-through on finish, got ImmediateResponse")
-	}
-}
-
-// sendFullRequestAndGetResponseStream_WithIP sends request and response headers
-// through the stream, ready for response body chunks. Uses the given IP.
-func sendFullRequestAndGetResponseStream_WithIP(t *testing.T, stream extprocv3.ExternalProcessor_ProcessClient, toolNames []string, ip string) {
-	t.Helper()
-
-	err := stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestHeaders{
-			RequestHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":path", "/v1/chat/completions",
-					":method", "POST",
-					"host", "api.openai.com",
-					"content-type", "application/json",
-					"x-forwarded-for", ip,
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request headers: %v", err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("failed to receive headers response: %v", err)
-	}
-
-	body := makeOpenAIRequestBodyWithTools("gpt-4", true, toolNames)
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_RequestBody{
-			RequestBody: &extprocv3.HttpBody{
-				Body:        body,
-				EndOfStream: true,
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send request body: %v", err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("failed to receive body response: %v", err)
-	}
-
-	err = stream.Send(&extprocv3.ProcessingRequest{
-		Request: &extprocv3.ProcessingRequest_ResponseHeaders{
-			ResponseHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(
-					":status", "200",
-					"content-type", "text/event-stream",
-				),
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to send response headers: %v", err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("failed to receive response headers response: %v", err)
 	}
 }
 

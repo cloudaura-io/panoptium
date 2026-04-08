@@ -161,8 +161,8 @@ func TestDecisionTree_DefaultAllow(t *testing.T) {
 	if decision.Matched {
 		t.Error("Decision.Matched = true, want false for non-matching event")
 	}
-	if decision.Action.Type != "allow" {
-		t.Errorf("Decision.Action.Type = %q, want %q", decision.Action.Type, "allow")
+	if decision.Action.Type != v1alpha1.ActionTypeAllow {
+		t.Errorf("Decision.Action.Type = %q, want %q", decision.Action.Type, v1alpha1.ActionTypeAllow)
 	}
 	if decision.MatchedRuleIndex != -1 {
 		t.Errorf("Decision.MatchedRuleIndex = %d, want -1", decision.MatchedRuleIndex)
@@ -250,7 +250,7 @@ func TestDecisionTree_MixedTriggerTypes(t *testing.T) {
 			name:          "protocol event matches no rule",
 			category:      "protocol",
 			subcategory:   "tool_call",
-			wantAction:    "allow",
+			wantAction:    v1alpha1.ActionTypeAllow,
 			wantRule:      "",
 			wantRuleIndex: -1,
 			wantMatched:   false,
@@ -412,8 +412,8 @@ func TestDecisionTree_EmptyRules(t *testing.T) {
 	if decision.Matched {
 		t.Error("Decision.Matched = true, want false for empty rules")
 	}
-	if decision.Action.Type != "allow" {
-		t.Errorf("Decision.Action.Type = %q, want %q", decision.Action.Type, "allow")
+	if decision.Action.Type != v1alpha1.ActionTypeAllow {
+		t.Errorf("Decision.Action.Type = %q, want %q", decision.Action.Type, v1alpha1.ActionTypeAllow)
 	}
 }
 
@@ -479,6 +479,62 @@ func TestDecisionTree_InequalityOperator(t *testing.T) {
 	})
 }
 
+// testNumericOperator is a helper that tests a numeric comparison operator (>, <)
+// with int, float64, and non-matching values.
+func testNumericOperator(t *testing.T, compiled *CompiledPolicy, fieldKey string,
+	op string, matchInt int, matchFloat float64, noMatchInt int, falseDesc string) {
+	t.Helper()
+	tree := NewDecisionTree(compiled)
+
+	t.Run(op+" with int field value", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "llm",
+			Subcategory: "completion_receive",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{fieldKey: matchInt},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Errorf("Decision.Matched = false, want true for int %s threshold", op)
+		}
+	})
+
+	t.Run(op+" with float64 field value", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "llm",
+			Subcategory: "completion_receive",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{fieldKey: matchFloat},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if !decision.Matched {
+			t.Errorf("Decision.Matched = false, want true for float64 %s threshold", op)
+		}
+	})
+
+	t.Run(op+" returns false when "+falseDesc+" threshold", func(t *testing.T) {
+		event := &PolicyEvent{
+			Category:    "llm",
+			Subcategory: "completion_receive",
+			Timestamp:   time.Now(),
+			Fields:      map[string]interface{}{fieldKey: noMatchInt},
+		}
+		decision, err := tree.Evaluate(event)
+		if err != nil {
+			t.Fatalf("Evaluate() unexpected error: %v", err)
+		}
+		if decision.Matched {
+			t.Errorf("Decision.Matched = true, want false for value %s threshold", falseDesc)
+		}
+	})
+}
+
 func TestDecisionTree_GreaterThanOperator(t *testing.T) {
 	compiled := &CompiledPolicy{
 		Name:      "gt-test",
@@ -502,56 +558,7 @@ func TestDecisionTree_GreaterThanOperator(t *testing.T) {
 			},
 		},
 	}
-
-	tree := NewDecisionTree(compiled)
-
-	t.Run("greater than with int field value", func(t *testing.T) {
-		event := &PolicyEvent{
-			Category:    "llm",
-			Subcategory: "completion_receive",
-			Timestamp:   time.Now(),
-			Fields:      map[string]interface{}{"tokenCount": 1500},
-		}
-		decision, err := tree.Evaluate(event)
-		if err != nil {
-			t.Fatalf("Evaluate() unexpected error: %v", err)
-		}
-		if !decision.Matched {
-			t.Error("Decision.Matched = false, want true for int > threshold")
-		}
-	})
-
-	t.Run("greater than with float64 field value", func(t *testing.T) {
-		event := &PolicyEvent{
-			Category:    "llm",
-			Subcategory: "completion_receive",
-			Timestamp:   time.Now(),
-			Fields:      map[string]interface{}{"tokenCount": float64(1500.5)},
-		}
-		decision, err := tree.Evaluate(event)
-		if err != nil {
-			t.Fatalf("Evaluate() unexpected error: %v", err)
-		}
-		if !decision.Matched {
-			t.Error("Decision.Matched = false, want true for float64 > threshold")
-		}
-	})
-
-	t.Run("greater than returns false when below threshold", func(t *testing.T) {
-		event := &PolicyEvent{
-			Category:    "llm",
-			Subcategory: "completion_receive",
-			Timestamp:   time.Now(),
-			Fields:      map[string]interface{}{"tokenCount": 500},
-		}
-		decision, err := tree.Evaluate(event)
-		if err != nil {
-			t.Fatalf("Evaluate() unexpected error: %v", err)
-		}
-		if decision.Matched {
-			t.Error("Decision.Matched = true, want false for value < threshold")
-		}
-	})
+	testNumericOperator(t, compiled, "tokenCount", ">", 1500, 1500.5, 500, "below")
 }
 
 func TestDecisionTree_LessThanOperator(t *testing.T) {
@@ -577,56 +584,7 @@ func TestDecisionTree_LessThanOperator(t *testing.T) {
 			},
 		},
 	}
-
-	tree := NewDecisionTree(compiled)
-
-	t.Run("less than with int field value", func(t *testing.T) {
-		event := &PolicyEvent{
-			Category:    "llm",
-			Subcategory: "completion_receive",
-			Timestamp:   time.Now(),
-			Fields:      map[string]interface{}{"latencyMs": 50},
-		}
-		decision, err := tree.Evaluate(event)
-		if err != nil {
-			t.Fatalf("Evaluate() unexpected error: %v", err)
-		}
-		if !decision.Matched {
-			t.Error("Decision.Matched = false, want true for int < threshold")
-		}
-	})
-
-	t.Run("less than with float64 field value", func(t *testing.T) {
-		event := &PolicyEvent{
-			Category:    "llm",
-			Subcategory: "completion_receive",
-			Timestamp:   time.Now(),
-			Fields:      map[string]interface{}{"latencyMs": float64(50.5)},
-		}
-		decision, err := tree.Evaluate(event)
-		if err != nil {
-			t.Fatalf("Evaluate() unexpected error: %v", err)
-		}
-		if !decision.Matched {
-			t.Error("Decision.Matched = false, want true for float64 < threshold")
-		}
-	})
-
-	t.Run("less than returns false when above threshold", func(t *testing.T) {
-		event := &PolicyEvent{
-			Category:    "llm",
-			Subcategory: "completion_receive",
-			Timestamp:   time.Now(),
-			Fields:      map[string]interface{}{"latencyMs": 200},
-		}
-		decision, err := tree.Evaluate(event)
-		if err != nil {
-			t.Fatalf("Evaluate() unexpected error: %v", err)
-		}
-		if decision.Matched {
-			t.Error("Decision.Matched = true, want false for value > threshold")
-		}
-	})
+	testNumericOperator(t, compiled, "latencyMs", "<", 50, 50.5, 200, "above")
 }
 
 func TestDecisionTree_RegexEvaluation(t *testing.T) {
@@ -863,6 +821,30 @@ func TestDecisionTree_RawOperatorRemoved(t *testing.T) {
 	}
 }
 
+// assertNoMatchWithTraceError is a helper that verifies an event evaluation does not match
+// and that the predicate trace contains at least one error entry.
+func assertNoMatchWithTraceError(t *testing.T, compiled *CompiledPolicy, event *PolicyEvent, desc string) {
+	t.Helper()
+	tree := NewDecisionTree(compiled)
+	decision, err := tree.Evaluate(event)
+	if err != nil {
+		t.Fatalf("Evaluate() unexpected error: %v", err)
+	}
+	if decision.Matched {
+		t.Errorf("Decision.Matched = true, want false for %s", desc)
+	}
+	found := false
+	for _, entry := range decision.PredicateTrace {
+		if entry.Error != "" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("PredicateTrace should contain an error for %s", desc)
+	}
+}
+
 func TestDecisionTree_UnknownOperator(t *testing.T) {
 	compiled := &CompiledPolicy{
 		Name:      "unknown-op-test",
@@ -886,33 +868,13 @@ func TestDecisionTree_UnknownOperator(t *testing.T) {
 			},
 		},
 	}
-
-	tree := NewDecisionTree(compiled)
 	event := &PolicyEvent{
 		Category:    "kernel",
 		Subcategory: "process_exec",
 		Timestamp:   time.Now(),
 		Fields:      map[string]interface{}{"field": "value"},
 	}
-	decision, err := tree.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate() unexpected error: %v", err)
-	}
-	// Unknown operator should not match (returns false).
-	if decision.Matched {
-		t.Error("Decision.Matched = true, want false for unknown operator")
-	}
-	// The trace should contain an error entry.
-	found := false
-	for _, entry := range decision.PredicateTrace {
-		if entry.Error != "" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("PredicateTrace should contain an error entry for unknown operator")
-	}
+	assertNoMatchWithTraceError(t, compiled, event, "unknown operator")
 }
 
 func TestDecisionTree_MultiPredicateAND(t *testing.T) {
@@ -1038,7 +1000,8 @@ func TestDecisionTree_PredicateTracePopulated(t *testing.T) {
 		t.Errorf("PredicateTrace[0].RuleName = %q, want %q", decision.PredicateTrace[0].RuleName, "traced-rule")
 	}
 	if decision.PredicateTrace[0].PredicateCEL != `event.processName == "curl"` {
-		t.Errorf("PredicateTrace[0].PredicateCEL = %q, want %q", decision.PredicateTrace[0].PredicateCEL, `event.processName == "curl"`)
+		t.Errorf("PredicateTrace[0].PredicateCEL = %q, want %q",
+			decision.PredicateTrace[0].PredicateCEL, `event.processName == "curl"`)
 	}
 	if !decision.PredicateTrace[0].Matched {
 		t.Error("PredicateTrace[0].Matched = false, want true")
@@ -1239,36 +1202,13 @@ func TestDecisionTree_NumericOperatorWithInvalidPredicateValue(t *testing.T) {
 			},
 		},
 	}
-
-	tree := NewDecisionTree(compiled)
 	event := &PolicyEvent{
 		Category:    "llm",
 		Subcategory: "completion_receive",
 		Timestamp:   time.Now(),
 		Fields:      map[string]interface{}{"tokenCount": 500},
 	}
-	decision, err := tree.Evaluate(event)
-	// The error path: evalNumericComparison returns error when predicate value is invalid.
-	// DecisionTree.Evaluate does not propagate evaluatePredicate errors as return errors;
-	// it records them in the trace. Let's check what actually happens.
-	if err != nil {
-		t.Fatalf("Evaluate() unexpected error: %v", err)
-	}
-	// The predicate should not match because parsing "abc" as float fails.
-	if decision.Matched {
-		t.Error("Decision.Matched = true, want false for invalid predicate value")
-	}
-	// Check trace for error.
-	found := false
-	for _, entry := range decision.PredicateTrace {
-		if entry.Error != "" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("PredicateTrace should contain an error for invalid numeric predicate value")
-	}
+	assertNoMatchWithTraceError(t, compiled, event, "invalid numeric predicate value")
 }
 
 func TestDecisionTree_MissingPrecompiledRegex(t *testing.T) {
@@ -1297,32 +1237,13 @@ func TestDecisionTree_MissingPrecompiledRegex(t *testing.T) {
 			},
 		},
 	}
-
-	tree := NewDecisionTree(compiled)
 	event := &PolicyEvent{
 		Category:    "kernel",
 		Subcategory: "process_exec",
 		Timestamp:   time.Now(),
 		Fields:      map[string]interface{}{"path": "/tmp/test.sh"},
 	}
-	decision, err := tree.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate() unexpected error: %v", err)
-	}
-	if decision.Matched {
-		t.Error("Decision.Matched = true, want false for missing pre-compiled regex")
-	}
-	// Check trace for error.
-	found := false
-	for _, entry := range decision.PredicateTrace {
-		if entry.Error != "" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("PredicateTrace should contain an error for missing pre-compiled regex")
-	}
+	assertNoMatchWithTraceError(t, compiled, event, "missing pre-compiled regex")
 }
 
 func TestDecisionTree_MissingPrecompiledGlob(t *testing.T) {
@@ -1404,31 +1325,13 @@ func TestDecisionTree_MissingPrecompiledCIDR(t *testing.T) {
 			},
 		},
 	}
-
-	tree := NewDecisionTree(compiled)
 	event := &PolicyEvent{
 		Category:    "network",
 		Subcategory: "egress_attempt",
 		Timestamp:   time.Now(),
 		Fields:      map[string]interface{}{"destinationIP": "10.1.2.3"},
 	}
-	decision, err := tree.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate() unexpected error: %v", err)
-	}
-	if decision.Matched {
-		t.Error("Decision.Matched = true, want false for missing pre-compiled CIDR")
-	}
-	found := false
-	for _, entry := range decision.PredicateTrace {
-		if entry.Error != "" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("PredicateTrace should contain an error for missing pre-compiled CIDR")
-	}
+	assertNoMatchWithTraceError(t, compiled, event, "missing pre-compiled CIDR")
 }
 
 func TestDecisionTree_ResolveFieldStripPrefix(t *testing.T) {

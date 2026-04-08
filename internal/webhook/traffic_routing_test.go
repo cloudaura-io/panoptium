@@ -55,7 +55,7 @@ func TestTrafficRouting_InterceptAnnotation_True(t *testing.T) {
 	// Default mode is sidecar; verify sidecar was injected
 	hasSidecar := false
 	for _, c := range pod.Spec.Containers {
-		if c.Name == "panoptium-envoy-sidecar" {
+		if c.Name == envoySidecarContainerName {
 			hasSidecar = true
 			break
 		}
@@ -134,7 +134,7 @@ func TestTrafficRouting_SidecarMode(t *testing.T) {
 	// Verify Envoy sidecar container was injected
 	var sidecar *corev1.Container
 	for i := range pod.Spec.Containers {
-		if pod.Spec.Containers[i].Name == "panoptium-envoy-sidecar" {
+		if pod.Spec.Containers[i].Name == envoySidecarContainerName {
 			sidecar = &pod.Spec.Containers[i]
 			break
 		}
@@ -189,7 +189,7 @@ func TestTrafficRouting_ProxyMode(t *testing.T) {
 
 	// Verify NO sidecar was injected (proxy mode doesn't need one)
 	for _, c := range pod.Spec.Containers {
-		if c.Name == "panoptium-envoy-sidecar" {
+		if c.Name == envoySidecarContainerName {
 			t.Fatal("expected no Envoy sidecar in proxy mode")
 		}
 	}
@@ -278,7 +278,7 @@ func TestTrafficRouting_DefaultModeIsSidecar(t *testing.T) {
 
 	hasSidecar := false
 	for _, c := range pod.Spec.Containers {
-		if c.Name == "panoptium-envoy-sidecar" {
+		if c.Name == envoySidecarContainerName {
 			hasSidecar = true
 		}
 	}

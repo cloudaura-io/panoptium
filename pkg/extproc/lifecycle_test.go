@@ -83,7 +83,7 @@ func TestLifecycleManagerStartAndServe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect to ExtProc server: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Verify the ExtProc service is registered
 	client := extprocv3.NewExternalProcessorClient(conn)
@@ -92,7 +92,7 @@ func TestLifecycleManagerStartAndServe(t *testing.T) {
 		t.Fatalf("failed to open Process stream: %v", err)
 	}
 	// Close the stream gracefully
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Stop by cancelling context
 	cancel()
@@ -122,7 +122,7 @@ func TestLifecycleManagerConfigurablePort(t *testing.T) {
 		t.Fatalf("failed to find free port: %v", err)
 	}
 	port := lis.Addr().(*net.TCPAddr).Port
-	lis.Close()
+	_ = lis.Close()
 
 	cfg := LifecycleConfig{
 		Port:    port,
@@ -243,7 +243,7 @@ func TestLifecycleManagerGracefulShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := extprocv3.NewExternalProcessorClient(conn)
 	stream, err := client.Process(ctx)
@@ -306,7 +306,7 @@ func TestLifecycleManagerHealthCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	healthClient := healthpb.NewHealthClient(conn)
 
@@ -395,7 +395,7 @@ func TestLifecycleManagerHealthCheckNotServingAfterShutdown(t *testing.T) {
 		// Connection failure is expected after shutdown
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	healthClient := healthpb.NewHealthClient(conn)
 	checkCtx, checkCancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -425,24 +425,29 @@ func TestLifecycleConfigDefaults(t *testing.T) {
 	}
 }
 
-// TestLifecycleManagerWithPodCacheInformer verifies that the pod IP cache
-// Informer is started and stopped alongside the lifecycle manager.
-func TestLifecycleManagerWithPodCacheInformer(t *testing.T) {
+// startInformerLifecycleManager is a helper that creates a fake Kubernetes
+// client, pod cache, informer, and lifecycle manager, starts them, and
+// verifies the pod cache is populated. Returns the podCache and a cancel func.
+func startInformerLifecycleManager(
+	t *testing.T,
+	podName, podIP string,
+	readyTimeout time.Duration,
+) (*identity.PodCache, context.CancelFunc, <-chan error) {
+	t.Helper()
+
 	bus := eventbus.NewSimpleBus()
-	defer bus.Close()
+	t.Cleanup(func() { bus.Close() })
 
 	registry := observer.NewObserverRegistry()
 
-	// Create a fake Kubernetes client with a test pod (must have monitored label
-	// for the filtered informer to watch it)
 	fakeClient := fake.NewSimpleClientset(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-agent",
+			Name:      podName,
 			Namespace: "default",
 			Labels:    map[string]string{"app": "agent"},
 		},
 		Status: corev1.PodStatus{
-			PodIP: "10.0.0.1",
+			PodIP: podIP,
 		},
 	})
 
@@ -459,19 +464,27 @@ func TestLifecycleManagerWithPodCacheInformer(t *testing.T) {
 	mgr.SetPodCacheInformer(informer)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- mgr.Start(ctx)
 	}()
 
-	if !mgr.WaitForReady(5 * time.Second) {
+	if !mgr.WaitForReady(readyTimeout) {
 		t.Fatal("lifecycle manager did not become ready in time")
 	}
 
-	// Verify the pod cache was populated by the informer — no sleep needed
-	// because WaitForSync is now called before readyCh is closed
+	return podCache, cancel, errCh
+}
+
+// TestLifecycleManagerWithPodCacheInformer verifies that the pod IP cache
+// Informer is started and stopped alongside the lifecycle manager.
+func TestLifecycleManagerWithPodCacheInformer(t *testing.T) {
+	podCache, cancel, errCh := startInformerLifecycleManager(
+		t, "test-agent", "10.0.0.1", 5*time.Second,
+	)
+	defer cancel()
+
 	info, ok := podCache.Get("10.0.0.1")
 	if !ok {
 		t.Fatal("expected pod cache to contain 10.0.0.1 after informer start")
@@ -483,7 +496,6 @@ func TestLifecycleManagerWithPodCacheInformer(t *testing.T) {
 		t.Errorf("expected namespace 'default', got %q", info.Namespace)
 	}
 
-	// Stop the manager
 	cancel()
 
 	select {
@@ -708,7 +720,7 @@ func TestLifecycleManagerConcurrentStreams(t *testing.T) {
 		}
 	}
 	for _, conn := range conns {
-		conn.Close()
+		_ = conn.Close()
 	}
 
 	cancel()
@@ -762,7 +774,7 @@ func TestLifecycleManagerEnforcementMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := extprocv3.NewExternalProcessorClient(conn)
 	stream, err := client.Process(ctx)
@@ -837,7 +849,10 @@ func TestLifecycleManagerPolicyEvaluator(t *testing.T) {
 
 	evaluator := &mockPolicyEvaluator{
 		decision: &policy.Decision{
-			Action:           policy.CompiledAction{Type: "deny", Parameters: map[string]string{"message": "blocked by lifecycle test"}},
+			Action: policy.CompiledAction{
+				Type:       "deny",
+				Parameters: map[string]string{"message": "blocked by lifecycle test"},
+			},
 			Matched:          true,
 			MatchedRule:      "test-rule",
 			MatchedRuleIndex: 0,
@@ -874,7 +889,7 @@ func TestLifecycleManagerPolicyEvaluator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := extprocv3.NewExternalProcessorClient(conn)
 	stream, err := client.Process(ctx)
@@ -916,53 +931,18 @@ func TestLifecycleManagerPolicyEvaluator(t *testing.T) {
 // informer.WaitForSync() before signaling ready, so the PodCache is fully
 // populated the instant WaitForReady returns — with no sleep workaround needed.
 func TestLifecycleManagerWaitForSyncBeforeReady(t *testing.T) {
-	bus := eventbus.NewSimpleBus()
-	defer bus.Close()
-
-	registry := observer.NewObserverRegistry()
-
-	// Create a fake Kubernetes client with a test pod
-	fakeClient := fake.NewSimpleClientset(&corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "sync-agent",
-			Namespace: "default",
-			Labels:    map[string]string{"app": "agent"},
-		},
-		Status: corev1.PodStatus{
-			PodIP: "10.0.0.50",
-		},
-	})
-
-	podCache := identity.NewPodCache()
-	informer := identity.NewPodCacheInformer(fakeClient, podCache)
-	resolver := identity.NewResolver(podCache)
-
-	cfg := LifecycleConfig{
-		Port:    0,
-		Enabled: true,
-	}
-
-	mgr := NewLifecycleManager(cfg, registry, resolver, bus)
-	mgr.SetPodCacheInformer(informer)
-
-	ctx, cancel := context.WithCancel(context.Background())
+	podCache, cancel, errCh := startInformerLifecycleManager(
+		t, "sync-agent", "10.0.0.50", 10*time.Second,
+	)
 	defer cancel()
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- mgr.Start(ctx)
-	}()
-
-	if !mgr.WaitForReady(10 * time.Second) {
-		t.Fatal("lifecycle manager did not become ready in time")
-	}
 
 	// CRITICAL: immediately after WaitForReady, with NO sleep, the pod cache
 	// must already be populated. This fails if Start() does not call
 	// informer.WaitForSync() before close(m.readyCh).
 	info, ok := podCache.Get("10.0.0.50")
 	if !ok {
-		t.Fatal("PodCache must contain 10.0.0.50 immediately after WaitForReady (no sleep) — WaitForSync not called before readyCh")
+		t.Fatal("PodCache must contain 10.0.0.50 immediately after WaitForReady " +
+			"(no sleep) — WaitForSync not called before readyCh")
 	}
 	if info.Name != "sync-agent" {
 		t.Errorf("expected pod name 'sync-agent', got %q", info.Name)

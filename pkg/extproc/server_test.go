@@ -52,9 +52,7 @@ func startTestServer(t *testing.T, srv *ExtProcServer) (extprocv3.ExternalProces
 	extprocv3.RegisterExternalProcessorServer(grpcServer, srv)
 
 	go func() {
-		if err := grpcServer.Serve(lis); err != nil {
-			// Server stopped, expected during cleanup
-		}
+		_ = grpcServer.Serve(lis) // error expected during cleanup
 	}()
 
 	conn, err := grpc.NewClient(
@@ -69,7 +67,7 @@ func startTestServer(t *testing.T, srv *ExtProcServer) (extprocv3.ExternalProces
 	client := extprocv3.NewExternalProcessorClient(conn)
 
 	cleanup := func() {
-		conn.Close()
+		_ = conn.Close()
 		grpcServer.Stop()
 	}
 
@@ -143,7 +141,9 @@ func makeAnthropicRequestBody(model string, stream bool) []byte {
 }
 
 // setupTestComponents creates all the common test infrastructure.
-func setupTestComponents(t *testing.T) (*eventbus.SimpleBus, *observer.ObserverRegistry, *identity.Resolver, *ExtProcServer) {
+func setupTestComponents(
+	t *testing.T,
+) (*eventbus.SimpleBus, *ExtProcServer) {
 	t.Helper()
 
 	bus := eventbus.NewSimpleBus()
@@ -164,14 +164,14 @@ func setupTestComponents(t *testing.T) (*eventbus.SimpleBus, *observer.ObserverR
 
 	srv := NewExtProcServer(registry, resolver, bus)
 
-	return bus, registry, resolver, srv
+	return bus, srv
 }
 
 // TestProcess_BidirectionalStream verifies the ExtProc server handles
 // a full bidirectional stream lifecycle: request headers, request body,
 // response headers, response body chunks, and end-of-stream.
-func TestProcess_BidirectionalStream(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+func TestProcess_BidirectionalStream(t *testing.T) { //nolint:gocyclo // integration test covers full stream lifecycle
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -213,7 +213,7 @@ func TestProcess_BidirectionalStream(t *testing.T) {
 	}
 
 	// 2. Send request body
-	reqBody := makeOpenAIRequestBody("gpt-4", true)
+	reqBody := makeOpenAIRequestBody(testModelGPT4, true)
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
@@ -353,7 +353,7 @@ done:
 // TestProcess_RequestHeaderExtraction verifies that request headers are correctly
 // extracted and delegated to the ObserverRegistry for observer selection.
 func TestProcess_RequestHeaderExtraction(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -395,7 +395,7 @@ func TestProcess_RequestHeaderExtraction(t *testing.T) {
 	}
 
 	// Send request body
-	reqBody := makeOpenAIRequestBody("gpt-4", true)
+	reqBody := makeOpenAIRequestBody(testModelGPT4, true)
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
@@ -414,7 +414,7 @@ func TestProcess_RequestHeaderExtraction(t *testing.T) {
 	}
 
 	// Close and check event
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	select {
 	case evt := <-sub.Events():
@@ -428,8 +428,8 @@ func TestProcess_RequestHeaderExtraction(t *testing.T) {
 		if startEvt.Provider() != eventbus.ProviderOpenAI {
 			t.Errorf("Provider = %q, want %q", startEvt.Provider(), eventbus.ProviderOpenAI)
 		}
-		if startEvt.Model != "gpt-4" {
-			t.Errorf("Model = %q, want %q", startEvt.Model, "gpt-4")
+		if startEvt.Model != testModelGPT4 {
+			t.Errorf("Model = %q, want %q", startEvt.Model, testModelGPT4)
 		}
 		if !startEvt.Stream {
 			t.Error("Stream = false, want true")
@@ -447,7 +447,7 @@ func TestProcess_AgentIdentityExtraction(t *testing.T) {
 	registry := observer.NewObserverRegistry()
 
 	llmObs := llm.NewLLMObserver(bus)
-	registry.Register(llmObs, observer.ObserverConfig{
+	_ = registry.Register(llmObs, observer.ObserverConfig{
 		Name:     "llm",
 		Priority: 100,
 	})
@@ -536,7 +536,7 @@ func TestProcess_AgentIdentityExtraction(t *testing.T) {
 			err = stream.Send(&extprocv3.ProcessingRequest{
 				Request: &extprocv3.ProcessingRequest_RequestBody{
 					RequestBody: &extprocv3.HttpBody{
-						Body:        makeOpenAIRequestBody("gpt-4", false),
+						Body:        makeOpenAIRequestBody(testModelGPT4, false),
 						EndOfStream: true,
 					},
 				},
@@ -549,7 +549,7 @@ func TestProcess_AgentIdentityExtraction(t *testing.T) {
 				t.Fatalf("failed to receive response: %v", err)
 			}
 
-			stream.CloseSend()
+			_ = stream.CloseSend()
 
 			// Check the emitted event's agent identity
 			select {
@@ -585,7 +585,7 @@ func TestProcess_AgentIdentityExtraction(t *testing.T) {
 // TestProcess_StreamedRequestBodyAssembly verifies that streamed request body
 // chunks are correctly assembled and parsed.
 func TestProcess_StreamedRequestBodyAssembly(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -658,7 +658,7 @@ func TestProcess_StreamedRequestBodyAssembly(t *testing.T) {
 		t.Fatalf("failed to receive response for second chunk: %v", err)
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Verify the assembled body was correctly parsed
 	select {
@@ -682,7 +682,7 @@ func TestProcess_StreamedRequestBodyAssembly(t *testing.T) {
 // (raw HTTP frames containing SSE data) are correctly parsed and emitted as
 // LLMTokenChunk events.
 func TestProcess_StreamedResponseBody(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -721,7 +721,7 @@ func TestProcess_StreamedResponseBody(t *testing.T) {
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
@@ -781,7 +781,7 @@ func TestProcess_StreamedResponseBody(t *testing.T) {
 		}
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Collect token chunk events
 	var tokenContents []string
@@ -822,7 +822,7 @@ verify:
 // data verbatim via BodyMutation (passive echo), and header responses
 // remain empty.
 func TestProcess_PassiveMode(t *testing.T) {
-	_, _, _, srv := setupTestComponents(t)
+	_, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -871,7 +871,7 @@ func TestProcess_PassiveMode(t *testing.T) {
 	}
 
 	// Test request body response echoes body verbatim (passive echo)
-	reqBody := makeOpenAIRequestBody("gpt-4", true)
+	reqBody := makeOpenAIRequestBody(testModelGPT4, true)
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
@@ -987,7 +987,7 @@ func TestProcess_PassiveMode(t *testing.T) {
 		t.Error("expected no mode override in passive mode")
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 }
 
 // TestProcess_EndOfStreamComplete verifies that when the stream ends,
@@ -997,7 +997,7 @@ func TestProcess_EndOfStreamComplete(t *testing.T) {
 	bus := eventbus.NewSimpleBus()
 	registry := observer.NewObserverRegistry()
 	llmObs := llm.NewLLMObserver(bus)
-	registry.Register(llmObs, observer.ObserverConfig{
+	_ = registry.Register(llmObs, observer.ObserverConfig{
 		Name:     "llm",
 		Priority: 100,
 	})
@@ -1023,7 +1023,7 @@ func TestProcess_EndOfStreamComplete(t *testing.T) {
 	}
 
 	// Full request lifecycle with K8s-native identity via X-Forwarded-For
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestHeaders{
 			RequestHeaders: &extprocv3.HttpHeaders{
 				Headers: makeHeaderMap(
@@ -1035,37 +1035,43 @@ func TestProcess_EndOfStreamComplete(t *testing.T) {
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(":status", "200", "content-type", "text/event-stream"),
+				Headers: makeHeaderMap(
+					":status", "200",
+					"content-type", "text/event-stream",
+				),
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Send 5 token chunks
 	for i := 0; i < 5; i++ {
 		isLast := i == 4
 		var body []byte
 		if isLast {
-			body = append(makeOpenAISSEChunk(fmt.Sprintf("token%d", i)), makeOpenAISSEDone()...)
+			body = append(
+				makeOpenAISSEChunk(fmt.Sprintf("token%d", i)),
+				makeOpenAISSEDone()...,
+			)
 		} else {
 			body = makeOpenAISSEChunk(fmt.Sprintf("token%d", i))
 		}
-		stream.Send(&extprocv3.ProcessingRequest{
+		_ = stream.Send(&extprocv3.ProcessingRequest{
 			Request: &extprocv3.ProcessingRequest_ResponseBody{
 				ResponseBody: &extprocv3.HttpBody{
 					Body:        body,
@@ -1073,10 +1079,10 @@ func TestProcess_EndOfStreamComplete(t *testing.T) {
 				},
 			},
 		})
-		stream.Recv()
+		_, _ = stream.Recv()
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Wait for the complete event
 	select {
@@ -1114,7 +1120,7 @@ func TestProcess_ConcurrentStreams(t *testing.T) {
 	bus := eventbus.NewSimpleBus()
 	registry := observer.NewObserverRegistry()
 	llmObs := llm.NewLLMObserver(bus)
-	registry.Register(llmObs, observer.ObserverConfig{
+	_ = registry.Register(llmObs, observer.ObserverConfig{
 		Name:     "llm",
 		Priority: 100,
 	})
@@ -1182,7 +1188,7 @@ func TestProcess_ConcurrentStreams(t *testing.T) {
 			err = stream.Send(&extprocv3.ProcessingRequest{
 				Request: &extprocv3.ProcessingRequest_RequestBody{
 					RequestBody: &extprocv3.HttpBody{
-						Body:        makeOpenAIRequestBody("gpt-4", true),
+						Body:        makeOpenAIRequestBody(testModelGPT4, true),
 						EndOfStream: true,
 					},
 				},
@@ -1241,7 +1247,7 @@ func TestProcess_ConcurrentStreams(t *testing.T) {
 				}
 			}
 
-			stream.CloseSend()
+			_ = stream.CloseSend()
 		}(i)
 	}
 
@@ -1286,7 +1292,7 @@ func TestProcess_ConcurrentStreams(t *testing.T) {
 // TestProcess_MetricsComputation verifies that per-request metrics (TTFT,
 // tokens per second, total tokens) are correctly computed.
 func TestProcess_MetricsComputation(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -1302,7 +1308,7 @@ func TestProcess_MetricsComputation(t *testing.T) {
 	}
 
 	// Request headers
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestHeaders{
 			RequestHeaders: &extprocv3.HttpHeaders{
 				Headers: makeHeaderMap(
@@ -1313,39 +1319,45 @@ func TestProcess_MetricsComputation(t *testing.T) {
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Request body
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Response headers
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(":status", "200", "content-type", "text/event-stream"),
+				Headers: makeHeaderMap(
+					":status", "200",
+					"content-type", "text/event-stream",
+				),
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Send 3 tokens with small delays to make TTFT measurable
 	for i := 0; i < 3; i++ {
 		isLast := i == 2
 		var body []byte
 		if isLast {
-			body = append(makeOpenAISSEChunk(fmt.Sprintf("w%d", i)), makeOpenAISSEDone()...)
+			body = append(
+				makeOpenAISSEChunk(fmt.Sprintf("w%d", i)),
+				makeOpenAISSEDone()...,
+			)
 		} else {
 			body = makeOpenAISSEChunk(fmt.Sprintf("w%d", i))
 		}
-		stream.Send(&extprocv3.ProcessingRequest{
+		_ = stream.Send(&extprocv3.ProcessingRequest{
 			Request: &extprocv3.ProcessingRequest_ResponseBody{
 				ResponseBody: &extprocv3.HttpBody{
 					Body:        body,
@@ -1353,10 +1365,10 @@ func TestProcess_MetricsComputation(t *testing.T) {
 				},
 			},
 		})
-		stream.Recv()
+		_, _ = stream.Recv()
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	select {
 	case evt := <-sub.Events():
@@ -1393,7 +1405,7 @@ func TestProcess_MetricsComputation(t *testing.T) {
 // the request (unknown path/host), the server logs and passes through
 // without failing.
 func TestProcess_UnknownObserver(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -1495,7 +1507,7 @@ func TestProcess_UnknownObserver(t *testing.T) {
 		t.Fatal("expected ResponseBody response even for unknown observer")
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// No events should be emitted for unknown observers
 	select {
@@ -1509,7 +1521,7 @@ func TestProcess_UnknownObserver(t *testing.T) {
 // TestProcess_MultiEventSSEFrame verifies that when a single HTTP frame
 // contains multiple SSE events, they are all correctly parsed and emitted.
 func TestProcess_MultiEventSSEFrame(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -1525,7 +1537,7 @@ func TestProcess_MultiEventSSEFrame(t *testing.T) {
 	}
 
 	// Request headers
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestHeaders{
 			RequestHeaders: &extprocv3.HttpHeaders{
 				Headers: makeHeaderMap(
@@ -1536,28 +1548,31 @@ func TestProcess_MultiEventSSEFrame(t *testing.T) {
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Request body
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Response headers
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(":status", "200", "content-type", "text/event-stream"),
+				Headers: makeHeaderMap(
+					":status", "200",
+					"content-type", "text/event-stream",
+				),
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Send a single frame with multiple SSE events
 	multiFrame := append(
@@ -1565,7 +1580,7 @@ func TestProcess_MultiEventSSEFrame(t *testing.T) {
 		makeOpenAISSEChunk("frame")...,
 	)
 
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseBody{
 			ResponseBody: &extprocv3.HttpBody{
 				Body:        multiFrame,
@@ -1573,9 +1588,9 @@ func TestProcess_MultiEventSSEFrame(t *testing.T) {
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Verify all three token events were emitted
 	var tokens []string
@@ -1603,7 +1618,7 @@ func TestProcess_MultiEventSSEFrame(t *testing.T) {
 // TestProcess_StreamEndTriggersFinalize verifies that when the client closes
 // the stream (io.EOF), the Finalize method is called on the observer.
 func TestProcess_StreamEndTriggersFinalize(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -1619,7 +1634,7 @@ func TestProcess_StreamEndTriggersFinalize(t *testing.T) {
 	}
 
 	// Minimal stream with request headers, body, and one response chunk
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestHeaders{
 			RequestHeaders: &extprocv3.HttpHeaders{
 				Headers: makeHeaderMap(
@@ -1630,30 +1645,33 @@ func TestProcess_StreamEndTriggersFinalize(t *testing.T) {
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(":status", "200", "content-type", "text/event-stream"),
+				Headers: makeHeaderMap(
+					":status", "200",
+					"content-type", "text/event-stream",
+				),
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Send a single chunk with end of stream
 	body := append(makeOpenAISSEChunk("final"), makeOpenAISSEDone()...)
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseBody{
 			ResponseBody: &extprocv3.HttpBody{
 				Body:        body,
@@ -1661,10 +1679,10 @@ func TestProcess_StreamEndTriggersFinalize(t *testing.T) {
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Explicitly close the stream
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Wait to receive a trailing EOF
 	for {
@@ -1695,7 +1713,7 @@ func TestProcess_StreamEndTriggersFinalize(t *testing.T) {
 // TestProcess_AnthropicProvider verifies that the ExtProc server correctly
 // handles Anthropic-format requests and streaming responses.
 func TestProcess_AnthropicProvider(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -1711,7 +1729,7 @@ func TestProcess_AnthropicProvider(t *testing.T) {
 	}
 
 	// Request headers for Anthropic
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestHeaders{
 			RequestHeaders: &extprocv3.HttpHeaders{
 				Headers: makeHeaderMap(
@@ -1722,33 +1740,43 @@ func TestProcess_AnthropicProvider(t *testing.T) {
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Request body
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeAnthropicRequestBody("claude-3-opus-20240229", true),
+				Body: makeAnthropicRequestBody(
+					"claude-3-opus-20240229", true,
+				),
 				EndOfStream: true,
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Response headers
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &extprocv3.HttpHeaders{
-				Headers: makeHeaderMap(":status", "200", "content-type", "text/event-stream"),
+				Headers: makeHeaderMap(
+					":status", "200",
+					"content-type", "text/event-stream",
+				),
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
 	// Anthropic SSE events
 	anthropicChunk := func(text string) []byte {
-		data := fmt.Sprintf(`{"type":"content_block_delta","delta":{"type":"text_delta","text":"%s"}}`, text)
-		return []byte(fmt.Sprintf("event: content_block_delta\ndata: %s\n\n", data))
+		data := fmt.Sprintf(
+			`{"type":"content_block_delta","delta":{"type":"text_delta","text":"%s"}}`,
+			text,
+		)
+		return []byte(fmt.Sprintf(
+			"event: content_block_delta\ndata: %s\n\n", data,
+		))
 	}
 
 	anthropicStop := func() []byte {
@@ -1756,7 +1784,7 @@ func TestProcess_AnthropicProvider(t *testing.T) {
 	}
 
 	// Send Anthropic streaming chunks
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseBody{
 			ResponseBody: &extprocv3.HttpBody{
 				Body:        anthropicChunk("Kubernetes"),
@@ -1764,19 +1792,21 @@ func TestProcess_AnthropicProvider(t *testing.T) {
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
-	stream.Send(&extprocv3.ProcessingRequest{
+	_ = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_ResponseBody{
 			ResponseBody: &extprocv3.HttpBody{
-				Body:        append(anthropicChunk(" is"), anthropicStop()...),
+				Body: append(
+					anthropicChunk(" is"), anthropicStop()...,
+				),
 				EndOfStream: true,
 			},
 		},
 	})
-	stream.Recv()
+	_, _ = stream.Recv()
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Collect events
 	var events []eventbus.Event
@@ -1824,7 +1854,7 @@ checkAnthropicEvents:
 // returns a BodyResponse with BodyMutation containing the echoed body data,
 // rather than an empty BodyResponse.
 func TestProcess_RequestBodyEchoesViaBodyMutation(t *testing.T) {
-	_, _, _, srv := setupTestComponents(t)
+	_, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -1857,7 +1887,7 @@ func TestProcess_RequestBodyEchoesViaBodyMutation(t *testing.T) {
 	}
 
 	// Send request body
-	reqBody := makeOpenAIRequestBody("gpt-4", true)
+	reqBody := makeOpenAIRequestBody(testModelGPT4, true)
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
@@ -1898,14 +1928,14 @@ func TestProcess_RequestBodyEchoesViaBodyMutation(t *testing.T) {
 		t.Errorf("echoed body mismatch: got %d bytes, want %d bytes", len(streamedResp.GetBody()), len(reqBody))
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 }
 
 // TestProcess_ResponseBodyEchoesViaBodyMutation verifies that handleResponseBody
 // returns a BodyResponse with BodyMutation containing the echoed body data,
 // rather than an empty BodyResponse.
 func TestProcess_ResponseBodyEchoesViaBodyMutation(t *testing.T) {
-	_, _, _, srv := setupTestComponents(t)
+	_, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -1941,7 +1971,7 @@ func TestProcess_ResponseBodyEchoesViaBodyMutation(t *testing.T) {
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
@@ -2017,7 +2047,7 @@ func TestProcess_ResponseBodyEchoesViaBodyMutation(t *testing.T) {
 		t.Errorf("echoed body = %q, want %q", string(echoedBody), string(sseChunk))
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 }
 
 // TestProcess_MultiChunkRequestBodyBuffersUntilFinal verifies the always-buffer
@@ -2026,7 +2056,7 @@ func TestProcess_ResponseBodyEchoesViaBodyMutation(t *testing.T) {
 // the final chunk (EndOfStream=true) sends the full accumulated body. This
 // prevents corruption when tool stripping modifies the body on the final chunk.
 func TestProcess_MultiChunkRequestBodyBuffersUntilFinal(t *testing.T) {
-	_, _, _, srv := setupTestComponents(t)
+	_, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -2059,7 +2089,7 @@ func TestProcess_MultiChunkRequestBodyBuffersUntilFinal(t *testing.T) {
 	}
 
 	// Split body into 3 chunks
-	fullBody := makeOpenAIRequestBody("gpt-4", true)
+	fullBody := makeOpenAIRequestBody(testModelGPT4, true)
 	chunkSize := len(fullBody) / 3
 	chunks := [][]byte{
 		fullBody[:chunkSize],
@@ -2113,7 +2143,10 @@ func TestProcess_MultiChunkRequestBodyBuffersUntilFinal(t *testing.T) {
 		} else {
 			// Intermediate chunk: body must be empty (buffered for final)
 			if len(streamedResp.GetBody()) != 0 {
-				t.Errorf("intermediate chunk %d: expected empty body (always-buffer semantics), got %d bytes", i, len(streamedResp.GetBody()))
+				t.Errorf(
+					"intermediate chunk %d: expected empty body (always-buffer semantics), got %d bytes",
+					i, len(streamedResp.GetBody()),
+				)
 			}
 			if streamedResp.GetEndOfStream() {
 				t.Errorf("intermediate chunk %d: expected EndOfStream=false", i)
@@ -2121,14 +2154,14 @@ func TestProcess_MultiChunkRequestBodyBuffersUntilFinal(t *testing.T) {
 		}
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 }
 
 // TestProcess_MultiChunkResponseBodyEchoesWithTokenParsing verifies that
 // each response body chunk (containing SSE frames) is both echoed via
 // BodyMutation and parsed for token observation.
 func TestProcess_MultiChunkResponseBodyEchoesWithTokenParsing(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -2167,7 +2200,7 @@ func TestProcess_MultiChunkResponseBodyEchoesWithTokenParsing(t *testing.T) {
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
@@ -2247,7 +2280,7 @@ func TestProcess_MultiChunkResponseBodyEchoesWithTokenParsing(t *testing.T) {
 		}
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Verify token parsing still works alongside echoing
 	var tokenCount int
@@ -2277,7 +2310,7 @@ verifyTokens:
 // each chunk's body correctly, and the echo behavior is consistent
 // regardless of the EndOfStream flag value in the request.
 func TestProcess_EndOfStreamOnlyOnFinalChunk(t *testing.T) {
-	_, _, _, srv := setupTestComponents(t)
+	_, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -2313,7 +2346,7 @@ func TestProcess_EndOfStreamOnlyOnFinalChunk(t *testing.T) {
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
@@ -2396,14 +2429,14 @@ func TestProcess_EndOfStreamOnlyOnFinalChunk(t *testing.T) {
 		}
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 }
 
 // TestRequestBody_UsesStreamedResponse verifies that handleRequestBody returns
 // BodyMutation_StreamedResponse (not BodyMutation_Body) with the correct body
 // data and EndOfStream flag. AgentGateway requires this variant for streaming mode.
 func TestRequestBody_UsesEmptyBodyResponse(t *testing.T) {
-	_, _, _, srv := setupTestComponents(t)
+	_, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -2435,7 +2468,7 @@ func TestRequestBody_UsesEmptyBodyResponse(t *testing.T) {
 	}
 
 	// Send request body with EndOfStream=true
-	reqBody := makeOpenAIRequestBody("gpt-4", true)
+	reqBody := makeOpenAIRequestBody(testModelGPT4, true)
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
@@ -2476,14 +2509,14 @@ func TestRequestBody_UsesEmptyBodyResponse(t *testing.T) {
 		t.Errorf("echoed body mismatch: got %d bytes, want %d bytes", len(streamedResp.GetBody()), len(reqBody))
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 }
 
 // TestResponseBody_UsesStreamedResponse verifies that handleResponseBody returns
 // BodyMutation_StreamedResponse (not BodyMutation_Body) with the correct body
 // data and EndOfStream flag. AgentGateway requires this variant for streaming mode.
 func TestResponseBody_UsesStreamedResponse(t *testing.T) {
-	_, _, _, srv := setupTestComponents(t)
+	_, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -2518,7 +2551,7 @@ func TestResponseBody_UsesStreamedResponse(t *testing.T) {
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
@@ -2600,14 +2633,14 @@ func TestResponseBody_UsesStreamedResponse(t *testing.T) {
 		t.Error("StreamedResponse.EndOfStream should be true for final chunk")
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 }
 
 // TestMultiChunkBody_StreamedResponseEndOfStream verifies that multi-chunk body
 // processing uses StreamedBodyResponse with correct EndOfStream flags: false for
 // intermediate chunks and true for the final chunk.
 func TestMultiChunkBody_StreamedResponseEndOfStream(t *testing.T) {
-	_, _, _, srv := setupTestComponents(t)
+	_, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -2642,7 +2675,7 @@ func TestMultiChunkBody_StreamedResponseEndOfStream(t *testing.T) {
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
@@ -2734,14 +2767,14 @@ func TestMultiChunkBody_StreamedResponseEndOfStream(t *testing.T) {
 		}
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 }
 
 // TestProcess_ServerGeneratedRequestID verifies that the request ID is generated
 // server-side per gRPC stream and that client-provided x-request-id headers are
 // ignored. This is a trust inversion fix: clients cannot control correlation IDs.
 func TestProcess_ServerGeneratedRequestID(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -2783,7 +2816,7 @@ func TestProcess_ServerGeneratedRequestID(t *testing.T) {
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
@@ -2797,7 +2830,7 @@ func TestProcess_ServerGeneratedRequestID(t *testing.T) {
 		t.Fatalf("failed to receive response: %v", err)
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Verify the emitted event has a server-generated UUID, not the client value
 	select {
@@ -2820,7 +2853,7 @@ func TestProcess_ServerGeneratedRequestID(t *testing.T) {
 // unique server-generated request ID. Two sequential streams must produce
 // different UUIDs.
 func TestProcess_UniqueRequestIDPerStream(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -2867,7 +2900,7 @@ func TestProcess_UniqueRequestIDPerStream(t *testing.T) {
 		err = stream.Send(&extprocv3.ProcessingRequest{
 			Request: &extprocv3.ProcessingRequest_RequestBody{
 				RequestBody: &extprocv3.HttpBody{
-					Body:        makeOpenAIRequestBody("gpt-4", true),
+					Body:        makeOpenAIRequestBody(testModelGPT4, true),
 					EndOfStream: true,
 				},
 			},
@@ -2885,7 +2918,7 @@ func TestProcess_UniqueRequestIDPerStream(t *testing.T) {
 			t.Fatalf("stream %d: failed to recv body response: %v", i, err)
 		}
 
-		stream.CloseSend()
+		_ = stream.CloseSend()
 
 		select {
 		case evt := <-sub.Events():
@@ -2910,7 +2943,7 @@ func TestProcess_UniqueRequestIDPerStream(t *testing.T) {
 // TestProcess_AllEventsCarryServerGeneratedUUID verifies that all emitted events
 // (start, chunk, complete) carry the same server-generated UUID.
 func TestProcess_AllEventsCarryServerGeneratedUUID(t *testing.T) {
-	bus, _, _, srv := setupTestComponents(t)
+	bus, srv := setupTestComponents(t)
 	client, cleanup := startTestServer(t, srv)
 	defer cleanup()
 
@@ -2950,7 +2983,7 @@ func TestProcess_AllEventsCarryServerGeneratedUUID(t *testing.T) {
 	err = stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
@@ -2996,7 +3029,7 @@ func TestProcess_AllEventsCarryServerGeneratedUUID(t *testing.T) {
 		t.Fatalf("failed to receive response body resp: %v", err)
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Drain all events and verify they all have the same server-generated UUID
 	var events []eventbus.Event

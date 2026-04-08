@@ -17,7 +17,6 @@ limitations under the License.
 package openai
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
 )
@@ -58,8 +57,8 @@ func TestParseSSEChunk_ToolCalls_SingleCall(t *testing.T) {
 	if tc.ID != "call_abc123" {
 		t.Errorf("expected ID='call_abc123', got %q", tc.ID)
 	}
-	if tc.FunctionName != "get_weather" {
-		t.Errorf("expected FunctionName='get_weather', got %q", tc.FunctionName)
+	if tc.FunctionName != testToolGetWeather {
+		t.Errorf("expected FunctionName=%q, got %q", testToolGetWeather, tc.FunctionName)
 	}
 	if tc.FunctionArguments != "" {
 		t.Errorf("expected empty FunctionArguments, got %q", tc.FunctionArguments)
@@ -131,8 +130,8 @@ func TestParseSSEChunk_ToolCalls_NameFragmented(t *testing.T) {
 
 	// Accumulation: get_ + weather = get_weather
 	combined := chunk1.ToolCalls[0].FunctionName + chunk2.ToolCalls[0].FunctionName
-	if combined != "get_weather" {
-		t.Errorf("accumulated name = %q, want 'get_weather'", combined)
+	if combined != testToolGetWeather {
+		t.Errorf("accumulated name = %q, want %q", combined, testToolGetWeather)
 	}
 }
 
@@ -170,8 +169,8 @@ func TestParseSSEChunk_ToolCalls_MultipleConcurrent(t *testing.T) {
 	if len(chunk.ToolCalls) != 2 {
 		t.Fatalf("expected 2 tool calls, got %d", len(chunk.ToolCalls))
 	}
-	if chunk.ToolCalls[0].FunctionName != "get_weather" {
-		t.Errorf("ToolCalls[0].FunctionName = %q, want 'get_weather'", chunk.ToolCalls[0].FunctionName)
+	if chunk.ToolCalls[0].FunctionName != testToolGetWeather {
+		t.Errorf("ToolCalls[0].FunctionName = %q, want %q", chunk.ToolCalls[0].FunctionName, testToolGetWeather)
 	}
 	if chunk.ToolCalls[0].Index != 0 {
 		t.Errorf("ToolCalls[0].Index = %d, want 0", chunk.ToolCalls[0].Index)
@@ -233,9 +232,14 @@ func TestParseSSEChunk_NoToolCalls(t *testing.T) {
 // flow across multiple SSE events in a single frame.
 func TestParseSSEFrame_ToolCalls_FullFlow(t *testing.T) {
 	// First event: tool call with name
-	event1 := `{"id":"chatcmpl-123","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_abc","type":"function","function":{"name":"bash","arguments":""}}]},"finish_reason":null}]}`
+	event1 := `{"id":"chatcmpl-123","choices":[{"index":0,` +
+		`"delta":{"tool_calls":[{"index":0,"id":"call_abc",` +
+		`"type":"function","function":{"name":"bash",` +
+		`"arguments":""}}]},"finish_reason":null}]}`
 	// Second event: arguments
-	event2 := `{"id":"chatcmpl-123","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"cmd\":"}}]},"finish_reason":null}]}`
+	event2 := `{"id":"chatcmpl-123","choices":[{"index":0,` +
+		`"delta":{"tool_calls":[{"index":0,"function":` +
+		`{"arguments":"{\"cmd\":"}}]},"finish_reason":null}]}`
 	// Third event: finish_reason
 	event3 := `{"id":"chatcmpl-123","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`
 
@@ -269,36 +273,4 @@ func TestParseSSEFrame_ToolCalls_FullFlow(t *testing.T) {
 	if chunks[2].FinishReason != "tool_calls" {
 		t.Errorf("chunk 2: FinishReason = %q, want 'tool_calls'", chunks[2].FinishReason)
 	}
-}
-
-// makeToolCallSSEChunk is a helper to build an SSE data line for a tool call chunk.
-func makeToolCallSSEChunk(index int, id, name, args string) []byte {
-	tc := map[string]interface{}{
-		"index": index,
-	}
-	if id != "" {
-		tc["id"] = id
-		tc["type"] = "function"
-	}
-	fn := map[string]interface{}{}
-	if name != "" {
-		fn["name"] = name
-	}
-	fn["arguments"] = args
-	tc["function"] = fn
-
-	chunk := map[string]interface{}{
-		"id": "chatcmpl-test",
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"delta": map[string]interface{}{
-					"tool_calls": []interface{}{tc},
-				},
-				"finish_reason": nil,
-			},
-		},
-	}
-	data, _ := json.Marshal(chunk)
-	return []byte(fmt.Sprintf("data: %s\n\n", data))
 }

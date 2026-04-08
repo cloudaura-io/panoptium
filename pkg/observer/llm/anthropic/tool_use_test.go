@@ -96,9 +96,13 @@ func TestParseSSEEvent_ContentBlockStop(t *testing.T) {
 func TestParseSSEFrame_ToolUseFlow(t *testing.T) {
 	frame := []byte(
 		"event: content_block_start\n" +
-			`data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_01abc","name":"bash","input":{}}}` + "\n\n" +
+			`data: {"type":"content_block_start","index":1,` +
+			`"content_block":{"type":"tool_use",` +
+			`"id":"toolu_01abc","name":"bash","input":{}}}` + "\n\n" +
 			"event: content_block_delta\n" +
-			`data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"cmd\":\"ls\"}"}}` + "\n\n" +
+			`data: {"type":"content_block_delta","index":1,` +
+			`"delta":{"type":"input_json_delta",` +
+			`"partial_json":"{\"cmd\":\"ls\"}"}}` + "\n\n" +
 			"event: content_block_stop\n" +
 			`data: {"type":"content_block_stop","index":1}` + "\n\n",
 	)

@@ -56,7 +56,7 @@ func stripToolsFromBody(body []byte, bannedTools []string) ([]byte, error) {
 	}
 
 	// Filter tools: keep only those not in the banned set
-	var kept []json.RawMessage
+	kept := make([]json.RawMessage, 0, len(tools))
 	for _, toolRaw := range tools {
 		name := extractToolName(toolRaw)
 		if name != "" && banned[name] {

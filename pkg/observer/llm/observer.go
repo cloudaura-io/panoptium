@@ -30,6 +30,9 @@ import (
 )
 
 const (
+	// observerName is the name returned by the observer.
+	observerName = "llm"
+
 	// providerOpenAI identifies OpenAI as the LLM provider.
 	providerOpenAI = "openai"
 
@@ -70,7 +73,7 @@ func NewLLMObserver(bus eventbus.EventBus) *LLMObserver {
 
 // Name returns the observer identifier.
 func (o *LLMObserver) Name() string {
-	return "llm"
+	return observerName
 }
 
 // CanHandle determines whether this observer can handle the request by
@@ -94,7 +97,9 @@ func (o *LLMObserver) CanHandle(_ context.Context, req *observer.ObserverContext
 }
 
 // ProcessRequestStream parses the LLM request and emits a start event.
-func (o *LLMObserver) ProcessRequestStream(_ context.Context, req *observer.ObserverContext) (*observer.StreamContext, error) {
+func (o *LLMObserver) ProcessRequestStream(
+	_ context.Context, req *observer.ObserverContext,
+) (*observer.StreamContext, error) {
 	provider := o.detectProvider(req)
 
 	streamCtx := &observer.StreamContext{

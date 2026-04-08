@@ -97,10 +97,25 @@ func TestIntegration_FullPipeline_RegexPredicate(t *testing.T) {
 	}
 }
 
-func TestIntegration_FullPipeline_GlobPredicate(t *testing.T) {
-	policy := &v1alpha1.AgentPolicy{
+// integrationPredicateTest describes a single full-pipeline predicate test case.
+type integrationPredicateTest struct {
+	name        string
+	policyName  string
+	ruleName    string
+	category    string
+	subcategory string
+	celExpr     string
+	actionType  v1alpha1.ActionType
+	severity    v1alpha1.Severity
+	matchFields map[string]interface{}
+	matchDesc   string
+}
+
+func runIntegrationPredicateTest(t *testing.T, tc integrationPredicateTest) {
+	t.Helper()
+	pol := &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "glob-integration",
+			Name:      tc.policyName,
 			Namespace: "default",
 		},
 		Spec: v1alpha1.AgentPolicySpec{
@@ -109,23 +124,23 @@ func TestIntegration_FullPipeline_GlobPredicate(t *testing.T) {
 			Priority:        100,
 			Rules: []v1alpha1.PolicyRule{
 				{
-					Name: "deny-etc-writes",
+					Name: tc.ruleName,
 					Trigger: v1alpha1.Trigger{
-						EventCategory:    "kernel",
-						EventSubcategory: "file_write",
+						EventCategory:    tc.category,
+						EventSubcategory: tc.subcategory,
 					},
 					Predicates: []v1alpha1.Predicate{
-						{CEL: `event.path.glob("/etc/**")`},
+						{CEL: tc.celExpr},
 					},
-					Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeDeny},
-					Severity: v1alpha1.SeverityCritical,
+					Action:   v1alpha1.Action{Type: tc.actionType},
+					Severity: tc.severity,
 				},
 			},
 		},
 	}
 
 	compiler := NewPolicyCompiler()
-	compiled, err := compiler.Compile(policy)
+	compiled, err := compiler.Compile(pol)
 	if err != nil {
 		t.Fatalf("Compile() unexpected error: %v", err)
 	}
@@ -133,74 +148,52 @@ func TestIntegration_FullPipeline_GlobPredicate(t *testing.T) {
 	tree := NewDecisionTree(compiled)
 
 	event := &PolicyEvent{
-		Category:    "kernel",
-		Subcategory: "file_write",
+		Category:    tc.category,
+		Subcategory: tc.subcategory,
 		Timestamp:   time.Now(),
-		Fields:      map[string]interface{}{"path": "/etc/shadow"},
+		Fields:      tc.matchFields,
 	}
 	decision, err := tree.Evaluate(event)
 	if err != nil {
 		t.Fatalf("Evaluate() unexpected error: %v", err)
 	}
 	if !decision.Matched {
-		t.Error("Decision.Matched = false, want true for glob matching event")
+		t.Errorf("Decision.Matched = false, want true for %s", tc.matchDesc)
 	}
-	if decision.Action.Type != v1alpha1.ActionTypeDeny {
-		t.Errorf("Decision.Action.Type = %q, want %q", decision.Action.Type, v1alpha1.ActionTypeDeny)
+	if decision.Action.Type != tc.actionType {
+		t.Errorf("Decision.Action.Type = %q, want %q",
+			decision.Action.Type, tc.actionType)
 	}
 }
 
+func TestIntegration_FullPipeline_GlobPredicate(t *testing.T) {
+	runIntegrationPredicateTest(t, integrationPredicateTest{
+		name:        "GlobPredicate",
+		policyName:  "glob-integration",
+		ruleName:    "deny-etc-writes",
+		category:    "kernel",
+		subcategory: "file_write",
+		celExpr:     `event.path.glob("/etc/**")`,
+		actionType:  v1alpha1.ActionTypeDeny,
+		severity:    v1alpha1.SeverityCritical,
+		matchFields: map[string]interface{}{"path": "/etc/shadow"},
+		matchDesc:   "glob matching event",
+	})
+}
+
 func TestIntegration_FullPipeline_CIDRPredicate(t *testing.T) {
-	policy := &v1alpha1.AgentPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "cidr-integration",
-			Namespace: "default",
-		},
-		Spec: v1alpha1.AgentPolicySpec{
-			TargetSelector:  metav1.LabelSelector{MatchLabels: map[string]string{"app": "agent"}},
-			EnforcementMode: v1alpha1.EnforcementModeEnforcing,
-			Priority:        100,
-			Rules: []v1alpha1.PolicyRule{
-				{
-					Name: "alert-external-egress",
-					Trigger: v1alpha1.Trigger{
-						EventCategory:    "network",
-						EventSubcategory: "egress_attempt",
-					},
-					Predicates: []v1alpha1.Predicate{
-						{CEL: `event.destinationIP.inCIDR("10.0.0.0/8")`},
-					},
-					Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeAlert},
-					Severity: v1alpha1.SeverityMedium,
-				},
-			},
-		},
-	}
-
-	compiler := NewPolicyCompiler()
-	compiled, err := compiler.Compile(policy)
-	if err != nil {
-		t.Fatalf("Compile() unexpected error: %v", err)
-	}
-
-	tree := NewDecisionTree(compiled)
-
-	event := &PolicyEvent{
-		Category:    "network",
-		Subcategory: "egress_attempt",
-		Timestamp:   time.Now(),
-		Fields:      map[string]interface{}{"destinationIP": "10.42.0.5"},
-	}
-	decision, err := tree.Evaluate(event)
-	if err != nil {
-		t.Fatalf("Evaluate() unexpected error: %v", err)
-	}
-	if !decision.Matched {
-		t.Error("Decision.Matched = false, want true for CIDR matching event")
-	}
-	if decision.Action.Type != v1alpha1.ActionTypeAlert {
-		t.Errorf("Decision.Action.Type = %q, want %q", decision.Action.Type, v1alpha1.ActionTypeAlert)
-	}
+	runIntegrationPredicateTest(t, integrationPredicateTest{
+		name:        "CIDRPredicate",
+		policyName:  "cidr-integration",
+		ruleName:    "alert-external-egress",
+		category:    "network",
+		subcategory: "egress_attempt",
+		celExpr:     `event.destinationIP.inCIDR("10.0.0.0/8")`,
+		actionType:  v1alpha1.ActionTypeAlert,
+		severity:    v1alpha1.SeverityMedium,
+		matchFields: map[string]interface{}{"destinationIP": "10.42.0.5"},
+		matchDesc:   "CIDR matching event",
+	})
 }
 
 func TestIntegration_FullPipeline_EqualityPredicate(t *testing.T) {

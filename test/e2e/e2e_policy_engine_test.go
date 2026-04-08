@@ -110,10 +110,10 @@ spec:
 
 			By("applying a valid AgentPolicy")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
 
 			By("waiting for Ready=True status")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 
 			By("verifying ruleCount matches spec")
 			count, err := getPolicyRuleCount(policyName, namespace)
@@ -163,7 +163,7 @@ spec:
 				return
 			}
 
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
 
 			By("waiting for Ready=False or checking status")
 			// The controller may set Ready=True if it doesn't validate regex at compile time
@@ -181,8 +181,8 @@ spec:
 	Context("PE-2: Deny Action", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should strip denied tool from request body (HTTP 200) and allow safe tools (HTTP 200)", func() {
@@ -213,8 +213,8 @@ spec:
 
 			By("applying deny policy")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
+			waitForPolicyReady(policyName)
 
 			By("sending multi-tool request with dangerous_exec + safe_read and expecting HTTP 200 with tool stripped")
 			statusCode, body, err := execMultiToolRequest(curlPod, gwIP, []string{"dangerous_exec", "safe_read"}, nil)
@@ -226,7 +226,7 @@ spec:
 				"Dangerous tool should be stripped from the request before reaching the LLM")
 
 			By("sending tool_call for safe_read and expecting HTTP 200")
-			statusCode, _, err = execToolCallRequest(curlPod, gwIP, "safe_read", nil)
+			statusCode, _, err = execToolCallRequest(curlPod, gwIP, "safe_read")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(statusCode).To(Equal(200), "Safe tool_call should pass through with 200")
 		})
@@ -235,8 +235,8 @@ spec:
 	Context("PE-3: Allow Override", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should allow tool_call when explicit allow overrides deny at equal priority", func() {
@@ -295,14 +295,14 @@ spec:
 			Expect(applyAgentPolicy(denyYAML)).To(Succeed())
 			Expect(applyAgentPolicy(allowYAML)).To(Succeed())
 			DeferCleanup(func() {
-				deleteAgentPolicy(denyPolicyName, namespace)
-				deleteAgentPolicy(allowPolicyName, namespace)
+				deleteAgentPolicy(denyPolicyName)
+				deleteAgentPolicy(allowPolicyName)
 			})
-			waitForPolicyReady(denyPolicyName, namespace, 2*time.Minute)
-			waitForPolicyReady(allowPolicyName, namespace, 2*time.Minute)
+			waitForPolicyReady(denyPolicyName)
+			waitForPolicyReady(allowPolicyName)
 
 			By("sending tool_call for ambiguous_tool and expecting HTTP 200 (allow wins)")
-			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "ambiguous_tool", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "ambiguous_tool")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(statusCode).To(Equal(200),
 				"Explicit allow should override deny at equal priority")
@@ -312,8 +312,8 @@ spec:
 	Context("PE-4: Namespace Override", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should allow tool_call when namespace policy overrides cluster deny", func() {
@@ -372,13 +372,13 @@ spec:
 			Expect(applyAgentPolicy(nsYAML)).To(Succeed())
 			DeferCleanup(func() {
 				deleteAgentClusterPolicy(clusterPolicyName)
-				deleteAgentPolicy(namespacePolicyName, namespace)
+				deleteAgentPolicy(namespacePolicyName)
 			})
 			waitForClusterPolicyReady(clusterPolicyName, 2*time.Minute)
-			waitForPolicyReady(namespacePolicyName, namespace, 2*time.Minute)
+			waitForPolicyReady(namespacePolicyName)
 
 			By("sending tool_call for scoped_tool and expecting HTTP 200 (namespace wins)")
-			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "scoped_tool", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "scoped_tool")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(statusCode).To(Equal(200),
 				"Namespace-scoped allow should override cluster deny at equal priority")
@@ -388,8 +388,8 @@ spec:
 	Context("PE-5: Rate Limiting", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 
 			// Warm up: probe the gateway→ExtProc path before sending rate-limited
 			// requests. After a Helm upgrade scale-down (earlier in the Ordered suite),
@@ -431,19 +431,19 @@ spec:
 
 			By("applying rate limit policy")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
+			waitForPolicyReady(policyName)
 
 			By("sending 3 requests within limit — all should get HTTP 200")
 			for i := 1; i <= 3; i++ {
-				statusCode, _, err := execToolCallRequest(curlPod, gwIP, "rate_test", nil)
+				statusCode, _, err := execToolCallRequest(curlPod, gwIP, "rate_test")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(statusCode).To(Equal(200),
 					fmt.Sprintf("Request %d/3 should pass (within rate limit)", i))
 			}
 
 			By("sending 4th request — should get HTTP 429")
-			statusCode, body, err := execToolCallRequest(curlPod, gwIP, "rate_test", nil)
+			statusCode, body, err := execToolCallRequest(curlPod, gwIP, "rate_test")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(statusCode).To(Equal(429), "4th request should be rate limited with 429")
 			Expect(assertStructuredError(body, "rate_limited", "")).To(Succeed(),
@@ -454,8 +454,8 @@ spec:
 	Context("PE-6: Escalation Chain", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should create AgentQuarantine after 3 denials from same agent", func() {
@@ -492,17 +492,17 @@ spec:
 			By("applying escalation policy")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
 			DeferCleanup(func() {
-				deleteAgentPolicy(policyName, namespace)
+				deleteAgentPolicy(policyName)
 				// Clean up any quarantine resources
 				cmd := exec.Command("kubectl", "delete", "agentquarantine",
 					"--all", "-n", namespace, "--ignore-not-found=true")
 				_, _ = utils.Run(cmd)
 			})
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 
 			By("sending 3 requests to trigger escalation")
 			for i := 1; i <= 3; i++ {
-				statusCode, _, err := execToolCallRequest(curlPod, gwIP, "escalation_target", nil)
+				statusCode, _, err := execToolCallRequest(curlPod, gwIP, "escalation_target")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(statusCode).To(Equal(403),
 					fmt.Sprintf("Denial %d/3 should return 403", i))
@@ -540,8 +540,8 @@ spec:
 	Context("PE-7: Temporal Sequence", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should emit alert when file_write followed by egress_attempt within window", func() {
@@ -575,8 +575,8 @@ spec:
 
 			By("applying temporal sequence policy")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
+			waitForPolicyReady(policyName)
 
 			By("verifying policy was reconciled")
 			gen, err := getPolicyObservedGeneration(policyName, namespace)
@@ -594,7 +594,7 @@ spec:
 			// tool name "file_write" and a header hinting the path so the
 			// policy engine can match the trigger + predicate.
 			By("sending file_write tool_call (first event in temporal sequence)")
-			_, _, err = execToolCallRequest(curlPod, gwIP, "file_write", nil)
+			_, _, err = execToolCallRequest(curlPod, gwIP, "file_write")
 			// The file_write request itself may be allowed (alert action
 			// does not block), or it may not match the ExtProc path if the
 			// gateway does not synthesize a kernel.file_write event from an
@@ -608,7 +608,7 @@ spec:
 			time.Sleep(1 * time.Second)
 
 			By("sending egress_attempt tool_call (follow-up event within temporal window)")
-			_, _, err = execToolCallRequest(curlPod, gwIP, "egress_attempt", nil)
+			_, _, err = execToolCallRequest(curlPod, gwIP, "egress_attempt")
 			Expect(err).NotTo(HaveOccurred(),
 				"egress_attempt request should reach the gateway without transport error")
 
@@ -639,8 +639,8 @@ spec:
 	Context("PE-8: NATS Decision Events", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should publish policy.decision event to NATS on deny", func() {
@@ -672,11 +672,11 @@ spec:
 
 			By("applying deny policy for NATS event validation")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
+			waitForPolicyReady(policyName)
 
 			By("sending tool_call to trigger deny and NATS event")
-			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "nats_test_tool", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "nats_test_tool")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(statusCode).To(Equal(403), "Request should be denied")
 
@@ -695,8 +695,8 @@ spec:
 	Context("PE-9: Fallback RewritePath", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should convert deny to allow via rewritePath fallback", func() {
@@ -730,11 +730,11 @@ spec:
 
 			By("applying deny policy with rewritePath fallback")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
+			waitForPolicyReady(policyName)
 
 			By("sending tool_call targeting /etc/shadow")
-			statusCode, body, err := execToolCallRequest(curlPod, gwIP, "file_read", nil)
+			statusCode, body, err := execToolCallRequest(curlPod, gwIP, "file_read")
 			Expect(err).NotTo(HaveOccurred())
 
 			// The deny rule has fallback.rewritePath configured, so the FallbackEngine
@@ -768,8 +768,8 @@ spec:
 	Context("PE-10: Hot-Reload", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should update policy in-place without operator restart", func() {
@@ -802,11 +802,11 @@ spec:
 
 			By("applying initial deny policy")
 			Expect(applyAgentPolicy(denyYAML)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
+			waitForPolicyReady(policyName)
 
 			By("sending request and verifying it is denied (HTTP 403)")
-			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "hot_reload_target", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "hot_reload_target")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(statusCode).To(Equal(403), "Initial request should be denied")
 
@@ -851,7 +851,7 @@ spec:
 
 			By("sending same request and verifying it is now allowed (HTTP 200)")
 			verifyAllowed := func(g Gomega) {
-				statusCode, _, reqErr := execToolCallRequest(curlPod, gwIP, "hot_reload_target", nil)
+				statusCode, _, reqErr := execToolCallRequest(curlPod, gwIP, "hot_reload_target")
 				g.Expect(reqErr).NotTo(HaveOccurred())
 				g.Expect(statusCode).To(Equal(200),
 					"After hot-reload, request should be allowed")
@@ -875,11 +875,11 @@ spec:
 			By("pre-creating 5 persistent curl pods (one per simulated agent)")
 			for i := range numAgents {
 				podName := persistentCurlPodName(fmt.Sprintf("pe11-agent-%d", i))
-				curlPods[i] = createPersistentCurlPodWithName(podName, namespace)
+				curlPods[i] = createPersistentCurlPodWithName(podName)
 			}
 			DeferCleanup(func() {
 				for _, pod := range curlPods {
-					deletePersistentCurlPod(pod, namespace)
+					deletePersistentCurlPod(pod)
 				}
 			})
 		})
@@ -913,8 +913,8 @@ spec:
 
 			By("applying deny policy for concurrency test")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
+			waitForPolicyReady(policyName)
 
 			By("launching 10 concurrent requests from 5 agents (2 requests per agent pod)")
 			type result struct {
@@ -934,7 +934,7 @@ spec:
 					defer wg.Done()
 					agentIdx := idx % numAgents
 					agentID := fmt.Sprintf("pe11-agent-%d", agentIdx)
-					statusCode, _, reqErr := execToolCallRequest(curlPods[agentIdx], gwIP, "concurrent_deny", nil)
+					statusCode, _, reqErr := execToolCallRequest(curlPods[agentIdx], gwIP, "concurrent_deny")
 					results[idx] = result{
 						agentID:    agentID,
 						requestNum: idx,
@@ -971,11 +971,11 @@ spec:
 			By("pre-creating 10 persistent curl pods for benchmark")
 			for i := range numBenchPods {
 				podName := persistentCurlPodName(fmt.Sprintf("pe12-bench-%d", i))
-				benchPods[i] = createPersistentCurlPodWithName(podName, namespace)
+				benchPods[i] = createPersistentCurlPodWithName(podName)
 			}
 			DeferCleanup(func() {
 				for _, pod := range benchPods {
-					deletePersistentCurlPod(pod, namespace)
+					deletePersistentCurlPod(pod)
 				}
 			})
 		})
@@ -1020,13 +1020,13 @@ spec:
 			}
 			DeferCleanup(func() {
 				for _, name := range policyNames {
-					deleteAgentPolicy(name, namespace)
+					deleteAgentPolicy(name)
 				}
 			})
 
 			// Wait for all policies to be ready
 			for _, name := range policyNames {
-				waitForPolicyReady(name, namespace, 2*time.Minute)
+				waitForPolicyReady(name)
 			}
 
 			By("sending 100 sequential requests via 10 persistent pods (10 requests each)")
@@ -1035,7 +1035,7 @@ spec:
 				podIdx := i / requestsPerPod
 				start := time.Now()
 				_, _, err := execToolCallRequest(benchPods[podIdx], gwIP,
-					fmt.Sprintf("bench_%d", i%10), nil)
+					fmt.Sprintf("bench_%d", i%10))
 				elapsed := time.Since(start)
 				Expect(err).NotTo(HaveOccurred())
 				latencies = append(latencies, elapsed)
@@ -1074,8 +1074,8 @@ spec:
 	Context("PE-8: Severity-Based Escalation", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should create AgentQuarantine when CRITICAL severity event exceeds risk threshold", func() {
@@ -1110,13 +1110,13 @@ spec:
 
 			By("applying CRITICAL severity deny policy with escalation")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
 
 			By("waiting for policy to be compiled")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 
 			By("sending request that triggers CRITICAL deny")
-			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "critical_tool", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "critical_tool")
 			Expect(err).NotTo(HaveOccurred())
 			// Tool is stripped (200) or denied (403) depending on whether it's the only tool
 			_ = statusCode
@@ -1128,7 +1128,7 @@ spec:
 					"-o", "jsonpath={.items[*].spec.triggeringPolicy}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(string(output)).To(ContainSubstring(policyName))
+				g.Expect(output).To(ContainSubstring(policyName))
 			}
 			Eventually(verifyQuarantine, 30*time.Second, 2*time.Second).Should(Succeed())
 		})
@@ -1138,8 +1138,8 @@ spec:
 	Context("PE-9: Rate Limit GroupBy Agent", func() {
 		var curlPod string
 		BeforeAll(func() {
-			curlPod = createPersistentCurlPod(namespace)
-			DeferCleanup(func() { deletePersistentCurlPod(curlPod, namespace) })
+			curlPod = createPersistentCurlPod()
+			DeferCleanup(func() { deletePersistentCurlPod(curlPod) })
 		})
 
 		It("should share rate limit counter across different tools from same agent", func() {
@@ -1171,15 +1171,15 @@ spec:
 
 			By("applying rateLimit policy with groupBy: agent")
 			Expect(applyAgentPolicy(yaml)).To(Succeed())
-			DeferCleanup(func() { deleteAgentPolicy(policyName, namespace) })
+			DeferCleanup(func() { deleteAgentPolicy(policyName) })
 
 			By("waiting for policy to be compiled")
-			waitForPolicyReady(policyName, namespace, 2*time.Minute)
+			waitForPolicyReady(policyName)
 
 			By("sending 3 requests with different tools from same agent")
 			// First 2 should be within burst
 			for i, tool := range []string{"tool_a", "tool_b"} {
-				statusCode, _, err := execToolCallRequest(curlPod, gwIP, tool, nil)
+				statusCode, _, err := execToolCallRequest(curlPod, gwIP, tool)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(statusCode).To(Equal(200),
 					fmt.Sprintf("request %d (tool %s): expected 200 (within burst)", i+1, tool))
@@ -1187,7 +1187,7 @@ spec:
 
 			// 3rd request with yet another tool should be rate limited
 			// (shares counter because groupBy=agent)
-			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "tool_c", nil)
+			statusCode, _, err := execToolCallRequest(curlPod, gwIP, "tool_c")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(statusCode).To(Equal(429),
 				"3rd request with different tool: expected 429 (agent-based counter shared)")

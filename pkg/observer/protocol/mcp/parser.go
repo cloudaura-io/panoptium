@@ -45,6 +45,26 @@ type ToolInfo struct {
 	InputSchema map[string]interface{}
 }
 
+const (
+	// parserName is the name of this parser.
+	parserName = "mcp"
+
+	// methodInitialize is the JSON-RPC method for session initialization.
+	methodInitialize = "initialize"
+
+	// methodToolsList is the JSON-RPC method for listing tools.
+	methodToolsList = "tools/list"
+
+	// methodToolsCall is the JSON-RPC method for calling a tool.
+	methodToolsCall = "tools/call"
+
+	// msgTypeSessionInit is the message type for session initialization.
+	msgTypeSessionInit = "mcp.session.init"
+
+	// msgTypeToolsList is the message type for tools list.
+	msgTypeToolsList = "mcp.tools.list"
+)
+
 // MCPParser implements protocol.ProtocolParser for MCP JSON-RPC 2.0 messages.
 type MCPParser struct {
 	mu         sync.RWMutex
@@ -60,7 +80,7 @@ func NewMCPParser() *MCPParser {
 
 // Name returns the parser name.
 func (p *MCPParser) Name() string {
-	return "mcp"
+	return parserName
 }
 
 // Detect returns whether this parser can handle the given request.
@@ -149,7 +169,9 @@ func idToString(raw json.RawMessage) string {
 }
 
 // ProcessRequest parses a single MCP JSON-RPC request body.
-func (p *MCPParser) ProcessRequest(_ context.Context, _ map[string]string, body []byte) (*protocol.ParsedRequest, error) {
+func (p *MCPParser) ProcessRequest(
+	_ context.Context, _ map[string]string, body []byte,
+) (*protocol.ParsedRequest, error) {
 	if len(body) == 0 {
 		return nil, errors.New("empty request body")
 	}
@@ -167,14 +189,14 @@ func (p *MCPParser) ProcessRequest(_ context.Context, _ map[string]string, body 
 	}
 
 	result := &protocol.ParsedRequest{
-		Protocol: "mcp",
+		Protocol: parserName,
 		Method:   msg.Method,
 		Metadata: make(map[string]interface{}),
 	}
 
 	switch msg.Method {
-	case "initialize":
-		result.MessageType = "mcp.session.init"
+	case methodInitialize:
+		result.MessageType = msgTypeSessionInit
 		if msg.Params != nil {
 			var params initializeParams
 			if err := json.Unmarshal(msg.Params, &params); err == nil {
@@ -185,10 +207,10 @@ func (p *MCPParser) ProcessRequest(_ context.Context, _ map[string]string, body 
 			}
 		}
 
-	case "tools/list":
-		result.MessageType = "mcp.tools.list"
+	case methodToolsList:
+		result.MessageType = msgTypeToolsList
 
-	case "tools/call":
+	case methodToolsCall:
 		result.MessageType = "mcp.tool.call"
 		if msg.Params != nil {
 			var params toolsCallParams
@@ -209,7 +231,9 @@ func (p *MCPParser) ProcessRequest(_ context.Context, _ map[string]string, body 
 }
 
 // ProcessRequestBatch parses a batched array of MCP JSON-RPC requests.
-func (p *MCPParser) ProcessRequestBatch(ctx context.Context, headers map[string]string, body []byte) ([]*protocol.ParsedRequest, error) {
+func (p *MCPParser) ProcessRequestBatch(
+	ctx context.Context, headers map[string]string, body []byte,
+) ([]*protocol.ParsedRequest, error) {
 	if len(body) == 0 {
 		return nil, errors.New("empty request body")
 	}
@@ -233,7 +257,9 @@ func (p *MCPParser) ProcessRequestBatch(ctx context.Context, headers map[string]
 
 // ProcessResponse parses an MCP JSON-RPC response body, correlating it with a
 // previously tracked request ID to determine the response type.
-func (p *MCPParser) ProcessResponse(_ context.Context, _ map[string]string, body []byte) (*protocol.ParsedResponse, error) {
+func (p *MCPParser) ProcessResponse(
+	_ context.Context, _ map[string]string, body []byte,
+) (*protocol.ParsedResponse, error) {
 	if len(body) == 0 {
 		return nil, errors.New("empty response body")
 	}
@@ -249,7 +275,7 @@ func (p *MCPParser) ProcessResponse(_ context.Context, _ map[string]string, body
 	method, found := p.lookupAndRemovePending(id)
 
 	result := &protocol.ParsedResponse{
-		Protocol: "mcp",
+		Protocol: parserName,
 		Method:   method,
 		Metadata: make(map[string]interface{}),
 	}
@@ -269,27 +295,23 @@ func (p *MCPParser) ProcessResponse(_ context.Context, _ map[string]string, body
 	}
 
 	switch method {
-	case "initialize":
-		result.MessageType = "mcp.session.init"
+	case methodInitialize:
+		result.MessageType = msgTypeSessionInit
 
-	case "tools/list":
-		result.MessageType = "mcp.tools.list"
+	case methodToolsList:
+		result.MessageType = msgTypeToolsList
 		if msg.Result != nil {
 			var toolsResult toolsListResult
 			if err := json.Unmarshal(msg.Result, &toolsResult); err == nil {
 				tools := make([]ToolInfo, len(toolsResult.Tools))
 				for i, t := range toolsResult.Tools {
-					tools[i] = ToolInfo{
-						Name:        t.Name,
-						Description: t.Description,
-						InputSchema: t.InputSchema,
-					}
+					tools[i] = ToolInfo(t)
 				}
 				result.Metadata["tools"] = tools
 			}
 		}
 
-	case "tools/call":
+	case methodToolsCall:
 		result.MessageType = "mcp.tool.response"
 
 	default:
@@ -301,8 +323,10 @@ func (p *MCPParser) ProcessResponse(_ context.Context, _ map[string]string, body
 
 // ProcessStreamChunk is a no-op for MCP since MCP uses HTTP request-response,
 // not streaming.
-func (p *MCPParser) ProcessStreamChunk(_ context.Context, _ []byte, _ *protocol.StreamState) (*protocol.ParsedChunk, error) {
+func (p *MCPParser) ProcessStreamChunk(
+	_ context.Context, _ []byte, _ *protocol.StreamState,
+) (*protocol.ParsedChunk, error) {
 	return &protocol.ParsedChunk{
-		Protocol: "mcp",
+		Protocol: parserName,
 	}, nil
 }

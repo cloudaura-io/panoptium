@@ -178,10 +178,7 @@ func ParseRequest(body []byte) (*ChatCompletionRequest, error) {
 
 	messages := make([]Message, len(raw.Messages))
 	for i, m := range raw.Messages {
-		messages[i] = Message{
-			Role:    m.Role,
-			Content: m.Content,
-		}
+		messages[i] = Message(m)
 	}
 
 	// Extract tool names from tools array

@@ -233,7 +233,7 @@ func (r *CompiledSignatureRegistry) Match(_ context.Context, input MatchInput) (
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var results []MatchResult
+	results := make([]MatchResult, 0, len(r.signatures))
 
 	for _, sig := range r.signatures {
 		// Protocol filtering: skip if signature specifies protocols and input doesn't match

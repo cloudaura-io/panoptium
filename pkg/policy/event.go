@@ -155,7 +155,7 @@ type EvaluationResult struct {
 // Decisions are expected to be sorted by descending priority (from EvaluateAll).
 func (r *EvaluationResult) EffectiveAction() CompiledAction {
 	if len(r.Decisions) == 0 || r.DefaultAllow {
-		return CompiledAction{Type: "allow"}
+		return CompiledAction{Type: v1alpha1.ActionTypeAllow}
 	}
 
 	// Walk decisions grouped by priority tier (highest first).
@@ -180,7 +180,7 @@ func (r *EvaluationResult) EffectiveAction() CompiledAction {
 				return tierRateLimit
 			}
 			if tierHasAllow {
-				return CompiledAction{Type: "allow"}
+				return CompiledAction{Type: v1alpha1.ActionTypeAllow}
 			}
 			// Move to next tier.
 			tierPriority = d.Priority
@@ -202,7 +202,7 @@ func (r *EvaluationResult) EffectiveAction() CompiledAction {
 				tierRateLimit = d.Action
 			}
 		case ActionCategoryNonTerminal:
-			if d.Action.Type == "allow" {
+			if d.Action.Type == v1alpha1.ActionTypeAllow {
 				tierHasAllow = true
 			}
 		}
@@ -217,7 +217,7 @@ func (r *EvaluationResult) EffectiveAction() CompiledAction {
 	}
 
 	// No terminal or rate control at any tier -- allow.
-	return CompiledAction{Type: "allow"}
+	return CompiledAction{Type: v1alpha1.ActionTypeAllow}
 }
 
 // TerminalDecisions returns all decisions classified as terminal (deny on
@@ -346,7 +346,7 @@ type PredicateTraceEntry struct {
 func DefaultAllowDecision() *Decision {
 	return &Decision{
 		Action: CompiledAction{
-			Type: "allow",
+			Type: v1alpha1.ActionTypeAllow,
 		},
 		Matched:          false,
 		MatchedRule:      "",

@@ -20,6 +20,13 @@ import (
 	"testing"
 )
 
+const (
+	testContentHello = "Hello"
+)
+
+// --- Request Parsing Tests ---
+
+
 // TestParseRequest_Basic verifies parsing a basic Anthropic messages API request.
 func TestParseRequest_Basic(t *testing.T) {
 	body := []byte(`{
@@ -118,8 +125,8 @@ func TestParseSSEEvent_ContentBlockDelta(t *testing.T) {
 	if event == nil {
 		t.Fatal("ParseSSEEvent() returned nil")
 	}
-	if event.Content != "Hello" {
-		t.Errorf("Content = %q, want %q", event.Content, "Hello")
+	if event.Content != testContentHello {
+		t.Errorf("Content = %q, want %q", event.Content, testContentHello)
 	}
 	if event.EventType != "content_block_delta" {
 		t.Errorf("EventType = %q, want %q", event.EventType, "content_block_delta")
@@ -144,7 +151,10 @@ func TestParseSSEEvent_MessageStop(t *testing.T) {
 
 // TestParseSSEEvent_MessageDelta verifies parsing a message_delta event with stop_reason.
 func TestParseSSEEvent_MessageDelta(t *testing.T) {
-	data := []byte(`{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":15}}`)
+	data := []byte(
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn",` +
+			`"stop_sequence":null},"usage":{"output_tokens":15}}`,
+	)
 
 	event, err := ParseSSEEvent("message_delta", data)
 	if err != nil {
@@ -157,7 +167,11 @@ func TestParseSSEEvent_MessageDelta(t *testing.T) {
 
 // TestParseSSEFrame_SingleEvent verifies parsing a frame with a single SSE event.
 func TestParseSSEFrame_SingleEvent(t *testing.T) {
-	frame := []byte("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\n")
+	frame := []byte(
+		"event: content_block_delta\n" +
+			`data: {"type":"content_block_delta","index":0,` +
+			`"delta":{"type":"text_delta","text":"Hello"}}` + "\n\n",
+	)
 
 	events, err := ParseSSEFrame(frame)
 	if err != nil {
@@ -166,14 +180,21 @@ func TestParseSSEFrame_SingleEvent(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("ParseSSEFrame() returned %d events, want 1", len(events))
 	}
-	if events[0].Content != "Hello" {
-		t.Errorf("events[0].Content = %q, want %q", events[0].Content, "Hello")
+	if events[0].Content != testContentHello {
+		t.Errorf("events[0].Content = %q, want %q", events[0].Content, testContentHello)
 	}
 }
 
 // TestParseSSEFrame_MultipleEvents verifies parsing a frame with multiple SSE events.
 func TestParseSSEFrame_MultipleEvents(t *testing.T) {
-	frame := []byte("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" world\"}}\n\n")
+	frame := []byte(
+		"event: content_block_delta\n" +
+			`data: {"type":"content_block_delta","index":0,` +
+			`"delta":{"type":"text_delta","text":"Hello"}}` + "\n\n" +
+			"event: content_block_delta\n" +
+			`data: {"type":"content_block_delta","index":0,` +
+			`"delta":{"type":"text_delta","text":" world"}}` + "\n\n",
+	)
 
 	events, err := ParseSSEFrame(frame)
 	if err != nil {
@@ -182,8 +203,8 @@ func TestParseSSEFrame_MultipleEvents(t *testing.T) {
 	if len(events) != 2 {
 		t.Fatalf("ParseSSEFrame() returned %d events, want 2", len(events))
 	}
-	if events[0].Content != "Hello" {
-		t.Errorf("events[0].Content = %q, want %q", events[0].Content, "Hello")
+	if events[0].Content != testContentHello {
+		t.Errorf("events[0].Content = %q, want %q", events[0].Content, testContentHello)
 	}
 	if events[1].Content != " world" {
 		t.Errorf("events[1].Content = %q, want %q", events[1].Content, " world")

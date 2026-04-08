@@ -31,7 +31,9 @@ import (
 )
 
 // setupTelemetryTestComponents creates test infrastructure for telemetry tests.
-func setupTelemetryTestComponents(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
+func setupTelemetryTestComponents(
+	t *testing.T, evaluator PolicyEvaluator,
+) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
 
 	bus := eventbus.NewSimpleBus()
@@ -379,7 +381,7 @@ type denyLLMRequestEvaluator struct {
 
 func (m *denyLLMRequestEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.Decision, error) {
 	m.lastEvent = event
-	if event.Subcategory == "llm_request" {
+	if event.Subcategory == subcategoryLLMRequest {
 		return &policy.Decision{
 			Action: policy.CompiledAction{
 				Type:       v1alpha1.ActionTypeDeny,

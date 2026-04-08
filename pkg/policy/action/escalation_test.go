@@ -21,28 +21,36 @@ import (
 	"time"
 )
 
+const (
+	testActionQuarantine = "quarantine"
+	testActionDeny       = "deny"
+)
+
+// --- EscalationProcessor tests ---
+
+
 func TestEscalationProcessor_DenyToQuarantine(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 3, Window: 5 * time.Second},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 3, Window: 5 * time.Second},
 	})
 
 	// Record 3 deny actions for agent-1
-	proc.RecordAction("agent-1", "deny")
-	proc.RecordAction("agent-1", "deny")
-	proc.RecordAction("agent-1", "deny")
+	proc.RecordAction("agent-1", testActionDeny)
+	proc.RecordAction("agent-1", testActionDeny)
+	proc.RecordAction("agent-1", testActionDeny)
 
-	escalated, toAction := proc.CheckEscalation("agent-1", "deny")
+	escalated, toAction := proc.CheckEscalation("agent-1", testActionDeny)
 	if !escalated {
 		t.Error("expected escalation after 3 denials, got false")
 	}
-	if toAction != "quarantine" {
+	if toAction != testActionQuarantine {
 		t.Errorf("expected escalation to quarantine, got %q", toAction)
 	}
 }
 
 func TestEscalationProcessor_ThrottleToDeny(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "throttle", ToAction: "deny", Threshold: 5, Window: 10 * time.Second},
+		{FromAction: "throttle", ToAction: testActionDeny, Threshold: 5, Window: 10 * time.Second},
 	})
 
 	for i := 0; i < 5; i++ {
@@ -53,20 +61,20 @@ func TestEscalationProcessor_ThrottleToDeny(t *testing.T) {
 	if !escalated {
 		t.Error("expected escalation after 5 throttles, got false")
 	}
-	if toAction != "deny" {
+	if toAction != testActionDeny {
 		t.Errorf("expected escalation to deny, got %q", toAction)
 	}
 }
 
 func TestEscalationProcessor_BelowThreshold(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 3, Window: 5 * time.Second},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 3, Window: 5 * time.Second},
 	})
 
-	proc.RecordAction("agent-1", "deny")
-	proc.RecordAction("agent-1", "deny")
+	proc.RecordAction("agent-1", testActionDeny)
+	proc.RecordAction("agent-1", testActionDeny)
 
-	escalated, _ := proc.CheckEscalation("agent-1", "deny")
+	escalated, _ := proc.CheckEscalation("agent-1", testActionDeny)
 	if escalated {
 		t.Error("expected no escalation below threshold (2 < 3), got true")
 	}
@@ -74,8 +82,8 @@ func TestEscalationProcessor_BelowThreshold(t *testing.T) {
 
 func TestEscalationProcessor_MultiLevelEscalation(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "throttle", ToAction: "deny", Threshold: 3, Window: 10 * time.Second},
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 2, Window: 10 * time.Second},
+		{FromAction: "throttle", ToAction: testActionDeny, Threshold: 3, Window: 10 * time.Second},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 2, Window: 10 * time.Second},
 	})
 
 	// First escalation: throttle -> deny
@@ -84,38 +92,38 @@ func TestEscalationProcessor_MultiLevelEscalation(t *testing.T) {
 	}
 
 	escalated, toAction := proc.CheckEscalation("agent-1", "throttle")
-	if !escalated || toAction != "deny" {
+	if !escalated || toAction != testActionDeny {
 		t.Errorf("expected throttle->deny escalation, got escalated=%v toAction=%q", escalated, toAction)
 	}
 
 	// Now record deny actions
-	proc.RecordAction("agent-1", "deny")
-	proc.RecordAction("agent-1", "deny")
+	proc.RecordAction("agent-1", testActionDeny)
+	proc.RecordAction("agent-1", testActionDeny)
 
-	escalated2, toAction2 := proc.CheckEscalation("agent-1", "deny")
-	if !escalated2 || toAction2 != "quarantine" {
+	escalated2, toAction2 := proc.CheckEscalation("agent-1", testActionDeny)
+	if !escalated2 || toAction2 != testActionQuarantine {
 		t.Errorf("expected deny->quarantine escalation, got escalated=%v toAction=%q", escalated2, toAction2)
 	}
 }
 
 func TestEscalationProcessor_PerAgentState(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 3, Window: 5 * time.Second},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 3, Window: 5 * time.Second},
 	})
 
 	// Agent-1 hits threshold
 	for i := 0; i < 3; i++ {
-		proc.RecordAction("agent-1", "deny")
+		proc.RecordAction("agent-1", testActionDeny)
 	}
 	// Agent-2 does not
-	proc.RecordAction("agent-2", "deny")
+	proc.RecordAction("agent-2", testActionDeny)
 
-	escalated1, _ := proc.CheckEscalation("agent-1", "deny")
+	escalated1, _ := proc.CheckEscalation("agent-1", testActionDeny)
 	if !escalated1 {
 		t.Error("expected escalation for agent-1")
 	}
 
-	escalated2, _ := proc.CheckEscalation("agent-2", "deny")
+	escalated2, _ := proc.CheckEscalation("agent-2", testActionDeny)
 	if escalated2 {
 		t.Error("expected no escalation for agent-2 (below threshold)")
 	}
@@ -123,15 +131,15 @@ func TestEscalationProcessor_PerAgentState(t *testing.T) {
 
 func TestEscalationProcessor_WindowExpiry(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 3, Window: 100 * time.Millisecond},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 3, Window: 100 * time.Millisecond},
 	})
 
 	for i := 0; i < 3; i++ {
-		proc.RecordAction("agent-1", "deny")
+		proc.RecordAction("agent-1", testActionDeny)
 	}
 
 	// Should escalate now
-	escalated, _ := proc.CheckEscalation("agent-1", "deny")
+	escalated, _ := proc.CheckEscalation("agent-1", testActionDeny)
 	if !escalated {
 		t.Error("expected escalation before window expiry")
 	}
@@ -139,7 +147,7 @@ func TestEscalationProcessor_WindowExpiry(t *testing.T) {
 	// Wait for window to expire
 	time.Sleep(150 * time.Millisecond)
 
-	escalated2, _ := proc.CheckEscalation("agent-1", "deny")
+	escalated2, _ := proc.CheckEscalation("agent-1", testActionDeny)
 	if escalated2 {
 		t.Error("expected no escalation after window expiry (de-escalation)")
 	}
@@ -147,15 +155,15 @@ func TestEscalationProcessor_WindowExpiry(t *testing.T) {
 
 func TestEscalationProcessor_Cooldown(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 3, Window: 100 * time.Millisecond},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 3, Window: 100 * time.Millisecond},
 	})
 
 	// Trigger escalation
 	for i := 0; i < 3; i++ {
-		proc.RecordAction("agent-1", "deny")
+		proc.RecordAction("agent-1", testActionDeny)
 	}
 
-	escalated, _ := proc.CheckEscalation("agent-1", "deny")
+	escalated, _ := proc.CheckEscalation("agent-1", testActionDeny)
 	if !escalated {
 		t.Error("expected escalation")
 	}
@@ -164,8 +172,8 @@ func TestEscalationProcessor_Cooldown(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	// After cooldown, new actions below threshold should not escalate
-	proc.RecordAction("agent-1", "deny")
-	escalated2, _ := proc.CheckEscalation("agent-1", "deny")
+	proc.RecordAction("agent-1", testActionDeny)
+	escalated2, _ := proc.CheckEscalation("agent-1", testActionDeny)
 	if escalated2 {
 		t.Error("expected no escalation after cooldown with only 1 action")
 	}
@@ -173,7 +181,7 @@ func TestEscalationProcessor_Cooldown(t *testing.T) {
 
 func TestEscalationProcessor_NoMatchingEscalation(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 3, Window: 5 * time.Second},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 3, Window: 5 * time.Second},
 	})
 
 	// Record allow actions (no escalation defined for allow)
@@ -189,13 +197,13 @@ func TestEscalationProcessor_NoMatchingEscalation(t *testing.T) {
 
 func TestEscalationProcessor_Cleanup(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 3, Window: 50 * time.Millisecond},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 3, Window: 50 * time.Millisecond},
 	})
 
 	for i := 0; i < 3; i++ {
-		proc.RecordAction("agent-1", "deny")
+		proc.RecordAction("agent-1", testActionDeny)
 	}
-	proc.RecordAction("agent-2", "deny")
+	proc.RecordAction("agent-2", testActionDeny)
 
 	// Wait for window to expire
 	time.Sleep(80 * time.Millisecond)
@@ -203,7 +211,7 @@ func TestEscalationProcessor_Cleanup(t *testing.T) {
 	proc.Cleanup()
 
 	// After cleanup, all expired records should be removed
-	escalated, _ := proc.CheckEscalation("agent-1", "deny")
+	escalated, _ := proc.CheckEscalation("agent-1", testActionDeny)
 	if escalated {
 		t.Error("expected no escalation after cleanup removed expired records")
 	}
@@ -211,19 +219,19 @@ func TestEscalationProcessor_Cleanup(t *testing.T) {
 
 func TestEscalationProcessor_CleanupEmptyLevels(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{})
-	proc.RecordAction("agent-1", "deny")
+	proc.RecordAction("agent-1", testActionDeny)
 	proc.Cleanup() // Should not panic with empty levels
 }
 
 func TestEscalationProcessor_SeverityRisk(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 100, Window: 5 * time.Second},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 100, Window: 5 * time.Second},
 	})
 
 	// 3 MEDIUM events = 3 * 20 = 60 points, below threshold 100
-	proc.RecordSeverityAction("agent-1", "deny", "MEDIUM", false)
-	proc.RecordSeverityAction("agent-1", "deny", "MEDIUM", false)
-	proc.RecordSeverityAction("agent-1", "deny", "MEDIUM", false)
+	proc.RecordSeverityAction("agent-1", testActionDeny, "MEDIUM", false)
+	proc.RecordSeverityAction("agent-1", testActionDeny, "MEDIUM", false)
+	proc.RecordSeverityAction("agent-1", testActionDeny, "MEDIUM", false)
 
 	escalated, _ := proc.CheckSeverityEscalation("agent-1")
 	if escalated {
@@ -233,30 +241,30 @@ func TestEscalationProcessor_SeverityRisk(t *testing.T) {
 
 func TestEscalationProcessor_SeverityRisk_CriticalTriggers(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 100, Window: 5 * time.Second},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 100, Window: 5 * time.Second},
 	})
 
 	// 1 CRITICAL (100) + 1 INFO (0) = 100 points, meets threshold
-	proc.RecordSeverityAction("agent-1", "deny", "CRITICAL", false)
-	proc.RecordSeverityAction("agent-1", "deny", "INFO", false)
+	proc.RecordSeverityAction("agent-1", testActionDeny, "CRITICAL", false)
+	proc.RecordSeverityAction("agent-1", testActionDeny, "INFO", false)
 
 	escalated, toAction := proc.CheckSeverityEscalation("agent-1")
 	if !escalated {
 		t.Error("expected escalation at 100 risk points (threshold 100)")
 	}
-	if toAction != "quarantine" {
+	if toAction != testActionQuarantine {
 		t.Errorf("expected quarantine, got %q", toAction)
 	}
 }
 
 func TestEscalationProcessor_AuditWeight(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 100, Window: 5 * time.Second},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 100, Window: 5 * time.Second},
 	})
 
 	// 2 HIGH audit events = 2 * 50 * 0.5 = 50 points
-	proc.RecordSeverityAction("agent-1", "deny", "HIGH", true)
-	proc.RecordSeverityAction("agent-1", "deny", "HIGH", true)
+	proc.RecordSeverityAction("agent-1", testActionDeny, "HIGH", true)
+	proc.RecordSeverityAction("agent-1", testActionDeny, "HIGH", true)
 
 	escalated, _ := proc.CheckSeverityEscalation("agent-1")
 	if escalated {
@@ -264,7 +272,7 @@ func TestEscalationProcessor_AuditWeight(t *testing.T) {
 	}
 
 	// 1 more HIGH enforced event = 50 pts, total now 100
-	proc.RecordSeverityAction("agent-1", "deny", "HIGH", false)
+	proc.RecordSeverityAction("agent-1", testActionDeny, "HIGH", false)
 
 	escalated, _ = proc.CheckSeverityEscalation("agent-1")
 	if !escalated {
@@ -274,10 +282,10 @@ func TestEscalationProcessor_AuditWeight(t *testing.T) {
 
 func TestEscalationProcessor_SeverityRisk_WindowExpiry(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
-		{FromAction: "deny", ToAction: "quarantine", Threshold: 100, Window: 100 * time.Millisecond},
+		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 100, Window: 100 * time.Millisecond},
 	})
 
-	proc.RecordSeverityAction("agent-1", "deny", "CRITICAL", false)
+	proc.RecordSeverityAction("agent-1", testActionDeny, "CRITICAL", false)
 
 	escalated, _ := proc.CheckSeverityEscalation("agent-1")
 	if !escalated {

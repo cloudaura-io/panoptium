@@ -36,6 +36,11 @@ import (
 	"github.com/panoptium/panoptium/pkg/threat"
 )
 
+const (
+	// parserName is the name of this parser.
+	parserName = "gemini"
+)
+
 // GeminiParser implements protocol.ProtocolParser for Google Gemini API messages.
 type GeminiParser struct {
 	mu            sync.RWMutex
@@ -56,7 +61,7 @@ func (p *GeminiParser) SetThreatMatcher(matcher threat.ThreatMatcher) {
 
 // Name returns the parser name.
 func (p *GeminiParser) Name() string {
-	return "gemini"
+	return parserName
 }
 
 // Detect checks if the request matches Gemini API path patterns.
@@ -150,7 +155,9 @@ type usageMetadata struct {
 }
 
 // ProcessRequest parses a Gemini generateContent request.
-func (p *GeminiParser) ProcessRequest(ctx context.Context, headers map[string]string, body []byte) (*protocol.ParsedRequest, error) {
+func (p *GeminiParser) ProcessRequest(
+	ctx context.Context, headers map[string]string, body []byte,
+) (*protocol.ParsedRequest, error) {
 	if len(body) == 0 {
 		return nil, errors.New("empty request body")
 	}
@@ -161,7 +168,7 @@ func (p *GeminiParser) ProcessRequest(ctx context.Context, headers map[string]st
 	}
 
 	result := &protocol.ParsedRequest{
-		Protocol:    "gemini",
+		Protocol:    parserName,
 		MessageType: "llm.request.start",
 		Metadata:    make(map[string]interface{}),
 	}
@@ -211,7 +218,7 @@ func (p *GeminiParser) ProcessRequest(ctx context.Context, headers map[string]st
 		}
 		if allText != "" {
 			matches, err := matcher.Match(ctx, threat.MatchInput{
-				Protocol: "gemini",
+				Protocol: parserName,
 				Target:   "message_content",
 				Content:  allText,
 				Metadata: map[string]any{"model": req.Model},
@@ -226,7 +233,9 @@ func (p *GeminiParser) ProcessRequest(ctx context.Context, headers map[string]st
 }
 
 // ProcessResponse parses a non-streaming Gemini generateContent response.
-func (p *GeminiParser) ProcessResponse(_ context.Context, headers map[string]string, body []byte) (*protocol.ParsedResponse, error) {
+func (p *GeminiParser) ProcessResponse(
+	_ context.Context, headers map[string]string, body []byte,
+) (*protocol.ParsedResponse, error) {
 	if len(body) == 0 {
 		return nil, errors.New("empty response body")
 	}
@@ -237,7 +246,7 @@ func (p *GeminiParser) ProcessResponse(_ context.Context, headers map[string]str
 	}
 
 	result := &protocol.ParsedResponse{
-		Protocol: "gemini",
+		Protocol: parserName,
 		Metadata: make(map[string]interface{}),
 	}
 
@@ -295,13 +304,15 @@ func (p *GeminiParser) ProcessResponse(_ context.Context, headers map[string]str
 }
 
 // ProcessStreamChunk parses an SSE chunk from a streaming Gemini response.
-func (p *GeminiParser) ProcessStreamChunk(_ context.Context, chunk []byte, state *protocol.StreamState) (*protocol.ParsedChunk, error) {
+func (p *GeminiParser) ProcessStreamChunk(
+	_ context.Context, chunk []byte, state *protocol.StreamState,
+) (*protocol.ParsedChunk, error) {
 	if len(chunk) == 0 {
 		return nil, nil
 	}
 
 	result := &protocol.ParsedChunk{
-		Protocol: "gemini",
+		Protocol: parserName,
 		Metadata: make(map[string]interface{}),
 	}
 

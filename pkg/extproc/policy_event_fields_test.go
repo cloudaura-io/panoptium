@@ -33,6 +33,11 @@ import (
 	"github.com/panoptium/panoptium/pkg/policy"
 )
 
+const (
+	subcategoryToolCall = "tool_call"
+	testModelGPT4Turbo  = "gpt-4-turbo"
+)
+
 // toolOnlyDenyEvaluator denies tool_call events but allows llm_request events.
 // This is needed because FR-2 dual emission evaluates llm_request first.
 type toolOnlyDenyEvaluator struct {
@@ -43,7 +48,7 @@ type toolOnlyDenyEvaluator struct {
 
 func (m *toolOnlyDenyEvaluator) Evaluate(event *policy.PolicyEvent) (*policy.Decision, error) {
 	m.lastEvent = event
-	if event.Subcategory == "tool_call" {
+	if event.Subcategory == subcategoryToolCall {
 		m.lastToolEvent = event
 		return m.denyDecision, nil
 	}
@@ -65,7 +70,9 @@ func (m *toolOnlyDenyEvaluator) EvaluateAll(event *policy.PolicyEvent) (*policy.
 }
 
 // setupPolicyEventFieldsTest creates test infrastructure for policy event field tests.
-func setupPolicyEventFieldsTest(t *testing.T, evaluator PolicyEvaluator) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
+func setupPolicyEventFieldsTest(
+	t *testing.T, evaluator PolicyEvaluator,
+) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
 
 	bus := eventbus.NewSimpleBus()
@@ -125,7 +132,12 @@ func makeOpenAIRequestBodyWithTools(model string, stream bool, toolNames []strin
 
 // sendHeadersAndBody sends request headers and a complete body to the ExtProc stream,
 // receiving the response for each. Returns the body-phase response.
-func sendHeadersAndBody(t *testing.T, stream extprocv3.ExternalProcessor_ProcessClient, headerKVs []string, body []byte) *extprocv3.ProcessingResponse {
+func sendHeadersAndBody(
+	t *testing.T,
+	stream extprocv3.ExternalProcessor_ProcessClient,
+	headerKVs []string,
+	body []byte,
+) *extprocv3.ProcessingResponse {
 	t.Helper()
 
 	// Send request headers
@@ -210,8 +222,8 @@ func TestPolicyEventFields_ToolCallSubcategory(t *testing.T) {
 	if evaluator.lastEvent == nil {
 		t.Fatal("policy evaluator was not invoked")
 	}
-	if evaluator.lastEvent.Subcategory != "tool_call" {
-		t.Errorf("expected Subcategory 'tool_call', got %q", evaluator.lastEvent.Subcategory)
+	if evaluator.lastEvent.Subcategory != subcategoryToolCall {
+		t.Errorf("expected Subcategory %q, got %q", subcategoryToolCall, evaluator.lastEvent.Subcategory)
 	}
 	if evaluator.lastEvent.Category != "protocol" {
 		t.Errorf("expected Category 'protocol', got %q", evaluator.lastEvent.Category)
@@ -258,8 +270,8 @@ func TestPolicyEventFields_LLMRequestSubcategory(t *testing.T) {
 	if evaluator.lastEvent == nil {
 		t.Fatal("policy evaluator was not invoked")
 	}
-	if evaluator.lastEvent.Subcategory != "llm_request" {
-		t.Errorf("expected Subcategory 'llm_request', got %q", evaluator.lastEvent.Subcategory)
+	if evaluator.lastEvent.Subcategory != subcategoryLLMRequest {
+		t.Errorf("expected Subcategory %q, got %q", subcategoryLLMRequest, evaluator.lastEvent.Subcategory)
 	}
 }
 
@@ -307,8 +319,8 @@ func TestPolicyEventFields_ToolNamePopulated(t *testing.T) {
 	}
 
 	// First event should be llm_request (FR-2)
-	if evaluator.allEvents[0].Subcategory != "llm_request" {
-		t.Errorf("expected first event Subcategory='llm_request', got %q", evaluator.allEvents[0].Subcategory)
+	if evaluator.allEvents[0].Subcategory != subcategoryLLMRequest {
+		t.Errorf("expected first event Subcategory=%q, got %q", subcategoryLLMRequest, evaluator.allEvents[0].Subcategory)
 	}
 
 	// Second event should have toolName = "dangerous_exec"
@@ -405,7 +417,7 @@ func TestPolicyEventFields_ModelAndProvider(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 
-	body := makeOpenAIRequestBody("gpt-4-turbo", false)
+	body := makeOpenAIRequestBody(testModelGPT4Turbo, false)
 
 	sendHeadersAndBody(t, stream, []string{
 		":path", "/v1/chat/completions",
@@ -420,8 +432,8 @@ func TestPolicyEventFields_ModelAndProvider(t *testing.T) {
 	}
 
 	model := evaluator.lastEvent.GetStringField("model")
-	if model != "gpt-4-turbo" {
-		t.Errorf("expected Fields[model]='gpt-4-turbo', got %q", model)
+	if model != testModelGPT4Turbo {
+		t.Errorf("expected Fields[model]=%q, got %q", testModelGPT4Turbo, model)
 	}
 
 	provider := evaluator.lastEvent.GetStringField("provider")
@@ -476,8 +488,9 @@ func TestPolicyEventFields_HeaderNotUsedForToolName(t *testing.T) {
 	}
 
 	// Subcategory should be llm_request (no tools in body), not tool_call
-	if evaluator.lastEvent.Subcategory != "llm_request" {
-		t.Errorf("expected Subcategory 'llm_request' (header should be ignored), got %q", evaluator.lastEvent.Subcategory)
+	if evaluator.lastEvent.Subcategory != subcategoryLLMRequest {
+		t.Errorf("expected Subcategory %q (header should be ignored), got %q",
+			subcategoryLLMRequest, evaluator.lastEvent.Subcategory)
 	}
 
 	// Fields["toolName"] should be empty (not from header)
@@ -571,8 +584,8 @@ func TestPolicyEventFields_DenyAfterBodyParsing(t *testing.T) {
 	if evaluator.lastToolEvent == nil {
 		t.Fatal("policy evaluator was not invoked for tool_call")
 	}
-	if evaluator.lastToolEvent.Subcategory != "tool_call" {
-		t.Errorf("expected Subcategory 'tool_call', got %q", evaluator.lastToolEvent.Subcategory)
+	if evaluator.lastToolEvent.Subcategory != subcategoryToolCall {
+		t.Errorf("expected Subcategory %q, got %q", subcategoryToolCall, evaluator.lastToolEvent.Subcategory)
 	}
 	if evaluator.lastToolEvent.GetStringField("toolName") != "dangerous_exec" {
 		t.Errorf("expected toolName 'dangerous_exec', got %q", evaluator.lastToolEvent.GetStringField("toolName"))

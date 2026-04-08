@@ -32,7 +32,11 @@ import (
 )
 
 // setupFailModeTestComponents creates test infrastructure with configurable failure mode.
-func setupFailModeTestComponents(t *testing.T, evaluator PolicyEvaluator, failureMode enforce.FailureMode) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
+func setupFailModeTestComponents(
+	t *testing.T,
+	evaluator PolicyEvaluator,
+	failureMode enforce.FailureMode,
+) (*eventbus.SimpleBus, *identity.PodCache, *ExtProcServer) {
 	t.Helper()
 
 	bus := eventbus.NewSimpleBus()
@@ -118,22 +122,22 @@ func TestFailOpen_PassThroughOnPolicyError(t *testing.T) {
 	}
 }
 
-// TestFailOpen_EmitsBypassEvent verifies that in fail-open mode, an
-// enforcement.bypass event is emitted to the Event Bus.
-func TestFailOpen_EmitsBypassEvent(t *testing.T) {
-	evaluator := &errorPolicyEvaluator{err: errors.New("evaluation timeout")}
-	bus, podCache, srv := setupFailModeTestComponents(t, evaluator, enforce.FailOpen)
-	defer bus.Close()
+// assertFailModeEvent is a helper that sets up a pod, subscribes to the given
+// event type, sends a request, and asserts that the expected event is emitted.
+func assertFailModeEvent(
+	t *testing.T,
+	srv *ExtProcServer,
+	bus *eventbus.SimpleBus,
+	podCache *identity.PodCache,
+	podIP string,
+	podInfo identity.PodInfo,
+	eventType string,
+) {
+	t.Helper()
 
-	podCache.Set("10.0.0.101", identity.PodInfo{
-		Name:      "bypass-pod",
-		Namespace: "default",
-		UID:       "uid-bp-1",
-		Labels:    map[string]string{"app": "agent"},
-	})
+	podCache.Set(podIP, podInfo)
 
-	// Subscribe to bypass events
-	sub := bus.Subscribe(eventbus.EventTypeEnforcementBypass)
+	sub := bus.Subscribe(eventType)
 	defer bus.Unsubscribe(sub)
 
 	client, cleanup := startTestServer(t, srv)
@@ -154,19 +158,40 @@ func TestFailOpen_EmitsBypassEvent(t *testing.T) {
 		":method", "POST",
 		"host", "api.openai.com",
 		"content-type", "application/json",
-		"x-forwarded-for", "10.0.0.101",
+		"x-forwarded-for", podIP,
 	}, reqBody)
 
-	// Verify enforcement.bypass event was emitted
 	select {
 	case evt := <-sub.Events():
-		if evt.EventType() != eventbus.EventTypeEnforcementBypass {
-			t.Errorf("expected enforcement.bypass event, got %q", evt.EventType())
+		if evt.EventType() != eventType {
+			t.Errorf("expected %s event, got %q", eventType, evt.EventType())
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for enforcement.bypass event")
+		t.Fatalf("timed out waiting for %s event", eventType)
 	}
 }
+
+// TestFailOpen_EmitsBypassEvent verifies that in fail-open mode, an
+// enforcement.bypass event is emitted to the Event Bus.
+func TestFailOpen_EmitsBypassEvent(t *testing.T) {
+	evaluator := &errorPolicyEvaluator{err: errors.New("evaluation timeout")}
+	bus, podCache, srv := setupFailModeTestComponents(t, evaluator, enforce.FailOpen)
+	defer bus.Close()
+
+	assertFailModeEvent(t, srv, bus, podCache,
+		"10.0.0.101",
+		identity.PodInfo{
+			Name:      "bypass-pod",
+			Namespace: "default",
+			UID:       "uid-bp-1",
+			Labels:    map[string]string{"app": "agent"},
+		},
+		eventbus.EventTypeEnforcementBypass,
+	)
+}
+
+// --- Fail-Closed Tests ---
+
 
 // TestFailClosed_Returns503OnPolicyError verifies that in fail-closed mode,
 // when the policy evaluator returns an error, the ExtProc server returns
@@ -230,47 +255,16 @@ func TestFailClosed_EmitsUnavailableEvent(t *testing.T) {
 	bus, podCache, srv := setupFailModeTestComponents(t, evaluator, enforce.FailClosed)
 	defer bus.Close()
 
-	podCache.Set("10.0.0.103", identity.PodInfo{
-		Name:      "unavailable-pod",
-		Namespace: "default",
-		UID:       "uid-ua-1",
-		Labels:    map[string]string{"app": "agent"},
-	})
-
-	// Subscribe to unavailable events
-	sub := bus.Subscribe(eventbus.EventTypeEnforcementUnavailable)
-	defer bus.Unsubscribe(sub)
-
-	client, cleanup := startTestServer(t, srv)
-	defer cleanup()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	stream, err := client.Process(ctx)
-	if err != nil {
-		t.Fatalf("failed to open stream: %v", err)
-	}
-
-	reqBody := makeOpenAIRequestBody("gpt-4", false)
-
-	sendHeadersAndBody(t, stream, []string{
-		":path", "/v1/chat/completions",
-		":method", "POST",
-		"host", "api.openai.com",
-		"content-type", "application/json",
-		"x-forwarded-for", "10.0.0.103",
-	}, reqBody)
-
-	// Verify enforcement.unavailable event was emitted
-	select {
-	case evt := <-sub.Events():
-		if evt.EventType() != eventbus.EventTypeEnforcementUnavailable {
-			t.Errorf("expected enforcement.unavailable event, got %q", evt.EventType())
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for enforcement.unavailable event")
-	}
+	assertFailModeEvent(t, srv, bus, podCache,
+		"10.0.0.103",
+		identity.PodInfo{
+			Name:      "unavailable-pod",
+			Namespace: "default",
+			UID:       "uid-ua-1",
+			Labels:    map[string]string{"app": "agent"},
+		},
+		eventbus.EventTypeEnforcementUnavailable,
+	)
 }
 
 // TestFailModeConstants verifies the FailureMode constants.

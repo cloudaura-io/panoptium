@@ -115,7 +115,9 @@ func (dt *DecisionTree) matchesTrigger(rule *CompiledRule, event *PolicyEvent) b
 }
 
 // evaluatePredicate evaluates a single compiled predicate against an event.
-func (dt *DecisionTree) evaluatePredicate(rule *CompiledRule, pred *CompiledPredicate, event *PolicyEvent) (bool, error) {
+func (dt *DecisionTree) evaluatePredicate(
+	rule *CompiledRule, pred *CompiledPredicate, event *PolicyEvent,
+) (bool, error) {
 	switch pred.Operator {
 	case "==":
 		return dt.evalEquality(pred, event)
@@ -146,7 +148,10 @@ func (dt *DecisionTree) evalEquality(pred *CompiledPredicate, event *PolicyEvent
 }
 
 // evalNumericComparison evaluates a numeric comparison predicate.
-func (dt *DecisionTree) evalNumericComparison(pred *CompiledPredicate, event *PolicyEvent, cmp func(float64, float64) bool) (bool, error) {
+func (dt *DecisionTree) evalNumericComparison(
+	pred *CompiledPredicate, event *PolicyEvent,
+	cmp func(float64, float64) bool,
+) (bool, error) {
 	fieldValue := dt.resolveField(pred.FieldPath, event)
 	var actual float64
 	switch v := fieldValue.(type) {

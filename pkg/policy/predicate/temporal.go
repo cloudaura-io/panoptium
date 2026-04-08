@@ -62,7 +62,10 @@ func (d *TemporalSequenceDetector) RecordEvent(sessionKey string, event *policy.
 // HasPrecedingEvent checks whether the given session has a recorded event
 // matching the specified category and subcategory within the given window
 // relative to the reference timestamp.
-func (d *TemporalSequenceDetector) HasPrecedingEvent(sessionKey, category, subcategory string, window time.Duration, referenceTime time.Time) bool {
+func (d *TemporalSequenceDetector) HasPrecedingEvent(
+	sessionKey, category, subcategory string,
+	window time.Duration, referenceTime time.Time,
+) bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 

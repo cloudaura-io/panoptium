@@ -37,7 +37,7 @@ func TestEnforcementMode_DisabledSkipped(t *testing.T) {
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -57,7 +57,7 @@ func TestEnforcementMode_DisabledSkipped(t *testing.T) {
 	if decision.Matched {
 		t.Error("expected no match — disabled policy should be skipped")
 	}
-	if decision.Action.Type != "allow" {
+	if decision.Action.Type != v1alpha1.ActionTypeAllow {
 		t.Errorf("expected default allow, got %q", decision.Action.Type)
 	}
 }
@@ -77,7 +77,7 @@ func TestEnforcementMode_AuditSetsAuditOnly(t *testing.T) {
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -97,7 +97,7 @@ func TestEnforcementMode_AuditSetsAuditOnly(t *testing.T) {
 	if !decision.Matched {
 		t.Error("expected match — audit policy should still evaluate")
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny action, got %q", decision.Action.Type)
 	}
 	if !decision.AuditOnly {
@@ -120,7 +120,7 @@ func TestEnforcementMode_EnforcingNormal(t *testing.T) {
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -140,7 +140,7 @@ func TestEnforcementMode_EnforcingNormal(t *testing.T) {
 	if !decision.Matched {
 		t.Error("expected match for enforcing policy")
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny, got %q", decision.Action.Type)
 	}
 	if decision.AuditOnly {
@@ -169,7 +169,7 @@ func TestEnforcementMode_GlobalAuditOverridesPerPolicyEnforcing(t *testing.T) {
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -209,7 +209,7 @@ func TestEnforcementMode_DisabledDoesNotBlockLowerPriority(t *testing.T) {
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},

@@ -161,8 +161,8 @@ func TestPolicyCache_InvalidationCallback_OnDeleteCluster(t *testing.T) {
 	})
 
 	pol := makeTestClusterPolicy("cluster-cb", 100)
-	cache.OnAddCluster(pol)
-	cache.OnDeleteCluster(pol)
+	_ = cache.OnAddCluster(pol)
+	_ = cache.OnDeleteCluster(pol)
 
 	if !callbackCalled {
 		t.Error("expected invalidation callback to be called on cluster policy delete")
@@ -231,7 +231,7 @@ func TestPolicyComposition_EvaluatesBothNamespaceAndCluster(t *testing.T) {
 					Name:         "cluster-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -250,7 +250,7 @@ func TestPolicyComposition_EvaluatesBothNamespaceAndCluster(t *testing.T) {
 	}
 
 	// Cluster policy has higher priority (100 > 50), so it should win
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny from cluster policy, got %q", decision.Action.Type)
 	}
 	if decision.PolicyName != "cluster-policy" {

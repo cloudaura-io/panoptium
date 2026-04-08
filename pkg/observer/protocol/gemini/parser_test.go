@@ -24,6 +24,11 @@ import (
 	"github.com/panoptium/panoptium/pkg/observer/protocol"
 )
 
+const testFuncGetWeather = "get_weather"
+
+// --- Compile-time interface check ---
+
+
 var _ protocol.ProtocolParser = (*GeminiParser)(nil)
 
 // TestGeminiParser_Detect_V1Beta verifies detection of v1beta generateContent path.
@@ -45,8 +50,8 @@ func TestGeminiParser_Detect_V1(t *testing.T) {
 	if !canDetect {
 		t.Error("Detect() returned false for v1 path, want true")
 	}
-	if confidence >= 0.9 {
-		// Good
+	if confidence < 0.9 {
+		t.Errorf("Confidence = %f, want >= 0.9", confidence)
 	}
 }
 
@@ -108,8 +113,8 @@ func TestGeminiParser_ProcessRequest_GenerateContent(t *testing.T) {
 	if result == nil {
 		t.Fatal("ProcessRequest() returned nil")
 	}
-	if result.Protocol != "gemini" {
-		t.Errorf("Protocol = %q, want %q", result.Protocol, "gemini")
+	if result.Protocol != parserName {
+		t.Errorf("Protocol = %q, want %q", result.Protocol, parserName)
 	}
 	if result.MessageType != "llm.request.start" {
 		t.Errorf("MessageType = %q, want %q", result.MessageType, "llm.request.start")
@@ -121,7 +126,7 @@ func TestGeminiParser_ProcessRequest_GenerateContent(t *testing.T) {
 	if !ok {
 		t.Fatalf("tool_names type = %T, want []string", result.Metadata["tool_names"])
 	}
-	if len(toolNames) != 1 || toolNames[0] != "get_weather" {
+	if len(toolNames) != 1 || toolNames[0] != testFuncGetWeather {
 		t.Errorf("tool_names = %v, want [get_weather]", toolNames)
 	}
 }
@@ -158,8 +163,8 @@ func TestGeminiParser_ProcessRequest_FunctionResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProcessRequest() error = %v", err)
 	}
-	if result.Metadata["function_response_name"] != "get_weather" {
-		t.Errorf("function_response_name = %v, want %q", result.Metadata["function_response_name"], "get_weather")
+	if result.Metadata["function_response_name"] != testFuncGetWeather {
+		t.Errorf("function_response_name = %v, want %q", result.Metadata["function_response_name"], testFuncGetWeather)
 	}
 }
 
@@ -167,9 +172,15 @@ func TestGeminiParser_ProcessRequest_FunctionResponse(t *testing.T) {
 func TestGeminiParser_ProcessStreamChunk_TextContent(t *testing.T) {
 	parser := NewGeminiParser()
 	ctx := context.Background()
-	state := protocol.NewStreamState("gemini")
+	state := protocol.NewStreamState(parserName)
 
-	chunk := []byte(`data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hello"}]},"safetyRatings":[{"category":"HARM_CATEGORY_HARASSMENT","probability":"NEGLIGIBLE"}]}]}` + "\n\n")
+	chunk := []byte(
+		`data: {"candidates":[{"content":` +
+			`{"role":"model","parts":[{"text":"Hello"}]},` +
+			`"safetyRatings":[{"category":` +
+			`"HARM_CATEGORY_HARASSMENT",` +
+			`"probability":"NEGLIGIBLE"}]}]}` + "\n\n",
+	)
 
 	result, err := parser.ProcessStreamChunk(ctx, chunk, state)
 	if err != nil {
@@ -181,8 +192,8 @@ func TestGeminiParser_ProcessStreamChunk_TextContent(t *testing.T) {
 	if result.Content != "Hello" {
 		t.Errorf("Content = %q, want %q", result.Content, "Hello")
 	}
-	if result.Protocol != "gemini" {
-		t.Errorf("Protocol = %q, want %q", result.Protocol, "gemini")
+	if result.Protocol != parserName {
+		t.Errorf("Protocol = %q, want %q", result.Protocol, parserName)
 	}
 }
 
@@ -191,16 +202,22 @@ func TestGeminiParser_ProcessStreamChunk_TextContent(t *testing.T) {
 func TestGeminiParser_ProcessStreamChunk_FunctionCall(t *testing.T) {
 	parser := NewGeminiParser()
 	ctx := context.Background()
-	state := protocol.NewStreamState("gemini")
+	state := protocol.NewStreamState(parserName)
 
-	chunk := []byte(`data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"get_weather","args":{"location":"London"}}}]},"finishReason":"STOP"}]}` + "\n\n")
+	chunk := []byte(
+		`data: {"candidates":[{"content":` +
+			`{"role":"model","parts":[{"functionCall":` +
+			`{"name":"get_weather",` +
+			`"args":{"location":"London"}}}]},` +
+			`"finishReason":"STOP"}]}` + "\n\n",
+	)
 
 	result, err := parser.ProcessStreamChunk(ctx, chunk, state)
 	if err != nil {
 		t.Fatalf("ProcessStreamChunk() error = %v", err)
 	}
-	if result.Metadata["function_call_name"] != "get_weather" {
-		t.Errorf("function_call_name = %v, want %q", result.Metadata["function_call_name"], "get_weather")
+	if result.Metadata["function_call_name"] != testFuncGetWeather {
+		t.Errorf("function_call_name = %v, want %q", result.Metadata["function_call_name"], testFuncGetWeather)
 	}
 	args, ok := result.Metadata["function_call_args"].(map[string]interface{})
 	if !ok {
@@ -218,9 +235,17 @@ func TestGeminiParser_ProcessStreamChunk_FunctionCall(t *testing.T) {
 func TestGeminiParser_ProcessStreamChunk_SafetyRatings(t *testing.T) {
 	parser := NewGeminiParser()
 	ctx := context.Background()
-	state := protocol.NewStreamState("gemini")
+	state := protocol.NewStreamState(parserName)
 
-	chunk := []byte(`data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hi"}]},"safetyRatings":[{"category":"HARM_CATEGORY_HARASSMENT","probability":"NEGLIGIBLE"},{"category":"HARM_CATEGORY_DANGEROUS_CONTENT","probability":"LOW"}]}]}` + "\n\n")
+	chunk := []byte(
+		`data: {"candidates":[{"content":` +
+			`{"role":"model","parts":[{"text":"Hi"}]},` +
+			`"safetyRatings":[` +
+			`{"category":"HARM_CATEGORY_HARASSMENT",` +
+			`"probability":"NEGLIGIBLE"},` +
+			`{"category":"HARM_CATEGORY_DANGEROUS_CONTENT",` +
+			`"probability":"LOW"}]}]}` + "\n\n",
+	)
 
 	result, err := parser.ProcessStreamChunk(ctx, chunk, state)
 	if err != nil {
@@ -239,7 +264,7 @@ func TestGeminiParser_ProcessStreamChunk_SafetyRatings(t *testing.T) {
 func TestGeminiParser_ProcessStreamChunk_Empty(t *testing.T) {
 	parser := NewGeminiParser()
 	ctx := context.Background()
-	state := protocol.NewStreamState("gemini")
+	state := protocol.NewStreamState(parserName)
 
 	result, err := parser.ProcessStreamChunk(ctx, []byte{}, state)
 	if err != nil {
@@ -289,8 +314,8 @@ func TestGeminiParser_ProcessResponse_NonStreaming(t *testing.T) {
 	if result == nil {
 		t.Fatal("ProcessResponse() returned nil")
 	}
-	if result.Protocol != "gemini" {
-		t.Errorf("Protocol = %q, want %q", result.Protocol, "gemini")
+	if result.Protocol != parserName {
+		t.Errorf("Protocol = %q, want %q", result.Protocol, parserName)
 	}
 	if result.MessageType != "llm.token.chunk" {
 		t.Errorf("MessageType = %q, want %q", result.MessageType, "llm.token.chunk")
@@ -337,8 +362,8 @@ func TestGeminiParser_ProcessResponse_FunctionCallResponse(t *testing.T) {
 	if result.MessageType != "llm.tool.call" {
 		t.Errorf("MessageType = %q, want %q", result.MessageType, "llm.tool.call")
 	}
-	if result.Metadata["function_call_name"] != "get_weather" {
-		t.Errorf("function_call_name = %v, want %q", result.Metadata["function_call_name"], "get_weather")
+	if result.Metadata["function_call_name"] != testFuncGetWeather {
+		t.Errorf("function_call_name = %v, want %q", result.Metadata["function_call_name"], testFuncGetWeather)
 	}
 }
 
@@ -346,14 +371,21 @@ func TestGeminiParser_ProcessResponse_FunctionCallResponse(t *testing.T) {
 func TestGeminiParser_ChunkProcessingLatency(t *testing.T) {
 	parser := NewGeminiParser()
 	ctx := context.Background()
-	state := protocol.NewStreamState("gemini")
+	state := protocol.NewStreamState(parserName)
 
-	chunk := []byte(`data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hello world"}]},"safetyRatings":[{"category":"HARM_CATEGORY_HARASSMENT","probability":"NEGLIGIBLE"}]}]}` + "\n\n")
+	chunk := []byte(
+		`data: {"candidates":[{"content":` +
+			`{"role":"model","parts":[` +
+			`{"text":"Hello world"}]},` +
+			`"safetyRatings":[{"category":` +
+			`"HARM_CATEGORY_HARASSMENT",` +
+			`"probability":"NEGLIGIBLE"}]}]}` + "\n\n",
+	)
 
 	start := time.Now()
 	iterations := 1000
 	for i := 0; i < iterations; i++ {
-		parser.ProcessStreamChunk(ctx, chunk, state)
+		_, _ = parser.ProcessStreamChunk(ctx, chunk, state)
 	}
 	elapsed := time.Since(start)
 

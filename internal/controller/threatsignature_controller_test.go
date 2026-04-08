@@ -68,7 +68,7 @@ var _ = Describe("ThreatSignature Controller", func() {
 					return false
 				}
 				for _, c := range createdSig.Status.Conditions {
-					if c.Type == "Ready" && c.Status == metav1.ConditionTrue {
+					if c.Type == conditionTypeReady && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}
@@ -111,7 +111,7 @@ var _ = Describe("ThreatSignature Controller", func() {
 					return false
 				}
 				for _, c := range createdSig.Status.Conditions {
-					if c.Type == "Ready" && c.Status == metav1.ConditionFalse && c.Reason == "CompilationFailed" {
+					if c.Type == conditionTypeReady && c.Status == metav1.ConditionFalse && c.Reason == "CompilationFailed" {
 						return true
 					}
 				}
@@ -188,7 +188,7 @@ var _ = Describe("ThreatSignature Controller", func() {
 					return false
 				}
 				for _, c := range createdSig.Status.Conditions {
-					if c.Type == "Ready" && c.Status == metav1.ConditionTrue {
+					if c.Type == conditionTypeReady && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}

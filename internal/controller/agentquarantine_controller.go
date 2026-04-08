@@ -72,10 +72,7 @@ func (r *AgentQuarantineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if quarantine.DeletionTimestamp != nil {
 		if controllerutil.ContainsFinalizer(quarantine, panoptiumiov1alpha1.QuarantineCleanupFinalizer) {
 			// Run cleanup logic
-			if err := r.cleanupQuarantine(ctx, quarantine); err != nil {
-				logger.Error(err, "Failed to cleanup quarantine resources")
-				return ctrl.Result{}, err
-			}
+			r.cleanupQuarantine(ctx, quarantine)
 
 			// Remove finalizer
 			controllerutil.RemoveFinalizer(quarantine, panoptiumiov1alpha1.QuarantineCleanupFinalizer)
@@ -197,7 +194,7 @@ func (r *AgentQuarantineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 }
 
 // cleanupQuarantine removes NetworkPolicies and other resources created by this quarantine.
-func (r *AgentQuarantineReconciler) cleanupQuarantine(ctx context.Context, quarantine *panoptiumiov1alpha1.AgentQuarantine) error {
+func (r *AgentQuarantineReconciler) cleanupQuarantine(ctx context.Context, quarantine *panoptiumiov1alpha1.AgentQuarantine) {
 	logger := log.FromContext(ctx)
 
 	// Clean up NetworkPolicies listed in status
@@ -213,7 +210,6 @@ func (r *AgentQuarantineReconciler) cleanupQuarantine(ctx context.Context, quara
 		// Actual BPF-LSM rule removal will be implemented in graduated_containment track
 	}
 
-	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

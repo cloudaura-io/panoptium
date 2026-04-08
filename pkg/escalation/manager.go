@@ -170,7 +170,10 @@ func (m *EscalationManager) handleEvent(ctx context.Context, evt eventbus.Event)
 }
 
 // createQuarantine builds and creates a AgentQuarantine resource.
-func (m *EscalationManager) createQuarantine(ctx context.Context, agent eventbus.AgentIdentity, policyName, policyNamespace, reason string) error {
+func (m *EscalationManager) createQuarantine(
+	ctx context.Context, agent eventbus.AgentIdentity,
+	policyName, policyNamespace, reason string,
+) error {
 	ns := agent.Namespace
 	if ns == "" {
 		ns = policyNamespace

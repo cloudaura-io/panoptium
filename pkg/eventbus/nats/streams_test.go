@@ -24,7 +24,7 @@ import (
 )
 
 // newTestJetStream creates an embedded NATS server, connects, and returns a JetStream context.
-func newTestJetStream(t *testing.T) (*Server, natsgo.JetStreamContext, func()) {
+func newTestJetStream(t *testing.T) (natsgo.JetStreamContext, func()) {
 	t.Helper()
 	srv, err := NewServer(ServerConfig{})
 	if err != nil {
@@ -48,12 +48,12 @@ func newTestJetStream(t *testing.T) (*Server, natsgo.JetStreamContext, func()) {
 		nc.Close()
 		srv.Shutdown()
 	}
-	return srv, js, cleanup
+	return js, cleanup
 }
 
 // TestStreamManager_CreateStreams verifies that streams are created for each event category.
 func TestStreamManager_CreateStreams(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	mgr := NewStreamManager(js, DefaultStreamConfig())
@@ -86,7 +86,7 @@ func TestStreamManager_CreateStreams(t *testing.T) {
 
 // TestStreamManager_PolicyRetention verifies 7-day retention for policy.* stream.
 func TestStreamManager_PolicyRetention(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	mgr := NewStreamManager(js, DefaultStreamConfig())
@@ -107,7 +107,7 @@ func TestStreamManager_PolicyRetention(t *testing.T) {
 
 // TestStreamManager_LifecycleRetention verifies 30-day retention for lifecycle.* stream.
 func TestStreamManager_LifecycleRetention(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	mgr := NewStreamManager(js, DefaultStreamConfig())
@@ -128,7 +128,7 @@ func TestStreamManager_LifecycleRetention(t *testing.T) {
 
 // TestStreamManager_HighSeverityRetention verifies 90-day retention for high-severity stream.
 func TestStreamManager_HighSeverityRetention(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	mgr := NewStreamManager(js, DefaultStreamConfig())
@@ -149,7 +149,7 @@ func TestStreamManager_HighSeverityRetention(t *testing.T) {
 
 // TestStreamManager_DefaultRetention verifies 24-hour default retention for standard streams.
 func TestStreamManager_DefaultRetention(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	mgr := NewStreamManager(js, DefaultStreamConfig())
@@ -175,7 +175,7 @@ func TestStreamManager_DefaultRetention(t *testing.T) {
 
 // TestStreamManager_MaxStreamSize verifies max stream size enforcement (1GB default).
 func TestStreamManager_MaxStreamSize(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	mgr := NewStreamManager(js, DefaultStreamConfig())
@@ -196,7 +196,7 @@ func TestStreamManager_MaxStreamSize(t *testing.T) {
 
 // TestStreamManager_DiscardOldPolicy verifies that streams use DiscardOld policy.
 func TestStreamManager_DiscardOldPolicy(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	mgr := NewStreamManager(js, DefaultStreamConfig())
@@ -216,7 +216,7 @@ func TestStreamManager_DiscardOldPolicy(t *testing.T) {
 
 // TestStreamManager_Idempotent verifies that EnsureStreams is idempotent.
 func TestStreamManager_Idempotent(t *testing.T) {
-	_, js, cleanup := newTestJetStream(t)
+	js, cleanup := newTestJetStream(t)
 	defer cleanup()
 
 	mgr := NewStreamManager(js, DefaultStreamConfig())

@@ -37,6 +37,9 @@ import (
 	"github.com/panoptium/panoptium/pkg/threat"
 )
 
+// conditionTypeReady is the canonical condition type for readiness.
+const conditionTypeReady = "Ready"
+
 var (
 	cfg       *rest.Config
 	k8sClient client.Client

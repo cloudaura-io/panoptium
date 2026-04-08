@@ -33,6 +33,11 @@ import (
 	"github.com/panoptium/panoptium/pkg/observer/llm"
 )
 
+const (
+	testModelGPT4           = "gpt-4"
+	testAgentSummarizerName = "agent-summarizer"
+)
+
 // setupIntegrationComponents creates the full component stack for integration
 // testing: event bus, observer registry with LLM observer, pod IP cache with
 // pre-populated entries, identity resolver, and ExtProc server. It returns all
@@ -191,7 +196,7 @@ func TestIntegration_OpenAIStreamingWithEnrolledPod(t *testing.T) {
 
 	// Pre-populate the PodCache with the enrolled pod
 	podCache.Set("10.0.0.1", identity.PodInfo{
-		Name:           "agent-summarizer",
+		Name:           testAgentSummarizerName,
 		Namespace:      "ai-agents",
 		UID:            "uid-summarizer-123",
 		Labels:         map[string]string{"app": "summarizer"},
@@ -210,7 +215,7 @@ func TestIntegration_OpenAIStreamingWithEnrolledPod(t *testing.T) {
 	}
 
 	tokens := []string{"Hello", " from", " the", " AI", " assistant"}
-	sendOpenAIStreamingRequest(t, stream, "10.0.0.1", "gpt-4", tokens)
+	sendOpenAIStreamingRequest(t, stream, "10.0.0.1", testModelGPT4, tokens)
 
 	// Expect: 1 LLMRequestStart + 5 LLMTokenChunk + 1 LLMRequestComplete = 7 events
 	events := collectEvents(sub, 7, 5*time.Second)
@@ -246,8 +251,8 @@ func TestIntegration_OpenAIStreamingWithEnrolledPod(t *testing.T) {
 	if start.Provider() != eventbus.ProviderOpenAI {
 		t.Errorf("LLMRequestStart.Provider = %q, want %q", start.Provider(), eventbus.ProviderOpenAI)
 	}
-	if start.Model != "gpt-4" {
-		t.Errorf("LLMRequestStart.Model = %q, want %q", start.Model, "gpt-4")
+	if start.Model != testModelGPT4 {
+		t.Errorf("LLMRequestStart.Model = %q, want %q", start.Model, testModelGPT4)
 	}
 	if !start.Stream {
 		t.Error("LLMRequestStart.Stream = false, want true")
@@ -255,11 +260,11 @@ func TestIntegration_OpenAIStreamingWithEnrolledPod(t *testing.T) {
 
 	// Verify agent identity on start event (resolved via PodCache)
 	agentInfo := start.Identity()
-	if agentInfo.ID != "agent-summarizer" {
-		t.Errorf("AgentIdentity.ID = %q, want %q", agentInfo.ID, "agent-summarizer")
+	if agentInfo.ID != testAgentSummarizerName {
+		t.Errorf("AgentIdentity.ID = %q, want %q", agentInfo.ID, testAgentSummarizerName)
 	}
-	if agentInfo.PodName != "agent-summarizer" {
-		t.Errorf("AgentIdentity.PodName = %q, want %q", agentInfo.PodName, "agent-summarizer")
+	if agentInfo.PodName != testAgentSummarizerName {
+		t.Errorf("AgentIdentity.PodName = %q, want %q", agentInfo.PodName, testAgentSummarizerName)
 	}
 	if agentInfo.Namespace != "ai-agents" {
 		t.Errorf("AgentIdentity.Namespace = %q, want %q", agentInfo.Namespace, "ai-agents")
@@ -286,8 +291,8 @@ func TestIntegration_OpenAIStreamingWithEnrolledPod(t *testing.T) {
 			t.Errorf("LLMTokenChunk[%d].Provider = %q, want %q", i, chunk.Provider(), eventbus.ProviderOpenAI)
 		}
 		chunkIdentity := chunk.Identity()
-		if chunkIdentity.ID != "agent-summarizer" {
-			t.Errorf("LLMTokenChunk[%d].Identity.ID = %q, want %q", i, chunkIdentity.ID, "agent-summarizer")
+		if chunkIdentity.ID != testAgentSummarizerName {
+			t.Errorf("LLMTokenChunk[%d].Identity.ID = %q, want %q", i, chunkIdentity.ID, testAgentSummarizerName)
 		}
 		if chunkIdentity.Confidence != eventbus.ConfidenceHigh {
 			t.Errorf("LLMTokenChunk[%d].Identity.Confidence = %q, want %q", i, chunkIdentity.Confidence, eventbus.ConfidenceHigh)
@@ -309,8 +314,8 @@ func TestIntegration_OpenAIStreamingWithEnrolledPod(t *testing.T) {
 		t.Errorf("LLMRequestComplete.RequestID = %q, want %q (same as start event)", complete.RequestID(), streamRequestID)
 	}
 	completeIdentity := complete.Identity()
-	if completeIdentity.ID != "agent-summarizer" {
-		t.Errorf("LLMRequestComplete.Identity.ID = %q, want %q", completeIdentity.ID, "agent-summarizer")
+	if completeIdentity.ID != testAgentSummarizerName {
+		t.Errorf("LLMRequestComplete.Identity.ID = %q, want %q", completeIdentity.ID, testAgentSummarizerName)
 	}
 	if completeIdentity.Confidence != eventbus.ConfidenceHigh {
 		t.Errorf("LLMRequestComplete.Identity.Confidence = %q, want %q", completeIdentity.Confidence, eventbus.ConfidenceHigh)
@@ -356,7 +361,7 @@ func TestIntegration_OpenAIMultiEventSSEFrame(t *testing.T) {
 	if err := stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", true),
+				Body:        makeOpenAIRequestBody(testModelGPT4, true),
 				EndOfStream: true,
 			},
 		},
@@ -407,7 +412,7 @@ func TestIntegration_OpenAIMultiEventSSEFrame(t *testing.T) {
 		t.Fatalf("failed to recv: %v", err)
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Expect: 1 LLMRequestStart + 2 LLMTokenChunk + 1 LLMRequestComplete = 4
 	events := collectEvents(sub, 4, 5*time.Second)
@@ -530,7 +535,7 @@ func TestIntegration_AnthropicStreamingRequest(t *testing.T) {
 		}
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Expect: 1 LLMRequestStart + 3 LLMTokenChunk + 1 LLMRequestComplete = 5
 	events := collectEvents(sub, 5, 5*time.Second)
@@ -632,7 +637,7 @@ func TestIntegration_EnrolledPodIdentityWithPodCache(t *testing.T) {
 	if err := stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", false),
+				Body:        makeOpenAIRequestBody(testModelGPT4, false),
 				EndOfStream: true,
 			},
 		},
@@ -643,7 +648,7 @@ func TestIntegration_EnrolledPodIdentityWithPodCache(t *testing.T) {
 		t.Fatalf("failed to recv: %v", err)
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Verify the event has high confidence with resolved pod info
 	select {
@@ -713,7 +718,7 @@ func TestIntegration_NoIdentityHeaders(t *testing.T) {
 	if err := stream.Send(&extprocv3.ProcessingRequest{
 		Request: &extprocv3.ProcessingRequest_RequestBody{
 			RequestBody: &extprocv3.HttpBody{
-				Body:        makeOpenAIRequestBody("gpt-4", false),
+				Body:        makeOpenAIRequestBody(testModelGPT4, false),
 				EndOfStream: true,
 			},
 		},
@@ -724,7 +729,7 @@ func TestIntegration_NoIdentityHeaders(t *testing.T) {
 		t.Fatalf("failed to recv: %v", err)
 	}
 
-	stream.CloseSend()
+	_ = stream.CloseSend()
 
 	// Verify event has low confidence with empty identity fields
 	select {
@@ -779,7 +784,7 @@ func TestIntegration_ConcurrentStreamsFromDifferentAgents(t *testing.T) {
 		{
 			podName:  "agent-alpha",
 			sourceIP: "10.0.0.1",
-			model:    "gpt-4",
+			model:    testModelGPT4,
 			tokens:   []string{"Alpha", " response", " here"},
 		},
 		{
@@ -791,7 +796,7 @@ func TestIntegration_ConcurrentStreamsFromDifferentAgents(t *testing.T) {
 		{
 			podName:  "agent-gamma",
 			sourceIP: "10.0.0.3",
-			model:    "gpt-4",
+			model:    testModelGPT4,
 			tokens:   []string{"Gamma", " data", " output", " done"},
 		},
 	}

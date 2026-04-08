@@ -136,7 +136,7 @@ func (s *Server) Shutdown() {
 
 	// Clean up temp directory if we created it
 	if s.tmpDir != "" {
-		os.RemoveAll(s.tmpDir)
+		_ = os.RemoveAll(s.tmpDir)
 		s.tmpDir = ""
 	}
 }

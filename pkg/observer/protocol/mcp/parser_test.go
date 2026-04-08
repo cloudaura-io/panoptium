@@ -236,7 +236,13 @@ func TestMCPParser_RequestIDCorrelation(t *testing.T) {
 	}
 
 	// Process initialize response — should correlate via id:1
-	initResp := []byte(`{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{},"serverInfo":{"name":"test-server","version":"1.0"}}}`)
+	initResp := []byte(
+		`{"jsonrpc":"2.0","id":1,"result":` +
+			`{"protocolVersion":"2024-11-05",` +
+			`"capabilities":{},` +
+			`"serverInfo":{"name":"test-server",` +
+			`"version":"1.0"}}}`,
+	)
 	respResult, err := parser.ProcessResponse(ctx, map[string]string{}, initResp)
 	if err != nil {
 		t.Fatalf("ProcessResponse(initialize) error = %v", err)

@@ -38,7 +38,7 @@ func TestPolicyComposition_DescendingPriorityOrdering(t *testing.T) {
 					Name:         "low-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "allow"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeAllow},
 				},
 			},
 		},
@@ -51,7 +51,7 @@ func TestPolicyComposition_DescendingPriorityOrdering(t *testing.T) {
 					Name:         "high-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -68,7 +68,7 @@ func TestPolicyComposition_DescendingPriorityOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny (from high-priority policy), got %q", decision.Action.Type)
 	}
 	if decision.PolicyName != "high-priority" {
@@ -90,7 +90,7 @@ func TestPolicyComposition_FirstMatchWithinPolicy(t *testing.T) {
 					Index:        0,
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 					Predicates: []CompiledPredicate{
 						{FieldPath: "event.processName", Operator: "==", Value: "curl"},
 					},
@@ -100,7 +100,7 @@ func TestPolicyComposition_FirstMatchWithinPolicy(t *testing.T) {
 					Index:        1,
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "allow"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeAllow},
 				},
 			},
 		},
@@ -120,7 +120,7 @@ func TestPolicyComposition_FirstMatchWithinPolicy(t *testing.T) {
 	if decision.MatchedRule != "first-rule" {
 		t.Errorf("expected first-rule (first match), got %q", decision.MatchedRule)
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny, got %q", decision.Action.Type)
 	}
 }
@@ -178,7 +178,8 @@ func TestPolicyComposition_NamespaceOverridesCluster(t *testing.T) {
 		t.Fatalf("expected 2 decisions, got %d", len(result.Decisions))
 	}
 	if result.Decisions[0].PolicyName != "namespace-policy" {
-		t.Errorf("expected namespace-policy first (namespace overrides cluster at equal priority), got %q", result.Decisions[0].PolicyName)
+		t.Errorf("expected namespace-policy first (namespace overrides cluster at equal priority), got %q",
+			result.Decisions[0].PolicyName)
 	}
 }
 
@@ -195,7 +196,7 @@ func TestPolicyComposition_DenyFirstAtEqualPriority(t *testing.T) {
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -208,7 +209,7 @@ func TestPolicyComposition_DenyFirstAtEqualPriority(t *testing.T) {
 					Name:         "allow-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "allow"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeAllow},
 				},
 			},
 		},
@@ -226,7 +227,7 @@ func TestPolicyComposition_DenyFirstAtEqualPriority(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// FR-3: deny-first semantics — at equal priority, deny beats allow.
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny (deny-first at equal priority, FR-3), got %q", decision.Action.Type)
 	}
 }
@@ -257,7 +258,7 @@ func TestPolicyComposition_DeterministicEvaluation(t *testing.T) {
 					Name:         "rule-b",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -276,7 +277,7 @@ func TestPolicyComposition_DeterministicEvaluation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("iteration %d: unexpected error: %v", i, err)
 		}
-		if decision.Action.Type != "deny" {
+		if decision.Action.Type != v1alpha1.ActionTypeDeny {
 			t.Errorf("iteration %d: expected deny, got %q", i, decision.Action.Type)
 		}
 		if decision.PolicyName != "policy-b" {
@@ -298,7 +299,7 @@ func TestPolicyComposition_NoMatchDefaultAllow(t *testing.T) {
 					Name:         "network-rule",
 					TriggerLayer: "network",
 					TriggerEvent: "egress_attempt",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -318,7 +319,7 @@ func TestPolicyComposition_NoMatchDefaultAllow(t *testing.T) {
 	if decision.Matched {
 		t.Error("expected no match (no kernel rule), got match")
 	}
-	if decision.Action.Type != "allow" {
+	if decision.Action.Type != v1alpha1.ActionTypeAllow {
 		t.Errorf("expected default allow, got %q", decision.Action.Type)
 	}
 }
@@ -339,7 +340,7 @@ func TestPolicyComposition_EmptyPolicySet(t *testing.T) {
 	if decision.Matched {
 		t.Error("expected no match with empty policy set")
 	}
-	if decision.Action.Type != "allow" {
+	if decision.Action.Type != v1alpha1.ActionTypeAllow {
 		t.Errorf("expected default allow, got %q", decision.Action.Type)
 	}
 }
@@ -357,7 +358,7 @@ func TestPolicyComposition_PredicateEvaluation(t *testing.T) {
 					Name:         "regex-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 					Predicates: []CompiledPredicate{
 						{FieldPath: "event.processName", Operator: "matches", Value: "^curl.*"},
 					},
@@ -418,7 +419,7 @@ func TestPolicyComposition_TiebreakByPolicyName(t *testing.T) {
 					Name:         "zzz-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -453,7 +454,7 @@ func TestPolicyComposition_TiebreakByPolicyName(t *testing.T) {
 	if decision.PolicyName != "zzz-policy" {
 		t.Errorf("expected zzz-policy (deny-first at equal priority), got %q", decision.PolicyName)
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny (deny-first), got %q", decision.Action.Type)
 	}
 }
@@ -483,7 +484,7 @@ func TestPolicyComposition_RateLimitWithinBurst(t *testing.T) {
 					TriggerLayer: "protocol",
 					TriggerEvent: "tool_call",
 					Action: CompiledAction{
-						Type: "rateLimit",
+						Type: v1alpha1.ActionTypeRateLimit,
 						Parameters: map[string]string{
 							"burstSize":         "3",
 							"requestsPerMinute": "3",
@@ -513,7 +514,7 @@ func TestPolicyComposition_RateLimitWithinBurst(t *testing.T) {
 		if decision.Matched {
 			t.Errorf("request %d: expected no match (under rate limit), got matched with action %q", i, decision.Action.Type)
 		}
-		if decision.Action.Type != "allow" {
+		if decision.Action.Type != v1alpha1.ActionTypeAllow {
 			t.Errorf("request %d: expected allow action, got %q", i, decision.Action.Type)
 		}
 	}
@@ -526,7 +527,7 @@ func TestPolicyComposition_RateLimitWithinBurst(t *testing.T) {
 	if !decision.Matched {
 		t.Error("4th request: expected match (rate limit exceeded)")
 	}
-	if decision.Action.Type != "rateLimit" {
+	if decision.Action.Type != rateLimitCanonicalName {
 		t.Errorf("4th request: expected rateLimit action, got %q", decision.Action.Type)
 	}
 }
@@ -546,7 +547,7 @@ func TestPolicyComposition_RateLimitWithoutCounter(t *testing.T) {
 					TriggerLayer: "protocol",
 					TriggerEvent: "tool_call",
 					Action: CompiledAction{
-						Type: "rateLimit",
+						Type: v1alpha1.ActionTypeRateLimit,
 						Parameters: map[string]string{
 							"burstSize":         "3",
 							"requestsPerMinute": "3",
@@ -575,7 +576,7 @@ func TestPolicyComposition_RateLimitWithoutCounter(t *testing.T) {
 	if !decision.Matched {
 		t.Error("expected match (no counter = rateLimit returned as-is)")
 	}
-	if decision.Action.Type != "rateLimit" {
+	if decision.Action.Type != rateLimitCanonicalName {
 		t.Errorf("expected rateLimit action, got %q", decision.Action.Type)
 	}
 }
@@ -595,7 +596,7 @@ func TestPolicyComposition_RateLimitNonMatchingEvent(t *testing.T) {
 					TriggerLayer: "protocol",
 					TriggerEvent: "tool_call",
 					Action: CompiledAction{
-						Type: "rateLimit",
+						Type: v1alpha1.ActionTypeRateLimit,
 						Parameters: map[string]string{
 							"burstSize":         "3",
 							"requestsPerMinute": "3",
@@ -624,7 +625,7 @@ func TestPolicyComposition_RateLimitNonMatchingEvent(t *testing.T) {
 	if decision.Matched {
 		t.Error("expected no match for non-matching event")
 	}
-	if decision.Action.Type != "allow" {
+	if decision.Action.Type != v1alpha1.ActionTypeAllow {
 		t.Errorf("expected default allow, got %q", decision.Action.Type)
 	}
 	// Counter should not have been touched
@@ -647,7 +648,7 @@ func TestPolicyComposition_NamespacedPolicy_DoesNotMatchPodInOtherNamespace(t *t
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -668,7 +669,7 @@ func TestPolicyComposition_NamespacedPolicy_DoesNotMatchPodInOtherNamespace(t *t
 	if decision.Matched {
 		t.Error("namespaced policy in 'foo' should NOT match pod in namespace 'bar'")
 	}
-	if decision.Action.Type != "allow" {
+	if decision.Action.Type != v1alpha1.ActionTypeAllow {
 		t.Errorf("expected default allow, got %q", decision.Action.Type)
 	}
 }
@@ -687,7 +688,7 @@ func TestPolicyComposition_NamespacedPolicy_MatchesPodInSameNamespace(t *testing
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -708,7 +709,7 @@ func TestPolicyComposition_NamespacedPolicy_MatchesPodInSameNamespace(t *testing
 	if !decision.Matched {
 		t.Error("namespaced policy should match pod in same namespace")
 	}
-	if decision.Action.Type != "deny" {
+	if decision.Action.Type != v1alpha1.ActionTypeDeny {
 		t.Errorf("expected deny, got %q", decision.Action.Type)
 	}
 }
@@ -826,7 +827,7 @@ func TestPolicyComposition_ClusterPolicy_WithSelector_MatchesAcrossNamespaces(t 
 					Name:         "deny-rule",
 					TriggerLayer: "kernel",
 					TriggerEvent: "process_exec",
-					Action:       CompiledAction{Type: "deny"},
+					Action:       CompiledAction{Type: v1alpha1.ActionTypeDeny},
 				},
 			},
 		},
@@ -948,77 +949,78 @@ func TestEvaluateAll_CollectsAllMatchingPolicies(t *testing.T) {
 	}
 }
 
-func TestEvaluateAll_DenyFirstAtEqualPriority(t *testing.T) {
-	resolver := NewPolicyCompositionResolver()
-	policies := []*CompiledPolicy{
+func TestEvaluateAll_PriorityAndDenyFirst(t *testing.T) {
+	tests := []struct {
+		name       string
+		policies   []*CompiledPolicy
+		wantAction v1alpha1.ActionType
+		desc       string
+	}{
 		{
-			Name: "allow-pol", Namespace: "default", Priority: 100,
-			Rules: []*CompiledRule{
-				{Name: "allow-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
-					Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}},
+			name: "DenyFirstAtEqualPriority",
+			policies: []*CompiledPolicy{
+				{
+					Name: "allow-pol", Namespace: "default", Priority: 100,
+					Rules: []*CompiledRule{
+						{Name: "allow-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
+							Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}},
+					},
+				},
+				{
+					Name: "deny-pol", Namespace: "default", Priority: 100,
+					Rules: []*CompiledRule{
+						{Name: "deny-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
+							Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}},
+					},
+				},
 			},
+			wantAction: v1alpha1.ActionTypeDeny,
+			desc:       "deny-first at equal priority",
 		},
 		{
-			Name: "deny-pol", Namespace: "default", Priority: 100,
-			Rules: []*CompiledRule{
-				{Name: "deny-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
-					Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}},
+			name: "HigherPriorityDenyWins",
+			policies: []*CompiledPolicy{
+				{
+					Name: "high-deny", Namespace: "default", Priority: 200,
+					Rules: []*CompiledRule{
+						{Name: "deny-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
+							Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}},
+					},
+				},
+				{
+					Name: "low-allow", Namespace: "default", Priority: 100,
+					Rules: []*CompiledRule{
+						{Name: "allow-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
+							Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}},
+					},
+				},
 			},
-		},
-	}
-
-	event := &PolicyEvent{
-		Category:    "llm",
-		Subcategory: "llm_request",
-		Namespace:   "default",
-		Fields:      map[string]interface{}{},
-	}
-
-	result, err := resolver.EvaluateAll(policies, event)
-	if err != nil {
-		t.Fatalf("EvaluateAll() error: %v", err)
-	}
-
-	effective := result.EffectiveAction()
-	if effective.Type != v1alpha1.ActionTypeDeny {
-		t.Errorf("EffectiveAction().Type = %q, want %q (deny-first at equal priority)", effective.Type, v1alpha1.ActionTypeDeny)
-	}
-}
-
-func TestEvaluateAll_HigherPriorityDenyWins(t *testing.T) {
-	resolver := NewPolicyCompositionResolver()
-	policies := []*CompiledPolicy{
-		{
-			Name: "high-deny", Namespace: "default", Priority: 200,
-			Rules: []*CompiledRule{
-				{Name: "deny-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
-					Action: CompiledAction{Type: v1alpha1.ActionTypeDeny}},
-			},
-		},
-		{
-			Name: "low-allow", Namespace: "default", Priority: 100,
-			Rules: []*CompiledRule{
-				{Name: "allow-rule", TriggerLayer: "llm", TriggerEvent: "llm_request",
-					Action: CompiledAction{Type: v1alpha1.ActionTypeAllow}},
-			},
+			wantAction: v1alpha1.ActionTypeDeny,
+			desc:       "higher priority deny wins",
 		},
 	}
 
-	event := &PolicyEvent{
-		Category:    "llm",
-		Subcategory: "llm_request",
-		Namespace:   "default",
-		Fields:      map[string]interface{}{},
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resolver := NewPolicyCompositionResolver()
+			event := &PolicyEvent{
+				Category:    "llm",
+				Subcategory: "llm_request",
+				Namespace:   "default",
+				Fields:      map[string]interface{}{},
+			}
 
-	result, err := resolver.EvaluateAll(policies, event)
-	if err != nil {
-		t.Fatalf("EvaluateAll() error: %v", err)
-	}
+			result, err := resolver.EvaluateAll(tc.policies, event)
+			if err != nil {
+				t.Fatalf("EvaluateAll() error: %v", err)
+			}
 
-	effective := result.EffectiveAction()
-	if effective.Type != v1alpha1.ActionTypeDeny {
-		t.Errorf("EffectiveAction().Type = %q, want %q", effective.Type, v1alpha1.ActionTypeDeny)
+			effective := result.EffectiveAction()
+			if effective.Type != tc.wantAction {
+				t.Errorf("EffectiveAction().Type = %q, want %q (%s)",
+					effective.Type, tc.wantAction, tc.desc)
+			}
+		})
 	}
 }
 
@@ -1061,7 +1063,8 @@ func TestEvaluateAll_HigherPriorityAllowWins(t *testing.T) {
 	// Deny-first only applies within the same priority tier (FR-3).
 	effective := result.EffectiveAction()
 	if effective.Type != v1alpha1.ActionTypeAllow {
-		t.Errorf("EffectiveAction().Type = %q, want %q (higher priority allow wins)", effective.Type, v1alpha1.ActionTypeAllow)
+		t.Errorf("EffectiveAction().Type = %q, want %q (higher priority allow wins)",
+			effective.Type, v1alpha1.ActionTypeAllow)
 	}
 }
 
@@ -1250,8 +1253,8 @@ func TestRateLimitCheck_GroupByAgent(t *testing.T) {
 		Fields:      map[string]interface{}{"toolName": "read_file"},
 	}
 
-	resolver.Evaluate(policies, event1) // count 1
-	resolver.Evaluate(policies, event2) // count 2 (same agent key)
+	_, _ = resolver.Evaluate(policies, event1) // count 1
+	_, _ = resolver.Evaluate(policies, event2) // count 2 (same agent key)
 
 	// 3rd request from same agent should exceed limit=2
 	decision, _ := resolver.Evaluate(policies, event1)
@@ -1307,9 +1310,9 @@ func TestRateLimitCheck_GroupByTool(t *testing.T) {
 		Fields:      map[string]interface{}{"toolName": "read_file"},
 	}
 
-	resolver.Evaluate(policies, eventBash) // bash count 1
-	resolver.Evaluate(policies, eventBash) // bash count 2
-	resolver.Evaluate(policies, eventRead) // read_file count 1
+	_, _ = resolver.Evaluate(policies, eventBash) // bash count 1
+	_, _ = resolver.Evaluate(policies, eventBash) // bash count 2
+	_, _ = resolver.Evaluate(policies, eventRead) // read_file count 1
 
 	// bash should now exceed limit
 	bashDecision, _ := resolver.Evaluate(policies, eventBash)
@@ -1371,7 +1374,7 @@ func TestRateLimitCheck_GroupByAgentTool(t *testing.T) {
 		Fields:      map[string]interface{}{"toolName": "bash"},
 	}
 
-	resolver.Evaluate(policies, event1) // agent-1/bash count 1
+	_, _ = resolver.Evaluate(policies, event1) // agent-1/bash count 1
 
 	// agent-1/bash should now exceed limit=1
 	decision1, _ := resolver.Evaluate(policies, event1)
@@ -1428,8 +1431,8 @@ func TestRateLimitCheck_DefaultGroupByAgent(t *testing.T) {
 		Fields:      map[string]interface{}{"toolName": "read_file"},
 	}
 
-	resolver.Evaluate(policies, event1) // count 1
-	resolver.Evaluate(policies, event2) // count 2 (same agent key)
+	_, _ = resolver.Evaluate(policies, event1) // count 1
+	_, _ = resolver.Evaluate(policies, event2) // count 2 (same agent key)
 
 	// 3rd request should exceed limit
 	decision, _ := resolver.Evaluate(policies, event1)

@@ -108,7 +108,7 @@ func NewPodCacheInformer(client kubernetes.Interface, podCache *PodCache) *PodCa
 
 	podInformer := factory.Core().V1().Pods().Informer()
 
-	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, _ = podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			pod, ok := obj.(*corev1.Pod)
 			if !ok {
