@@ -74,7 +74,7 @@ var _ = Describe("AgentPolicy Controller", func() {
 					return false
 				}
 				for _, c := range createdPolicy.Status.Conditions {
-					if c.Type == conditionTypeReady && c.Status == metav1.ConditionTrue {
+					if c.Type == ConditionTypeReady && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}
@@ -241,7 +241,7 @@ var _ = Describe("AgentPolicy Controller", func() {
 					return false
 				}
 				for _, c := range createdPolicy.Status.Conditions {
-					if c.Type == conditionTypeReady && c.Status == metav1.ConditionTrue {
+					if c.Type == ConditionTypeReady && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}
@@ -294,7 +294,7 @@ var _ = Describe("AgentPolicy Controller", func() {
 					return false
 				}
 				for _, c := range createdPolicy.Status.Conditions {
-					if c.Type == "Degraded" && c.Status == metav1.ConditionTrue {
+					if c.Type == ConditionTypeDegraded && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}

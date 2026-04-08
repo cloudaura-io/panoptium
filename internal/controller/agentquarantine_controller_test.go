@@ -76,7 +76,7 @@ var _ = Describe("AgentQuarantine Controller", func() {
 					return false
 				}
 				for _, c := range createdQ.Status.Conditions {
-					if c.Type == "Contained" && c.Status == metav1.ConditionTrue {
+					if c.Type == ConditionTypeContained && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}
@@ -185,7 +185,7 @@ var _ = Describe("AgentQuarantine Controller", func() {
 					return false
 				}
 				for _, c := range createdQ.Status.Conditions {
-					if c.Type == "Contained" && c.Status == metav1.ConditionTrue {
+					if c.Type == ConditionTypeContained && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}
@@ -199,7 +199,7 @@ var _ = Describe("AgentQuarantine Controller", func() {
 					return false
 				}
 				for _, c := range createdQ.Status.Conditions {
-					if c.Type == "Released" && c.Status == metav1.ConditionTrue {
+					if c.Type == ConditionTypeReleased && c.Status == metav1.ConditionTrue {
 						return true
 					}
 				}

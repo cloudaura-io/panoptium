@@ -115,17 +115,17 @@ func (r *AgentQuarantineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			now := metav1.Now()
 			quarantine.Status.ReleasedAt = &now
 			meta.SetStatusCondition(&quarantine.Status.Conditions, metav1.Condition{
-				Type:               "Released",
+				Type:               ConditionTypeReleased,
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: quarantine.Generation,
 				Reason:             "TTLExpired",
 				Message:            fmt.Sprintf("Auto-released after %d seconds", quarantine.Spec.Resolution.TTLSeconds),
 			})
 			meta.SetStatusCondition(&quarantine.Status.Conditions, metav1.Condition{
-				Type:               "Contained",
+				Type:               ConditionTypeContained,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: quarantine.Generation,
-				Reason:             "Released",
+				Reason:             ConditionReasonReleased,
 				Message:            "Quarantine has been released",
 			})
 
@@ -146,7 +146,7 @@ func (r *AgentQuarantineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		// Set Contained condition (still active)
 		meta.SetStatusCondition(&quarantine.Status.Conditions, metav1.Condition{
-			Type:               "Contained",
+			Type:               ConditionTypeContained,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: quarantine.Generation,
 			Reason:             "ContainmentActive",
@@ -154,7 +154,7 @@ func (r *AgentQuarantineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		})
 
 		meta.SetStatusCondition(&quarantine.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
+			Type:               ConditionTypeReady,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: quarantine.Generation,
 			Reason:             "Reconciled",
@@ -169,7 +169,7 @@ func (r *AgentQuarantineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Set Contained condition
 	meta.SetStatusCondition(&quarantine.Status.Conditions, metav1.Condition{
-		Type:               "Contained",
+		Type:               ConditionTypeContained,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: quarantine.Generation,
 		Reason:             "ContainmentActive",
@@ -178,7 +178,7 @@ func (r *AgentQuarantineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Set Ready condition
 	meta.SetStatusCondition(&quarantine.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
+		Type:               ConditionTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: quarantine.Generation,
 		Reason:             "Reconciled",

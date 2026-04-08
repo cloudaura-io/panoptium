@@ -299,7 +299,7 @@ func TestReconcile_InvalidRegexSetsCondition(t *testing.T) {
 
 	found := false
 	for _, c := range updated.Status.Conditions {
-		if c.Type == conditionTypeReady && c.Status == metav1.ConditionFalse && c.Reason == "CompilationFailed" {
+		if c.Type == ConditionTypeReady && c.Status == metav1.ConditionFalse && c.Reason == ConditionReasonCompilationFailed {
 			found = true
 			break
 		}

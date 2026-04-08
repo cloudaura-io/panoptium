@@ -93,7 +93,7 @@ func (r *AgentClusterPolicyReconciler) Reconcile(ctx context.Context, req ctrl.R
 				Type:               "Error",
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: pol.Generation,
-				Reason:             "CompilationFailed",
+				Reason:             ConditionReasonCompilationFailed,
 				Message:            fmt.Sprintf("Failed to compile cluster policy: %v", cacheErr),
 			})
 		} else {
@@ -109,14 +109,14 @@ func (r *AgentClusterPolicyReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// Set Ready condition
 	if degraded {
 		meta.SetStatusCondition(&pol.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
+			Type:               ConditionTypeReady,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: pol.Generation,
 			Reason:             "Reconciled",
 			Message:            "Policy reconciled with warnings",
 		})
 		meta.SetStatusCondition(&pol.Status.Conditions, metav1.Condition{
-			Type:               "Degraded",
+			Type:               ConditionTypeDegraded,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: pol.Generation,
 			Reason:             "EmptyTargetSelector",
@@ -125,20 +125,20 @@ func (r *AgentClusterPolicyReconciler) Reconcile(ctx context.Context, req ctrl.R
 		r.Recorder.Event(pol, "Warning", "EmptyTargetSelector", degradedMsg)
 	} else {
 		meta.SetStatusCondition(&pol.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
+			Type:               ConditionTypeReady,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: pol.Generation,
 			Reason:             "Reconciled",
 			Message:            fmt.Sprintf("Policy reconciled with %d rules", len(pol.Spec.Rules)),
 		})
 		// Remove Degraded condition if it was previously set
-		meta.RemoveStatusCondition(&pol.Status.Conditions, "Degraded")
+		meta.RemoveStatusCondition(&pol.Status.Conditions, ConditionTypeDegraded)
 	}
 
 	// Set Enforcing condition based on enforcement mode
 	if pol.Spec.EnforcementMode == panoptiumiov1alpha1.EnforcementModeEnforcing {
 		meta.SetStatusCondition(&pol.Status.Conditions, metav1.Condition{
-			Type:               "Enforcing",
+			Type:               ConditionTypeEnforcing,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: pol.Generation,
 			Reason:             "EnforcementEnabled",
@@ -146,7 +146,7 @@ func (r *AgentClusterPolicyReconciler) Reconcile(ctx context.Context, req ctrl.R
 		})
 	} else {
 		meta.SetStatusCondition(&pol.Status.Conditions, metav1.Condition{
-			Type:               "Enforcing",
+			Type:               ConditionTypeEnforcing,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: pol.Generation,
 			Reason:             "EnforcementDisabled",

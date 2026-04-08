@@ -66,7 +66,7 @@ func (r *AgentProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if profile.Spec.LearningMode {
 		profile.Status.BaselineHealth = "learning"
 		meta.SetStatusCondition(&profile.Status.Conditions, metav1.Condition{
-			Type:               "Learning",
+			Type:               ConditionTypeLearning,
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: profile.Generation,
 			Reason:             "LearningModeEnabled",
@@ -105,7 +105,7 @@ func (r *AgentProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			})
 		}
 		meta.SetStatusCondition(&profile.Status.Conditions, metav1.Condition{
-			Type:               "Learning",
+			Type:               ConditionTypeLearning,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: profile.Generation,
 			Reason:             "LearningModeDisabled",
@@ -119,7 +119,7 @@ func (r *AgentProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Set Ready condition
 	meta.SetStatusCondition(&profile.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
+		Type:               ConditionTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: profile.Generation,
 		Reason:             "Reconciled",

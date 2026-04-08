@@ -88,14 +88,14 @@ func (r *ThreatSignatureReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if len(compileErrors) > 0 {
 		meta.SetStatusCondition(&sig.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
+			Type:               ConditionTypeReady,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: sig.Generation,
-			Reason:             "CompilationFailed",
+			Reason:             ConditionReasonCompilationFailed,
 			Message:            fmt.Sprintf("Failed to compile %d pattern(s): %v", len(compileErrors), compileErrors),
 		})
 
-		r.Recorder.Event(sig, "Warning", "CompilationFailed",
+		r.Recorder.Event(sig, "Warning", ConditionReasonCompilationFailed,
 			fmt.Sprintf("Failed to compile patterns: %v", compileErrors))
 
 		// Remove from registry on compilation failure
@@ -153,7 +153,7 @@ func (r *ThreatSignatureReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		if err := r.Registry.AddSignature(sigDef); err != nil {
 			meta.SetStatusCondition(&sig.Status.Conditions, metav1.Condition{
-				Type:               "Ready",
+				Type:               ConditionTypeReady,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: sig.Generation,
 				Reason:             "RegistryError",
@@ -168,10 +168,10 @@ func (r *ThreatSignatureReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Set Ready condition
 	meta.SetStatusCondition(&sig.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
+		Type:               ConditionTypeReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: sig.Generation,
-		Reason:             "Compiled",
+		Reason:             ConditionReasonCompiled,
 		Message:            fmt.Sprintf("ThreatSignature compiled: %d patterns, category=%s", compiledCount, sig.Spec.Category),
 	})
 
