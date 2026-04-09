@@ -307,22 +307,22 @@ func TestConcurrentCacheAccess_UniversalTier(t *testing.T) {
 	// Concurrent writes
 	for i := 0; i < iterations; i++ {
 		wg.Add(1)
-		go func(_ int) {
+		go func() {
 			defer wg.Done()
 			key := CacheKey{Tool: "curl", Action: "execute", PolicyKey: "default/deny-curl"}
 			d := &policy.Decision{Matched: true, MatchedRule: "concurrent-rule", Action: policy.CompiledAction{Type: "deny"}}
 			c.Store(key, TierUniversal, d, "default/deny-curl", "v1")
-		}(i)
+		}()
 	}
 
 	// Concurrent reads
 	for i := 0; i < iterations; i++ {
 		wg.Add(1)
-		go func(_ int) {
+		go func() {
 			defer wg.Done()
 			key := CacheKey{Tool: "curl", Action: "execute", PolicyKey: "default/deny-curl"}
 			c.Lookup(key, TierUniversal)
-		}(i)
+		}()
 	}
 
 	wg.Wait()
@@ -339,29 +339,29 @@ func TestConcurrentCacheAccess_MixedTiers(t *testing.T) {
 		wg.Add(3)
 
 		// Universal tier operations
-		go func(_ int) {
+		go func() {
 			defer wg.Done()
 			key := CacheKey{Tool: "curl", Action: "execute", PolicyKey: "default/pol"}
 			d := &policy.Decision{Matched: true, Action: policy.CompiledAction{Type: "deny"}}
 			c.Store(key, TierUniversal, d, "default/pol", "v1")
 			c.Lookup(key, TierUniversal)
-		}(i)
+		}()
 
 		// Task-scoped tier operations
-		go func(_ int) {
+		go func() {
 			defer wg.Done()
 			key := CacheKey{Tool: "curl", Action: "execute", SessionID: "session-concurrent"}
 			d := &policy.Decision{Matched: true, Action: policy.CompiledAction{Type: "deny"}}
 			c.Store(key, TierTaskScoped, d, "default/pol", "v1")
 			c.Lookup(key, TierTaskScoped)
-		}(i)
+		}()
 
 		// Invalidation operations
-		go func(_ int) {
+		go func() {
 			defer wg.Done()
 			c.InvalidatePolicy("default/pol")
 			c.InvalidateSession("session-concurrent")
-		}(i)
+		}()
 	}
 
 	wg.Wait()
