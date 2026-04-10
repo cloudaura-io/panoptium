@@ -192,7 +192,6 @@ func TestFailOpen_EmitsBypassEvent(t *testing.T) {
 
 // --- Fail-Closed Tests ---
 
-
 // TestFailClosed_Returns503OnPolicyError verifies that in fail-closed mode,
 // when the policy evaluator returns an error, the ExtProc server returns
 // an ImmediateResponse with status 503.
