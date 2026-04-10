@@ -17,6 +17,8 @@ You can have a perfectly trained agent with flawless eval scores, red-teamed to 
 
 Traditional evaluators test what an agent *would* do given a controlled input. They don't run alongside the agent in production. They can't see what happens when a trusted website starts returning prompt injection payloads, when an MCP server poisons its tool descriptions to manipulate the LLM's tool selection, when a multi-step tool chain silently exfiltrates credentials through a side channel, or when an LLM provider response carries encoded instructions hidden in the token stream. These vectors don't exist in eval datasets. They manifest only at runtime, only in real environments, and only when real external services are involved.
 
+We maintain a [catalog of known attack vectors](https://cloudaura-io.github.io/panoptium/threats/) across different categories that documents these risks.
+
 The uncomfortable truth is that the boundary you always trusted is the one most likely to be weaponized. The API you allowlisted returns poisoned content. The tool that passed every static check changes behavior after deployment. The agent's declared intent says "read a CSV" while its actual syscalls show `connect(attacker.com)`. No amount of offline testing catches a live rug-pull.
 
 Panoptium is an R&D project born from this realization. It flips the perspective: instead of trying to prove an agent is safe before deployment, it assumes any layer can be compromised at any time and enforces security in real time. It sits as a proxy between every agent and every LLM provider, correlates what the agent *declares* it will do (through LLM tool calls and protocol messages) with what it *actually does* (at the kernel and network level), and acts: blocking, throttling, quarantining, or killing agent workloads the moment something doesn't add up. **Not after the fact. While it's happening**.
@@ -128,8 +130,6 @@ spec:
 Any pod with `app: my-agent` that tries to call `shell_exec` gets denied.
 
 More examples in [`examples/policies/`](examples/policies/).
-
-**Threat catalog:** [cloudaura-io.github.io/panoptium/threats/](https://cloudaura-io.github.io/panoptium/threats/) - 71 documented attack vectors across 11 categories.
 
 To tear down:
 
