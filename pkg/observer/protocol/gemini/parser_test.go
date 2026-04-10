@@ -28,7 +28,6 @@ const testFuncGetWeather = "get_weather"
 
 // --- Compile-time interface check ---
 
-
 var _ protocol.ProtocolParser = (*GeminiParser)(nil)
 
 // TestGeminiParser_Detect_V1Beta verifies detection of v1beta generateContent path.

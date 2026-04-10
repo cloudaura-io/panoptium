@@ -25,7 +25,6 @@ const testMethodToolsCall = "tools/call"
 
 // --- Mock ProtocolParser Implementation ---
 
-
 // mockParser is a test double implementing ProtocolParser.
 type mockParser struct {
 	name        string
