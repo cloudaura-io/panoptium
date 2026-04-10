@@ -28,7 +28,6 @@ const (
 
 // --- Request Parsing Tests ---
 
-
 // TestParseRequest_Basic verifies parsing a basic OpenAI chat completion request.
 func TestParseRequest_Basic(t *testing.T) {
 	body := []byte(`{

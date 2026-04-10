@@ -26,7 +26,6 @@ const (
 
 // --- Request Parsing Tests ---
 
-
 // TestParseRequest_Basic verifies parsing a basic Anthropic messages API request.
 func TestParseRequest_Basic(t *testing.T) {
 	body := []byte(`{
