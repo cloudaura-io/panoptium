@@ -28,7 +28,6 @@ const (
 
 // --- EscalationProcessor tests ---
 
-
 func TestEscalationProcessor_DenyToQuarantine(t *testing.T) {
 	proc := NewEscalationProcessor([]EscalationLevel{
 		{FromAction: testActionDeny, ToAction: testActionQuarantine, Threshold: 3, Window: 5 * time.Second},

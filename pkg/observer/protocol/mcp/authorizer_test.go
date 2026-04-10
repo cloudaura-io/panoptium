@@ -24,7 +24,6 @@ const testToolReadFile = "read_file"
 
 // --- Tool Authorization Tests ---
 
-
 // TestMCPToolAuthorizer_AllowedToolPassesThrough verifies allowed tool passes through.
 func TestMCPToolAuthorizer_AllowedToolPassesThrough(t *testing.T) {
 	authorizer := NewMCPToolAuthorizer()

@@ -38,7 +38,6 @@ const (
 // testDefaultPriority is the default priority used in test policies.
 const testDefaultPriority int32 = 100
 
-
 // newTestPolicy creates a AgentPolicy with the given rules for testing.
 func newTestPolicy(name string, rules []v1alpha1.PolicyRule) *v1alpha1.AgentPolicy {
 	return &v1alpha1.AgentPolicy{
