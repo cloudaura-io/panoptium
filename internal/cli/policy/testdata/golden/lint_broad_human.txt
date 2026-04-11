@@ -1,0 +1,4 @@
+[warn] <masked>/doc.yaml:1 (AgentPolicy/broad)
+    warning: spec.targetSelector: [broad-target-selector] target selector is empty; this policy will match every pod in the namespace
+
+Total: 1 | ok: 0 | errors: 0 | warnings: 1 | skipped: 0

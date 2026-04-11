@@ -1,12 +1,16 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/panoptium/panoptium/internal/cli/clierr"
+	"github.com/panoptium/panoptium/internal/cli/policy"
+	"github.com/panoptium/panoptium/internal/cli/signature"
 	"github.com/panoptium/panoptium/internal/cli/version"
 )
 
@@ -54,6 +58,8 @@ and manage agent quarantine and risk state.`,
 
 	root.AddCommand(version.NewCommand(func() string { return flags.Output }))
 	root.AddCommand(newCompletionCommand())
+	root.AddCommand(policy.NewCommand(func() string { return flags.Output }))
+	root.AddCommand(signature.NewCommand(func() string { return flags.Output }))
 
 	return root
 }
@@ -61,6 +67,10 @@ and manage agent quarantine and risk state.`,
 func Execute() {
 	root := NewRootCommand(os.Stdout, os.Stderr)
 	if err := root.Execute(); err != nil {
+		var exitErr *clierr.ExitError
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.Code)
+		}
 		fmt.Fprintf(os.Stderr, "error: %s\n", err.Error())
 		os.Exit(1)
 	}
