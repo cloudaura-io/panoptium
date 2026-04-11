@@ -134,6 +134,27 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
+# CLI build flags: inject version metadata via -ldflags -X.
+CLI_VERSION ?= dev
+CLI_COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+CLI_DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+CLI_LDFLAGS := -s -w \
+	-X github.com/panoptium/panoptium/internal/cli/version.Version=$(CLI_VERSION) \
+	-X github.com/panoptium/panoptium/internal/cli/version.Commit=$(CLI_COMMIT) \
+	-X github.com/panoptium/panoptium/internal/cli/version.Date=$(CLI_DATE)
+
+.PHONY: cli-build
+cli-build: fmt vet ## Build panoptium CLI binary to bin/panoptium.
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(CLI_LDFLAGS)" -o bin/panoptium ./cmd/panoptium
+
+.PHONY: cli-smoke
+cli-smoke: cli-build ## Build CLI and run a smoke-test of --help, version, completion.
+	@bin/panoptium --help >/dev/null
+	@bin/panoptium version >/dev/null
+	@bin/panoptium version -o json | grep -q '"version"'
+	@bin/panoptium completion zsh | grep -q '#compdef'
+	@echo "cli-smoke OK"
+
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
