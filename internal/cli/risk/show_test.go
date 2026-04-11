@@ -3,9 +3,11 @@ package risk
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/panoptium/panoptium/internal/cli/k8s"
 	"github.com/panoptium/panoptium/internal/cli/output"
 )
 
@@ -71,5 +73,53 @@ func TestWriteReportWithEntries(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "ns1") || !strings.Contains(buf.String(), "0.75") {
 		t.Errorf("missing entry fields:\n%s", buf.String())
+	}
+}
+
+func TestWriteReportTableWithEntries(t *testing.T) {
+	r := &RiskReport{
+		Available: true,
+		Entries: []RiskEntry{
+			{Namespace: "ns1", AgentName: "a", Score: 0.9, Level: "high"},
+		},
+	}
+	var buf bytes.Buffer
+	if err := writeReport(&buf, output.FormatTable, r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "SCORE") || !strings.Contains(buf.String(), "0.90") {
+		t.Errorf("missing table fields:\n%s", buf.String())
+	}
+}
+
+func TestNewShowCommandDegradesGracefully(t *testing.T) {
+	cmd := newShowCommand(
+		func() string { return "human" },
+		func() (*k8s.Built, error) { return nil, fmt.Errorf("no cluster") },
+	)
+	var out, errOut bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(errOut.String(), "warning: cluster not reachable") {
+		t.Errorf("expected warning on stderr:\n%s", errOut.String())
+	}
+	if !strings.Contains(out.String(), "unavailable") {
+		t.Errorf("expected unavailable in stdout:\n%s", out.String())
+	}
+}
+
+func TestNewShowCommandRejectsBadFormat(t *testing.T) {
+	cmd := newShowCommand(
+		func() string { return "invalid" },
+		func() (*k8s.Built, error) { return nil, nil },
+	)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	if err := cmd.Execute(); err == nil {
+		t.Error("expected error for bad format")
 	}
 }

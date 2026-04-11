@@ -102,33 +102,46 @@ func writeShowOutput(w io.Writer, format output.Format, obj interface{}) error {
 }
 
 func writeHumanPolicy(w io.Writer, obj interface{}) error {
+	var lines []string
 	switch p := obj.(type) {
 	case *v1alpha1.AgentPolicy:
-		fmt.Fprintf(w, "Kind:              AgentPolicy\n")
-		fmt.Fprintf(w, "Name:              %s\n", p.Name)
-		fmt.Fprintf(w, "Namespace:         %s\n", p.Namespace)
-		fmt.Fprintf(w, "Priority:          %d\n", p.Spec.Priority)
-		fmt.Fprintf(w, "Enforcement Mode:  %s\n", p.Spec.EnforcementMode)
-		fmt.Fprintf(w, "Rules:             %d\n", len(p.Spec.Rules))
-		fmt.Fprintf(w, "Ready:             %s\n", readyCondition(p.Status.Conditions))
-		fmt.Fprintf(w, "Age:               %s\n", relativeAge(p.CreationTimestamp.Time))
+		lines = append(lines,
+			"Kind:              AgentPolicy",
+			fmt.Sprintf("Name:              %s", p.Name),
+			fmt.Sprintf("Namespace:         %s", p.Namespace),
+			fmt.Sprintf("Priority:          %d", p.Spec.Priority),
+			fmt.Sprintf("Enforcement Mode:  %s", p.Spec.EnforcementMode),
+			fmt.Sprintf("Rules:             %d", len(p.Spec.Rules)),
+			fmt.Sprintf("Ready:             %s", readyCondition(p.Status.Conditions)),
+			fmt.Sprintf("Age:               %s", relativeAge(p.CreationTimestamp.Time)),
+		)
 		for i, rule := range p.Spec.Rules {
-			fmt.Fprintf(w, "\nRule %d: %s\n", i, rule.Name)
-			fmt.Fprintf(w, "  Trigger:   %s / %s\n", rule.Trigger.EventCategory, rule.Trigger.EventSubcategory)
-			fmt.Fprintf(w, "  Action:    %s\n", rule.Action.Type)
-			fmt.Fprintf(w, "  Severity:  %s\n", rule.Severity)
-			fmt.Fprintf(w, "  Predicates: %d\n", len(rule.Predicates))
+			lines = append(lines,
+				"",
+				fmt.Sprintf("Rule %d: %s", i, rule.Name),
+				fmt.Sprintf("  Trigger:   %s / %s", rule.Trigger.EventCategory, rule.Trigger.EventSubcategory),
+				fmt.Sprintf("  Action:    %s", rule.Action.Type),
+				fmt.Sprintf("  Severity:  %s", rule.Severity),
+				fmt.Sprintf("  Predicates: %d", len(rule.Predicates)),
+			)
 		}
 	case *v1alpha1.AgentClusterPolicy:
-		fmt.Fprintf(w, "Kind:              AgentClusterPolicy\n")
-		fmt.Fprintf(w, "Name:              %s\n", p.Name)
-		fmt.Fprintf(w, "Priority:          %d\n", p.Spec.Priority)
-		fmt.Fprintf(w, "Enforcement Mode:  %s\n", p.Spec.EnforcementMode)
-		fmt.Fprintf(w, "Rules:             %d\n", len(p.Spec.Rules))
-		fmt.Fprintf(w, "Ready:             %s\n", readyCondition(p.Status.Conditions))
-		fmt.Fprintf(w, "Age:               %s\n", relativeAge(p.CreationTimestamp.Time))
+		lines = append(lines,
+			"Kind:              AgentClusterPolicy",
+			fmt.Sprintf("Name:              %s", p.Name),
+			fmt.Sprintf("Priority:          %d", p.Spec.Priority),
+			fmt.Sprintf("Enforcement Mode:  %s", p.Spec.EnforcementMode),
+			fmt.Sprintf("Rules:             %d", len(p.Spec.Rules)),
+			fmt.Sprintf("Ready:             %s", readyCondition(p.Status.Conditions)),
+			fmt.Sprintf("Age:               %s", relativeAge(p.CreationTimestamp.Time)),
+		)
 	default:
 		return fmt.Errorf("unexpected policy type %T", obj)
+	}
+	for _, line := range lines {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
 	}
 	return nil
 }

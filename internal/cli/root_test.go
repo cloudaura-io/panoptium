@@ -63,6 +63,63 @@ func TestCompletionBashEmitsScript(t *testing.T) {
 	}
 }
 
+func TestCompletionFishEmitsScript(t *testing.T) {
+	var out, errOut bytes.Buffer
+	root := NewRootCommand(&out, &errOut)
+	root.SetArgs([]string{"completion", "fish"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() == 0 {
+		t.Error("fish completion output empty")
+	}
+}
+
+func TestCompletionPowerShellEmitsScript(t *testing.T) {
+	var out, errOut bytes.Buffer
+	root := NewRootCommand(&out, &errOut)
+	root.SetArgs([]string{"completion", "powershell"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() == 0 {
+		t.Error("powershell completion output empty")
+	}
+}
+
+func TestNoColorDefaultRespectsEnv(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	if !noColorDefault() {
+		t.Error("expected NO_COLOR=1 to make default true")
+	}
+	t.Setenv("NO_COLOR", "")
+	if noColorDefault() {
+		t.Error("expected empty NO_COLOR to make default false")
+	}
+}
+
+func TestRunVersionSuccessReturnsZero(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := Run([]string{"version"}, &out, &errOut)
+	if code != 0 {
+		t.Errorf("version exit code=%d want 0", code)
+	}
+	if !strings.Contains(out.String(), "panoptium-cli") {
+		t.Errorf("missing version banner:\n%s", out.String())
+	}
+}
+
+func TestRunUnknownSubcommandReturnsOne(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := Run([]string{"nonsense"}, &out, &errOut)
+	if code != 1 {
+		t.Errorf("unknown command should exit 1, got %d", code)
+	}
+	if !strings.Contains(errOut.String(), "error:") {
+		t.Errorf("expected 'error:' prefix on stderr:\n%s", errOut.String())
+	}
+}
+
 func TestCompletionRejectsInvalidShell(t *testing.T) {
 	var out, errOut bytes.Buffer
 	root := NewRootCommand(&out, &errOut)

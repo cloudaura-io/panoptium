@@ -247,7 +247,7 @@ func TestWriteReportHuman(t *testing.T) {
 
 func TestValidateCommandReturnsExitErrorOnFailure(t *testing.T) {
 	path := writeFile(t, invalidPolicyBadCEL)
-	cmd := newValidateCommand(func() string { return "human" })
+	cmd := newValidateCommand(func() string { return humanFmt })
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -264,7 +264,7 @@ func TestValidateCommandReturnsExitErrorOnFailure(t *testing.T) {
 
 func TestValidateCommandSuccessReturnsNil(t *testing.T) {
 	path := writeFile(t, validPolicy)
-	cmd := newValidateCommand(func() string { return "human" })
+	cmd := newValidateCommand(func() string { return humanFmt })
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -278,7 +278,7 @@ func TestValidateCommandSuccessReturnsNil(t *testing.T) {
 }
 
 func TestValidateCommandFromStdin(t *testing.T) {
-	cmd := newValidateCommand(func() string { return "human" })
+	cmd := newValidateCommand(func() string { return humanFmt })
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

@@ -15,6 +15,8 @@ import (
 	"github.com/panoptium/panoptium/internal/cli/output"
 )
 
+const defaultNamespace = "default"
+
 func newCreateCommand(getFormat func() string, factory k8s.ClientFactory) *cobra.Command {
 	var (
 		targetPod       string
@@ -75,7 +77,7 @@ func createQuarantine(ctx context.Context, w io.Writer, built *k8s.Built, name, 
 	}
 	qNS := built.Namespace
 	if qNS == "" {
-		qNS = "default"
+		qNS = defaultNamespace
 	}
 
 	q := &v1alpha1.AgentQuarantine{

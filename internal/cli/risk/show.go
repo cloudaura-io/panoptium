@@ -50,7 +50,7 @@ layer will grow a real implementation.`,
 				return err
 			}
 			if _, buildErr := factory(); buildErr != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "warning: cluster not reachable (%v); reporting CLI-only view\n", buildErr)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: cluster not reachable (%v); reporting CLI-only view\n", buildErr)
 			}
 			report := fetchRisk(agent, namespace)
 			return writeReport(cmd.OutOrStdout(), format, report)

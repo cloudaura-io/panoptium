@@ -14,6 +14,8 @@ import (
 	"github.com/panoptium/panoptium/internal/cli/output"
 )
 
+const humanFmt = "human"
+
 func makeFactory(built *k8s.Built) k8s.ClientFactory {
 	return func() (*k8s.Built, error) { return built, nil }
 }
@@ -92,7 +94,7 @@ func TestListCommandWiredThroughFactory(t *testing.T) {
 		Spec:       v1alpha1.ThreatSignatureSpec{Category: "c", Severity: v1alpha1.SeverityHigh},
 	}
 	built := newBuiltWithSignatures(s)
-	cmd := newListCommand(func() string { return "human" }, makeFactory(built))
+	cmd := newListCommand(func() string { return humanFmt }, makeFactory(built))
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

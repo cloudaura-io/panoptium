@@ -2,7 +2,6 @@ package eventbus
 
 import (
 	"errors"
-	"os"
 	"testing"
 )
 
@@ -41,8 +40,8 @@ func TestResolveEndpointFromPanoptiumNATSURL(t *testing.T) {
 }
 
 func TestResolveEndpointNoneReturnsError(t *testing.T) {
-	os.Unsetenv("NATS_URL")
-	os.Unsetenv("PANOPTIUM_NATS_URL")
+	t.Setenv("NATS_URL", "")
+	t.Setenv("PANOPTIUM_NATS_URL", "")
 	_, err := ResolveEndpoint("")
 	if err == nil {
 		t.Fatal("expected ErrNoEndpoint, got nil")

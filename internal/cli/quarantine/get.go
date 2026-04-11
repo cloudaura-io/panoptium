@@ -51,7 +51,7 @@ func showQuarantine(ctx context.Context, w io.Writer, built *k8s.Built, name str
 	}
 	ns := built.Namespace
 	if ns == "" {
-		ns = "default"
+		ns = defaultNamespace
 	}
 	var obj v1alpha1.AgentQuarantine
 	if err := built.Client.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, &obj); err != nil {
@@ -86,25 +86,32 @@ func writeGetOutput(w io.Writer, format output.Format, q *v1alpha1.AgentQuaranti
 }
 
 func writeHumanQuarantine(w io.Writer, q *v1alpha1.AgentQuarantine) error {
-	fmt.Fprintf(w, "Name:              %s\n", q.Name)
-	fmt.Fprintf(w, "Namespace:         %s\n", q.Namespace)
-	fmt.Fprintf(w, "Target Pod:        %s/%s\n", q.Spec.TargetNamespace, q.Spec.TargetPod)
-	fmt.Fprintf(w, "Containment:       %s\n", q.Spec.ContainmentLevel)
-	fmt.Fprintf(w, "Reason:            %s\n", q.Spec.Reason)
+	lines := []string{
+		fmt.Sprintf("Name:              %s", q.Name),
+		fmt.Sprintf("Namespace:         %s", q.Namespace),
+		fmt.Sprintf("Target Pod:        %s/%s", q.Spec.TargetNamespace, q.Spec.TargetPod),
+		fmt.Sprintf("Containment:       %s", q.Spec.ContainmentLevel),
+		fmt.Sprintf("Reason:            %s", q.Spec.Reason),
+	}
 	if q.Spec.TriggeringPolicy != "" {
-		fmt.Fprintf(w, "Triggering Policy: %s\n", q.Spec.TriggeringPolicy)
+		lines = append(lines, fmt.Sprintf("Triggering Policy: %s", q.Spec.TriggeringPolicy))
 	}
 	if q.Spec.TriggeringSignature != "" {
-		fmt.Fprintf(w, "Signature:         %s\n", q.Spec.TriggeringSignature)
+		lines = append(lines, fmt.Sprintf("Signature:         %s", q.Spec.TriggeringSignature))
 	}
 	if q.Status.ContainedAt != nil {
-		fmt.Fprintf(w, "Contained At:      %s\n", q.Status.ContainedAt.String())
+		lines = append(lines, fmt.Sprintf("Contained At:      %s", q.Status.ContainedAt.String()))
 	}
 	if q.Status.ReleasedAt != nil {
-		fmt.Fprintf(w, "Released At:       %s\n", q.Status.ReleasedAt.String())
+		lines = append(lines, fmt.Sprintf("Released At:       %s", q.Status.ReleasedAt.String()))
 	}
 	if len(q.Status.AppliedNetworkPolicies) > 0 {
-		fmt.Fprintf(w, "NetworkPolicies:   %v\n", q.Status.AppliedNetworkPolicies)
+		lines = append(lines, fmt.Sprintf("NetworkPolicies:   %v", q.Status.AppliedNetworkPolicies))
+	}
+	for _, line := range lines {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
 	}
 	return nil
 }

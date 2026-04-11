@@ -107,10 +107,10 @@ func TestLoadDirectoryRecursively(t *testing.T) {
 	sub := filepath.Join(dir, "sub")
 	_ = os.Mkdir(sub, 0o755)
 	files := map[string]string{
-		filepath.Join(dir, "a.yaml"):       "apiVersion: v1\nkind: A\nmetadata:\n  name: a\n",
-		filepath.Join(dir, "b.yml"):        "apiVersion: v1\nkind: B\nmetadata:\n  name: b\n",
-		filepath.Join(dir, "ignore.txt"):   "not a yaml",
-		filepath.Join(sub, "deep.yaml"):    "apiVersion: v1\nkind: C\nmetadata:\n  name: c\n",
+		filepath.Join(dir, "a.yaml"):     "apiVersion: v1\nkind: A\nmetadata:\n  name: a\n",
+		filepath.Join(dir, "b.yml"):      "apiVersion: v1\nkind: B\nmetadata:\n  name: b\n",
+		filepath.Join(dir, "ignore.txt"): "not a yaml",
+		filepath.Join(sub, "deep.yaml"):  "apiVersion: v1\nkind: C\nmetadata:\n  name: c\n",
 	}
 	for p, content := range files {
 		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {

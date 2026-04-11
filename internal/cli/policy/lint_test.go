@@ -153,7 +153,7 @@ func TestLintHasAtLeastThreeDistinctWarningClasses(t *testing.T) {
 
 func TestLintCommandStrictEscalatesWarnings(t *testing.T) {
 	path := writeFile(t, lintyPolicyBroadSelector)
-	cmd := newLintCommand(func() string { return "human" })
+	cmd := newLintCommand(func() string { return humanFmt })
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -170,7 +170,7 @@ func TestLintCommandStrictEscalatesWarnings(t *testing.T) {
 
 func TestLintCommandNonStrictPassesOnWarnings(t *testing.T) {
 	path := writeFile(t, lintyPolicyBroadSelector)
-	cmd := newLintCommand(func() string { return "human" })
+	cmd := newLintCommand(func() string { return humanFmt })
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

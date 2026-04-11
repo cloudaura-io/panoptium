@@ -128,7 +128,7 @@ func TestListCommandWiredThroughFactory(t *testing.T) {
 		Spec:       v1alpha1.AgentQuarantineSpec{TargetPod: "pod", TargetNamespace: "default", ContainmentLevel: v1alpha1.ContainmentLevelNetworkIsolate, Reason: "r"},
 	}
 	built := newBuilt("default", false, q)
-	cmd := newListCommand(func() string { return "human" }, makeFactory(built))
+	cmd := newListCommand(func() string { return humanFmt }, makeFactory(built))
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -137,5 +137,80 @@ func TestListCommandWiredThroughFactory(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "alpha") {
 		t.Errorf("expected alpha, got:\n%s", out.String())
+	}
+}
+
+func TestGetCommandWiredThroughFactory(t *testing.T) {
+	q := &v1alpha1.AgentQuarantine{
+		ObjectMeta: metav1.ObjectMeta{Name: "alpha", Namespace: "default"},
+		Spec:       v1alpha1.AgentQuarantineSpec{TargetPod: "pod", TargetNamespace: "default", ContainmentLevel: v1alpha1.ContainmentLevelNetworkIsolate, Reason: "r"},
+	}
+	built := newBuilt("default", false, q)
+	cmd := newGetCommand(func() string { return humanFmt }, makeFactory(built))
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"alpha"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "alpha") {
+		t.Errorf("expected alpha:\n%s", out.String())
+	}
+}
+
+func TestCreateCommandWiredThroughFactory(t *testing.T) {
+	built := newBuilt("default", false)
+	cmd := newCreateCommand(func() string { return humanFmt }, makeFactory(built))
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"q1", "--pod", "agent", "--target-namespace", "prod", "--reason", "test"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "q1") {
+		t.Errorf("expected q1:\n%s", out.String())
+	}
+}
+
+func TestCreateCommandMissingPodFlag(t *testing.T) {
+	built := newBuilt("default", false)
+	cmd := newCreateCommand(func() string { return humanFmt }, makeFactory(built))
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"q1", "--reason", "r"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for missing --pod")
+	}
+	if !strings.Contains(err.Error(), "--pod is required") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestReleaseCommandWiredThroughFactory(t *testing.T) {
+	q := &v1alpha1.AgentQuarantine{
+		ObjectMeta: metav1.ObjectMeta{Name: "q1", Namespace: "default"},
+		Spec: v1alpha1.AgentQuarantineSpec{
+			TargetPod: "p", TargetNamespace: "default",
+			ContainmentLevel: v1alpha1.ContainmentLevelNetworkIsolate, Reason: "r",
+		},
+	}
+	scheme := k8s.BuildScheme()
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&v1alpha1.AgentQuarantine{}).
+		WithObjects(q).
+		Build()
+	built := &k8s.Built{Client: c, Namespace: "default"}
+	cmd := newReleaseCommand(func() string { return humanFmt }, makeFactory(built))
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"q1"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -108,7 +108,7 @@ func TestWriteListResponseAllFormats(t *testing.T) {
 func TestListCommandWiredThroughFactory(t *testing.T) {
 	p1 := &v1alpha1.AgentPolicy{ObjectMeta: metav1.ObjectMeta{Name: "alpha", Namespace: "default"}}
 	built := newFakeBuiltWithPolicies("default", false, p1)
-	cmd := newListCommand(func() string { return "human" }, makeFactory(built))
+	cmd := newListCommand(func() string { return humanFmt }, makeFactory(built))
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

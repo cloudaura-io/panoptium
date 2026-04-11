@@ -136,7 +136,7 @@ func TestWriteReportAllFormats(t *testing.T) {
 
 func TestValidateCommandExitErrorOnFailure(t *testing.T) {
 	path := writeFile(t, invalidSignatureBadRegex)
-	cmd := newValidateCommand(func() string { return "human" })
+	cmd := newValidateCommand(func() string { return humanFmt })
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -153,7 +153,7 @@ func TestValidateCommandExitErrorOnFailure(t *testing.T) {
 
 func TestValidateCommandSuccess(t *testing.T) {
 	path := writeFile(t, validSignature)
-	cmd := newValidateCommand(func() string { return "human" })
+	cmd := newValidateCommand(func() string { return humanFmt })
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -167,7 +167,7 @@ func TestValidateCommandSuccess(t *testing.T) {
 }
 
 func TestValidateCommandFromStdin(t *testing.T) {
-	cmd := newValidateCommand(func() string { return "human" })
+	cmd := newValidateCommand(func() string { return humanFmt })
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

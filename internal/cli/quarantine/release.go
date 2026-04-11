@@ -53,7 +53,7 @@ func releaseQuarantine(ctx context.Context, w io.Writer, built *k8s.Built, name 
 	}
 	ns := built.Namespace
 	if ns == "" {
-		ns = "default"
+		ns = defaultNamespace
 	}
 
 	var obj v1alpha1.AgentQuarantine

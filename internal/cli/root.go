@@ -81,15 +81,21 @@ and manage agent quarantine and risk state.`,
 }
 
 func Execute() {
-	root := NewRootCommand(os.Stdout, os.Stderr)
+	os.Exit(Run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func Run(args []string, out, errOut io.Writer) int {
+	root := NewRootCommand(out, errOut)
+	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		var exitErr *clierr.ExitError
 		if errors.As(err, &exitErr) {
-			os.Exit(exitErr.Code)
+			return exitErr.Code
 		}
-		fmt.Fprintf(os.Stderr, "error: %s\n", err.Error())
-		os.Exit(1)
+		_, _ = fmt.Fprintf(errOut, "error: %s\n", err.Error())
+		return 1
 	}
+	return 0
 }
 
 func noColorDefault() bool {
