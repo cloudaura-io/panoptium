@@ -137,6 +137,44 @@ To tear down:
 helm uninstall panoptium -n panoptium-system
 ```
 
+## CLI
+
+The `panoptium` command is a first-party CLI for policy authoring, cluster introspection, and runtime operations. One binary, kubectl-style subcommand tree, shared global flags.
+
+```bash
+# Validate a policy offline — no cluster required
+panoptium policy validate -f examples/policies/
+
+# Lint for common authoring mistakes
+panoptium policy lint -f my-policy.yaml --strict
+
+# Inspect what's deployed
+panoptium policy list -A
+panoptium policy show deny-shell -o yaml | kubectl apply -f -
+
+# Tail the event bus (after kubectl port-forward)
+panoptium events tail --category policy -o json
+
+# Manually quarantine and release an agent
+panoptium quarantine create agent-foo-q --pod agent-foo --reason "manual review"
+panoptium quarantine release agent-foo-q
+```
+
+Install the latest release:
+
+```bash
+curl -L -o panoptium.tar.gz https://github.com/cloudaura-io/INTERNAL-panoptium/releases/latest/download/panoptium_linux_amd64.tar.gz
+tar -xzf panoptium.tar.gz && sudo mv panoptium /usr/local/bin/
+```
+
+Or build from source:
+
+```bash
+make cli-build    # → bin/panoptium
+```
+
+Full reference: [`docs/cli.md`](docs/cli.md).
+
 ## Demo
 
 `demo/run-demo.sh` deploys a Kagent agent on a kind cluster with AgentGateway and runs five scenarios end-to-end:
