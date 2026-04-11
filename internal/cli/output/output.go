@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"gopkg.in/yaml.v3"
+	kyaml "sigs.k8s.io/yaml"
 )
 
 type Format string
@@ -48,10 +48,12 @@ func WriteJSON(w io.Writer, obj interface{}) error {
 }
 
 func WriteYAML(w io.Writer, obj interface{}) error {
-	enc := yaml.NewEncoder(w)
-	enc.SetIndent(2)
-	defer func() { _ = enc.Close() }()
-	return enc.Encode(obj)
+	b, err := kyaml.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(b)
+	return err
 }
 
 type Table struct {

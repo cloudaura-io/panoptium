@@ -9,7 +9,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/panoptium/panoptium/internal/cli/clierr"
+	"github.com/panoptium/panoptium/internal/cli/k8s"
 	"github.com/panoptium/panoptium/internal/cli/policy"
+	"github.com/panoptium/panoptium/internal/cli/quarantine"
 	"github.com/panoptium/panoptium/internal/cli/signature"
 	"github.com/panoptium/panoptium/internal/cli/version"
 )
@@ -56,10 +58,20 @@ and manage agent quarantine and risk state.`,
 	pf.BoolVarP(&flags.Verbose, "verbose", "v", false, "enable verbose debug logging on stderr")
 	pf.BoolVar(&flags.NoColor, "no-color", noColorDefault(), "disable ANSI colors in output (respects NO_COLOR)")
 
+	clientFactory := func() (*k8s.Built, error) {
+		return k8s.NewFactory(&k8s.Flags{
+			Kubeconfig:    flags.Kubeconfig,
+			Context:       flags.Context,
+			Namespace:     flags.Namespace,
+			AllNamespaces: flags.AllNamespaces,
+		})()
+	}
+
 	root.AddCommand(version.NewCommand(func() string { return flags.Output }))
 	root.AddCommand(newCompletionCommand())
-	root.AddCommand(policy.NewCommand(func() string { return flags.Output }))
-	root.AddCommand(signature.NewCommand(func() string { return flags.Output }))
+	root.AddCommand(policy.NewCommand(func() string { return flags.Output }, clientFactory))
+	root.AddCommand(signature.NewCommand(func() string { return flags.Output }, clientFactory))
+	root.AddCommand(quarantine.NewCommand(func() string { return flags.Output }, clientFactory))
 
 	return root
 }

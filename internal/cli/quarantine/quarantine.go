@@ -1,4 +1,4 @@
-package signature
+package quarantine
 
 import (
 	"github.com/spf13/cobra"
@@ -8,10 +8,10 @@ import (
 
 func NewCommand(getFormat func() string, factory k8s.ClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "signature",
-		Short: "Validate, list, and inspect threat signatures",
+		Use:   "quarantine",
+		Short: "List, inspect, and manage agent quarantine state",
 	}
-	cmd.AddCommand(newValidateCommand(getFormat))
 	cmd.AddCommand(newListCommand(getFormat, factory))
+	cmd.AddCommand(newGetCommand(getFormat, factory))
 	return cmd
 }

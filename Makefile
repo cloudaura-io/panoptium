@@ -110,6 +110,11 @@ test-e2e-enforcement: ## Run Gateway Enforcement E2E tests on existing Kind clus
 	@command -v kind >/dev/null 2>&1 || { echo "Kind is not installed."; exit 1; }
 	KIND_CLUSTER=$(KIND_CLUSTER) go test ./test/e2e/ -v -ginkgo.v -timeout 300s -ginkgo.label-filter="e2e-enforcement"
 
+.PHONY: test-e2e-cli
+test-e2e-cli: ## Run panoptium CLI E2E tests on existing Kind cluster (expects deployed operator).
+	@command -v kind >/dev/null 2>&1 || { echo "Kind is not installed."; exit 1; }
+	KIND_CLUSTER=$(KIND_CLUSTER) go test ./test/e2e/ -v -ginkgo.v -timeout 300s -ginkgo.label-filter="e2e-cli"
+
 .PHONY: test-e2e-threat-sig
 test-e2e-threat-sig: ## Run ThreatSignature CRD E2E tests on existing Kind cluster.
 	@command -v kind >/dev/null 2>&1 || { echo "Kind is not installed."; exit 1; }
