@@ -13,5 +13,7 @@ func NewCommand(getFormat func() string, factory k8s.ClientFactory) *cobra.Comma
 	}
 	cmd.AddCommand(newListCommand(getFormat, factory))
 	cmd.AddCommand(newGetCommand(getFormat, factory))
+	cmd.AddCommand(newCreateCommand(getFormat, factory))
+	cmd.AddCommand(newReleaseCommand(getFormat, factory))
 	return cmd
 }

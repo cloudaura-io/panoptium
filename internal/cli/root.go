@@ -13,6 +13,7 @@ import (
 	"github.com/panoptium/panoptium/internal/cli/k8s"
 	"github.com/panoptium/panoptium/internal/cli/policy"
 	"github.com/panoptium/panoptium/internal/cli/quarantine"
+	"github.com/panoptium/panoptium/internal/cli/risk"
 	"github.com/panoptium/panoptium/internal/cli/signature"
 	"github.com/panoptium/panoptium/internal/cli/version"
 )
@@ -74,6 +75,7 @@ and manage agent quarantine and risk state.`,
 	root.AddCommand(signature.NewCommand(func() string { return flags.Output }, clientFactory))
 	root.AddCommand(quarantine.NewCommand(func() string { return flags.Output }, clientFactory))
 	root.AddCommand(events.NewCommand(func() string { return flags.Output }))
+	root.AddCommand(risk.NewCommand(func() string { return flags.Output }, clientFactory))
 
 	return root
 }
