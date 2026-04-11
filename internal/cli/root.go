@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/panoptium/panoptium/internal/cli/clierr"
+	"github.com/panoptium/panoptium/internal/cli/events"
 	"github.com/panoptium/panoptium/internal/cli/k8s"
 	"github.com/panoptium/panoptium/internal/cli/policy"
 	"github.com/panoptium/panoptium/internal/cli/quarantine"
@@ -72,6 +73,7 @@ and manage agent quarantine and risk state.`,
 	root.AddCommand(policy.NewCommand(func() string { return flags.Output }, clientFactory))
 	root.AddCommand(signature.NewCommand(func() string { return flags.Output }, clientFactory))
 	root.AddCommand(quarantine.NewCommand(func() string { return flags.Output }, clientFactory))
+	root.AddCommand(events.NewCommand(func() string { return flags.Output }))
 
 	return root
 }
