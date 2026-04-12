@@ -38,6 +38,13 @@ func ResolveEndpoint(explicit string) (string, error) {
 	return "", ErrNoEndpoint
 }
 
+func ValidateFilter(name, value string) error {
+	if strings.ContainsAny(value, ".*>") {
+		return fmt.Errorf("--%s %q contains NATS wildcard characters (., *, >); use a literal value", name, value)
+	}
+	return nil
+}
+
 func Subject(f Filters) string {
 	ns := f.Namespace
 	if ns == "" {
@@ -59,6 +66,17 @@ func Connect(url string, timeout time.Duration) (*nats.Conn, error) {
 		nats.Name("panoptium-cli"),
 		nats.Timeout(timeout),
 		nats.MaxReconnects(0), // CLI session is short-lived; don't silently reconnect
+		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "disconnected from NATS: %v\n", err)
+			}
+		}),
+		nats.ClosedHandler(func(_ *nats.Conn) {
+			fmt.Fprintln(os.Stderr, "NATS connection closed")
+		}),
+		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) {
+			fmt.Fprintf(os.Stderr, "NATS error: %v\n", err)
+		}),
 	}
 	c, err := nats.Connect(url, opts...)
 	if err != nil {

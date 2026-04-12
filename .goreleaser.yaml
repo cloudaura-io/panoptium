@@ -1,5 +1,8 @@
 version: 2
 
+monorepo:
+  tag_prefix: cli/v
+
 project_name: panoptium
 
 before:
@@ -49,6 +52,20 @@ archives:
 checksum:
   name_template: "panoptium_{{ .Version }}_checksums.txt"
   algorithm: sha256
+
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
 
 sboms:
   - artifacts: archive
@@ -103,10 +120,12 @@ release:
     panoptium version
     ```
 
-    Or with `go install`:
+    Or build from source:
 
     ```bash
-    go install github.com/panoptium/panoptium/cmd/panoptium@cli/v{{ .Version }}
+    git clone https://github.com/cloudaura-io/INTERNAL-panoptium && cd INTERNAL-panoptium
+    git checkout cli/v{{ .Version }}
+    go build -o panoptium ./cmd/panoptium
     ```
 
   footer: |

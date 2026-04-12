@@ -13,11 +13,13 @@ import (
 
 const StdinPath = "-"
 
+const maxFileSize = 10 << 20
+
 type Document struct {
-	Source string
+	Source   string
 	DocIndex int
-	Line int
-	Body []byte
+	Line     int
+	Body     []byte
 }
 
 func (d Document) Location() string {
@@ -73,14 +75,24 @@ func readStdinDocs(stdin io.Reader) ([]Document, error) {
 	if stdin == nil {
 		return nil, errors.New("no stdin reader provided")
 	}
-	b, err := io.ReadAll(stdin)
+	b, err := io.ReadAll(io.LimitReader(stdin, maxFileSize+1))
 	if err != nil {
 		return nil, fmt.Errorf("read stdin: %w", err)
+	}
+	if len(b) > maxFileSize {
+		return nil, fmt.Errorf("stdin exceeds maximum size (%d MB)", maxFileSize>>20)
 	}
 	return splitDocuments("<stdin>", b), nil
 }
 
 func loadFile(path string) ([]Document, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat %s: %w", path, err)
+	}
+	if info.Size() > maxFileSize {
+		return nil, fmt.Errorf("%s: file size %d exceeds maximum (%d MB)", path, info.Size(), maxFileSize>>20)
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
 	"github.com/panoptium/panoptium/internal/cli/k8s"
@@ -61,33 +62,40 @@ func listSignatures(ctx context.Context, built *k8s.Built) (*SignatureListRespon
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	var list v1alpha1.ThreatSignatureList
-	if err := built.Client.List(ctx, &list); err != nil {
-		if meta.IsNoMatchError(err) {
-			return nil, fmt.Errorf("%w: %v", k8s.ErrCRDNotFound, err)
-		}
-		return nil, fmt.Errorf("list ThreatSignature: %w", err)
-	}
 	resp := &SignatureListResponse{}
-	for i := range list.Items {
-		s := &list.Items[i]
-		ready := ""
-		for _, c := range s.Status.Conditions {
-			if c.Type == "Ready" {
-				ready = string(c.Status)
-				break
+	opts := []client.ListOption{client.Limit(500)}
+	for {
+		var list v1alpha1.ThreatSignatureList
+		if err := built.Client.List(ctx, &list, opts...); err != nil {
+			if meta.IsNoMatchError(err) {
+				return nil, fmt.Errorf("%w: %v", k8s.ErrCRDNotFound, err)
 			}
+			return nil, fmt.Errorf("list ThreatSignature: %w", err)
 		}
-		resp.Items = append(resp.Items, SignatureSummary{
-			Name:        s.Name,
-			Category:    s.Spec.Category,
-			Severity:    string(s.Spec.Severity),
-			Protocols:   s.Spec.Protocols,
-			Patterns:    len(s.Spec.Detection.Patterns),
-			Ready:       ready,
-			Age:         relativeAge(s.CreationTimestamp.Time),
-			Description: s.Spec.Description,
-		})
+		for i := range list.Items {
+			s := &list.Items[i]
+			ready := ""
+			for _, c := range s.Status.Conditions {
+				if c.Type == "Ready" {
+					ready = string(c.Status)
+					break
+				}
+			}
+			resp.Items = append(resp.Items, SignatureSummary{
+				Name:        s.Name,
+				Category:    s.Spec.Category,
+				Severity:    string(s.Spec.Severity),
+				Protocols:   s.Spec.Protocols,
+				Patterns:    len(s.Spec.Detection.Patterns),
+				Ready:       ready,
+				Age:         relativeAge(s.CreationTimestamp.Time),
+				Description: s.Spec.Description,
+			})
+		}
+		if list.Continue == "" {
+			break
+		}
+		opts = []client.ListOption{client.Limit(500), client.Continue(list.Continue)}
 	}
 	sort.SliceStable(resp.Items, func(i, j int) bool {
 		return resp.Items[i].Name < resp.Items[j].Name

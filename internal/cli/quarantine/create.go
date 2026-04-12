@@ -61,6 +61,9 @@ truth in either case.`,
 			if level == "" {
 				level = string(v1alpha1.ContainmentLevelNetworkIsolate)
 			}
+			if !isValidContainmentLevel(level) {
+				return fmt.Errorf("invalid --level %q: must be one of network-isolate, syscall-restrict, freeze, evict", level)
+			}
 			return createQuarantine(cmd.Context(), cmd.OutOrStdout(), built, args[0], targetPod, targetNamespace, level, reason, format)
 		},
 	}
@@ -110,4 +113,15 @@ func createQuarantine(ctx context.Context, w io.Writer, built *k8s.Built, name, 
 		}
 	}
 	return writeGetOutput(w, format, q)
+}
+
+var validContainmentLevels = map[string]bool{
+	string(v1alpha1.ContainmentLevelNetworkIsolate):  true,
+	string(v1alpha1.ContainmentLevelSyscallRestrict): true,
+	string(v1alpha1.ContainmentLevelFreeze):          true,
+	string(v1alpha1.ContainmentLevelEvict):           true,
+}
+
+func isValidContainmentLevel(level string) bool {
+	return validContainmentLevels[level]
 }

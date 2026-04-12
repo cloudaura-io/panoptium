@@ -210,7 +210,7 @@ Prints CLI version, commit, build date, Go version, and platform.
 ```bash
 panoptium version
 panoptium version -o json
-panoptium version --client   # skip operator version lookup
+panoptium version -o yaml
 ```
 
 ### `panoptium completion <shell>`

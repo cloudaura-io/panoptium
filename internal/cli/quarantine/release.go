@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/panoptium/panoptium/api/v1alpha1"
@@ -57,19 +58,22 @@ func releaseQuarantine(ctx context.Context, w io.Writer, built *k8s.Built, name 
 	}
 
 	var obj v1alpha1.AgentQuarantine
-	if err := built.Client.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, &obj); err != nil {
-		if apierrors.IsNotFound(err) {
-			return fmt.Errorf("%w: quarantine %q", errNotFound, name)
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := built.Client.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, &obj); err != nil {
+			if apierrors.IsNotFound(err) {
+				return fmt.Errorf("%w: quarantine %q", errNotFound, name)
+			}
+			return err
 		}
+		if obj.Status.ReleasedAt != nil {
+			return fmt.Errorf("%w: %s/%s already released at %s", ErrAlreadyReleased, ns, name, obj.Status.ReleasedAt.String())
+		}
+		now := metav1.Now()
+		obj.Status.ReleasedAt = &now
+		return built.Client.Status().Update(ctx, &obj)
+	})
+	if err != nil {
 		return err
-	}
-	if obj.Status.ReleasedAt != nil {
-		return fmt.Errorf("%w: %s/%s already released at %s", ErrAlreadyReleased, ns, name, obj.Status.ReleasedAt.String())
-	}
-	now := metav1.Now()
-	obj.Status.ReleasedAt = &now
-	if err := built.Client.Status().Update(ctx, &obj); err != nil {
-		return fmt.Errorf("update status for %q: %w", name, err)
 	}
 	return writeGetOutput(w, format, &obj)
 }

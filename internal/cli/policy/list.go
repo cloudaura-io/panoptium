@@ -68,30 +68,46 @@ func listPolicies(ctx context.Context, built *k8s.Built) (*PolicyListResponse, e
 		ctx = context.Background()
 	}
 
-	var nsList v1alpha1.AgentPolicyList
-	opts := []client.ListOption{}
+	nsOpts := []client.ListOption{client.Limit(500)}
 	if !built.AllNamespaces && built.Namespace != "" {
-		opts = append(opts, client.InNamespace(built.Namespace))
+		nsOpts = append(nsOpts, client.InNamespace(built.Namespace))
 	}
-	if err := built.Client.List(ctx, &nsList, opts...); err != nil {
-		if meta.IsNoMatchError(err) {
-			return nil, fmt.Errorf("%w: %v", k8s.ErrCRDNotFound, err)
+	for {
+		var nsList v1alpha1.AgentPolicyList
+		if err := built.Client.List(ctx, &nsList, nsOpts...); err != nil {
+			if meta.IsNoMatchError(err) {
+				return nil, fmt.Errorf("%w: %v", k8s.ErrCRDNotFound, err)
+			}
+			return nil, fmt.Errorf("list AgentPolicy: %w", err)
 		}
-		return nil, fmt.Errorf("list AgentPolicy: %w", err)
-	}
-	for i := range nsList.Items {
-		resp.Items = append(resp.Items, summaryFromPolicy(&nsList.Items[i]))
+		for i := range nsList.Items {
+			resp.Items = append(resp.Items, summaryFromPolicy(&nsList.Items[i]))
+		}
+		if nsList.Continue == "" {
+			break
+		}
+		nsOpts = []client.ListOption{client.Limit(500), client.Continue(nsList.Continue)}
+		if !built.AllNamespaces && built.Namespace != "" {
+			nsOpts = append(nsOpts, client.InNamespace(built.Namespace))
+		}
 	}
 
-	var cpList v1alpha1.AgentClusterPolicyList
-	if err := built.Client.List(ctx, &cpList); err != nil {
-		if meta.IsNoMatchError(err) {
-			return nil, fmt.Errorf("%w: %v", k8s.ErrCRDNotFound, err)
+	cpOpts := []client.ListOption{client.Limit(500)}
+	for {
+		var cpList v1alpha1.AgentClusterPolicyList
+		if err := built.Client.List(ctx, &cpList, cpOpts...); err != nil {
+			if meta.IsNoMatchError(err) {
+				return nil, fmt.Errorf("%w: %v", k8s.ErrCRDNotFound, err)
+			}
+			return nil, fmt.Errorf("list AgentClusterPolicy: %w", err)
 		}
-		return nil, fmt.Errorf("list AgentClusterPolicy: %w", err)
-	}
-	for i := range cpList.Items {
-		resp.Items = append(resp.Items, summaryFromClusterPolicy(&cpList.Items[i]))
+		for i := range cpList.Items {
+			resp.Items = append(resp.Items, summaryFromClusterPolicy(&cpList.Items[i]))
+		}
+		if cpList.Continue == "" {
+			break
+		}
+		cpOpts = []client.ListOption{client.Limit(500), client.Continue(cpList.Continue)}
 	}
 
 	sort.SliceStable(resp.Items, func(i, j int) bool {

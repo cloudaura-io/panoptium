@@ -35,7 +35,6 @@ func Current() Info {
 }
 
 func NewCommand(getFormat func() string) *cobra.Command {
-	var clientOnly bool
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print panoptium CLI version information",
@@ -44,10 +43,7 @@ func NewCommand(getFormat func() string) *cobra.Command {
 
   # machine-parseable
   panoptium version -o json
-  panoptium version -o yaml
-
-  # client-only, no cluster contact
-  panoptium version --client`,
+  panoptium version -o yaml`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			info := Current()
@@ -58,7 +54,6 @@ func NewCommand(getFormat func() string) *cobra.Command {
 			return writeInfo(cmd.OutOrStdout(), format, info)
 		},
 	}
-	cmd.Flags().BoolVar(&clientOnly, "client", false, "print CLI version only; do not contact the operator")
 	return cmd
 }
 

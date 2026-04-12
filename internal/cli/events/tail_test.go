@@ -11,12 +11,9 @@ import (
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	natstest "github.com/nats-io/nats-server/v2/test"
 	natsgo "github.com/nats-io/nats.go"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/panoptium/panoptium/internal/cli/eventbus"
 	"github.com/panoptium/panoptium/internal/cli/output"
-	pb "github.com/panoptium/panoptium/pkg/eventbus/pb"
 )
 
 func runNATSServer(t *testing.T) (string, func()) {
@@ -33,9 +30,28 @@ func runNATSServer(t *testing.T) (string, func()) {
 	}
 }
 
-func encodeEvent(t *testing.T, ev *pb.PanoptiumEvent) []byte {
+// testEnvelope matches the operator's natsEventEnvelope wire format.
+type testEnvelope struct {
+	EventType string          `json:"event_type"`
+	Timestamp time.Time       `json:"timestamp"`
+	RequestID string          `json:"request_id"`
+	Protocol  string          `json:"protocol"`
+	Provider  string          `json:"provider"`
+	Namespace string          `json:"namespace"`
+	Identity  testIdentity    `json:"identity"`
+	Data      json.RawMessage `json:"data"`
+}
+
+type testIdentity struct {
+	ID        string `json:"ID"`
+	SourceIP  string `json:"SourceIP"`
+	Namespace string `json:"Namespace"`
+	PodName   string `json:"PodName"`
+}
+
+func encodeEnvelope(t *testing.T, env testEnvelope) []byte {
 	t.Helper()
-	b, err := proto.Marshal(ev)
+	b, err := json.Marshal(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,20 +59,20 @@ func encodeEvent(t *testing.T, ev *pb.PanoptiumEvent) []byte {
 }
 
 func TestUnwrapExtractsFields(t *testing.T) {
-	ev := &pb.PanoptiumEvent{
-		Id:          "abc",
-		Timestamp:   timestamppb.New(time.Unix(1000, 0)),
-		Category:    "protocol",
-		Subcategory: "tool_call",
-		Severity:    pb.Severity_HIGH,
-		Agent: &pb.AgentIdentity{
+	env := testEnvelope{
+		EventType: "protocol.tool_call",
+		Timestamp: time.Unix(1000, 0),
+		RequestID: "abc",
+		Namespace: "default",
+		Identity: testIdentity{
 			PodName:   "my-pod",
 			Namespace: "default",
 		},
+		Data: json.RawMessage(`{"severity":"HIGH"}`),
 	}
 	msg := &natsgo.Msg{
 		Subject: "panoptium.events.default.protocol.tool_call",
-		Data:    encodeEvent(t, ev),
+		Data:    encodeEnvelope(t, env),
 	}
 	view, ok := unwrap(msg)
 	if !ok {
@@ -80,10 +96,13 @@ func TestUnwrapExtractsFields(t *testing.T) {
 	if view.Subject != "panoptium.events.default.protocol.tool_call" {
 		t.Errorf("Subject=%q", view.Subject)
 	}
+	if view.Severity != "HIGH" {
+		t.Errorf("Severity=%q", view.Severity)
+	}
 }
 
 func TestUnwrapBadPayloadDropped(t *testing.T) {
-	msg := &natsgo.Msg{Subject: "x", Data: []byte("not a proto")}
+	msg := &natsgo.Msg{Subject: "x", Data: []byte("not json {")}
 	if _, ok := unwrap(msg); ok {
 		t.Error("bad payload should return ok=false")
 	}
@@ -93,13 +112,13 @@ func TestWriteEventHuman(t *testing.T) {
 	view := &EventView{
 		ID: "abc", Timestamp: "2026-04-11T00:00:00Z",
 		Category: "protocol", Subcategory: "tool_call",
-		Severity: "SEVERITY_HIGH", Namespace: "default", AgentName: "my-pod",
+		Severity: "HIGH", Namespace: "default", AgentName: "my-pod",
 	}
 	var buf bytes.Buffer
 	if err := writeEvent(&buf, output.FormatHuman, view); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"protocol", "tool_call", "default", "my-pod", "SEVERITY_HIGH"} {
+	for _, want := range []string{"protocol", "tool_call", "default", "my-pod", "HIGH"} {
 		if !strings.Contains(buf.String(), want) {
 			t.Errorf("missing %q:\n%s", want, buf.String())
 		}
@@ -107,7 +126,7 @@ func TestWriteEventHuman(t *testing.T) {
 }
 
 func TestWriteEventJSONOneLine(t *testing.T) {
-	view := &EventView{ID: "abc", Category: "protocol", Severity: "SEVERITY_HIGH"}
+	view := &EventView{ID: "abc", Category: "protocol", Severity: "HIGH"}
 	var buf bytes.Buffer
 	if err := writeEvent(&buf, output.FormatJSON, view); err != nil {
 		t.Fatal(err)
@@ -168,18 +187,22 @@ func TestStreamEventsIntegration(t *testing.T) {
 	}
 	defer publisher.Close()
 
-	evs := []*pb.PanoptiumEvent{
+	envs := []testEnvelope{
 		{
-			Id: "ev-1", Timestamp: timestamppb.Now(),
-			Category: "protocol", Subcategory: "tool_call",
-			Severity: pb.Severity_INFO,
-			Agent:    &pb.AgentIdentity{PodName: "pod1", Namespace: "default"},
+			EventType: "protocol.tool_call",
+			Timestamp: time.Now(),
+			RequestID: "ev-1",
+			Namespace: "default",
+			Identity:  testIdentity{PodName: "pod1", Namespace: "default"},
+			Data:      json.RawMessage(`{"severity":"INFO"}`),
 		},
 		{
-			Id: "ev-2", Timestamp: timestamppb.Now(),
-			Category: "policy", Subcategory: "decision",
-			Severity: pb.Severity_CRITICAL,
-			Agent:    &pb.AgentIdentity{PodName: "pod2", Namespace: "default"},
+			EventType: "policy.decision",
+			Timestamp: time.Now(),
+			RequestID: "ev-2",
+			Namespace: "default",
+			Identity:  testIdentity{PodName: "pod2", Namespace: "default"},
+			Data:      json.RawMessage(`{"severity":"CRITICAL"}`),
 		},
 	}
 
@@ -189,9 +212,9 @@ func TestStreamEventsIntegration(t *testing.T) {
 
 	go func() {
 		time.Sleep(150 * time.Millisecond)
-		for _, ev := range evs {
-			subj := "panoptium.events.default." + ev.Category + "." + ev.Subcategory
-			_ = publisher.Publish(subj, encodeEvent(t, ev))
+		for _, env := range envs {
+			subj := "panoptium.events.default." + env.EventType
+			_ = publisher.Publish(subj, encodeEnvelope(t, env))
 		}
 		_ = publisher.Flush()
 	}()

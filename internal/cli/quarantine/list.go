@@ -62,20 +62,29 @@ func listQuarantines(ctx context.Context, built *k8s.Built) (*QuarantineListResp
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	var list v1alpha1.AgentQuarantineList
-	opts := []client.ListOption{}
+	resp := &QuarantineListResponse{}
+	opts := []client.ListOption{client.Limit(500)}
 	if !built.AllNamespaces && built.Namespace != "" {
 		opts = append(opts, client.InNamespace(built.Namespace))
 	}
-	if err := built.Client.List(ctx, &list, opts...); err != nil {
-		if meta.IsNoMatchError(err) {
-			return nil, fmt.Errorf("%w: %v", k8s.ErrCRDNotFound, err)
+	for {
+		var list v1alpha1.AgentQuarantineList
+		if err := built.Client.List(ctx, &list, opts...); err != nil {
+			if meta.IsNoMatchError(err) {
+				return nil, fmt.Errorf("%w: %v", k8s.ErrCRDNotFound, err)
+			}
+			return nil, fmt.Errorf("list AgentQuarantine: %w", err)
 		}
-		return nil, fmt.Errorf("list AgentQuarantine: %w", err)
-	}
-	resp := &QuarantineListResponse{}
-	for i := range list.Items {
-		resp.Items = append(resp.Items, summarize(&list.Items[i]))
+		for i := range list.Items {
+			resp.Items = append(resp.Items, summarize(&list.Items[i]))
+		}
+		if list.Continue == "" {
+			break
+		}
+		opts = []client.ListOption{client.Limit(500), client.Continue(list.Continue)}
+		if !built.AllNamespaces && built.Namespace != "" {
+			opts = append(opts, client.InNamespace(built.Namespace))
+		}
 	}
 	sort.SliceStable(resp.Items, func(i, j int) bool {
 		a, b := resp.Items[i], resp.Items[j]

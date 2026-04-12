@@ -7,17 +7,16 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	natsgo "github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/panoptium/panoptium/internal/cli/eventbus"
 	"github.com/panoptium/panoptium/internal/cli/output"
-	pb "github.com/panoptium/panoptium/pkg/eventbus/pb"
 )
 
 type EventView struct {
@@ -66,7 +65,7 @@ not part of the subject hierarchy.`,
   panoptium events tail --category policy
 
   # only events from the 'default' namespace, as JSON
-  panoptium events tail --namespace default -o json
+  panoptium events tail --ns-filter default -o json
 
   # stop after 10 events
   panoptium events tail --count 10`,
@@ -77,6 +76,16 @@ not part of the subject hierarchy.`,
 			}
 			if format == output.FormatTable {
 				return &output.FormatUnsupportedError{Command: "events tail", Format: format}
+			}
+			if namespace != "" {
+				if err := eventbus.ValidateFilter("ns-filter", namespace); err != nil {
+					return err
+				}
+			}
+			if category != "" {
+				if err := eventbus.ValidateFilter("category", category); err != nil {
+					return err
+				}
 			}
 			endpoint, err := eventbus.ResolveEndpoint(natsEndpoint)
 			if err != nil {
@@ -110,7 +119,10 @@ not part of the subject hierarchy.`,
 func streamEvents(ctx context.Context, w io.Writer, conn *natsgo.Conn, f eventbus.Filters, format output.Format, count int) error {
 	var delivered atomic.Int32
 	done := make(chan struct{})
-	var firstErr error
+	var (
+		mu       sync.Mutex
+		firstErr error
+	)
 
 	handler := func(msg *natsgo.Msg) {
 		view, ok := unwrap(msg)
@@ -121,9 +133,11 @@ func streamEvents(ctx context.Context, w io.Writer, conn *natsgo.Conn, f eventbu
 			return
 		}
 		if err := writeEvent(w, format, view); err != nil {
+			mu.Lock()
 			if firstErr == nil {
 				firstErr = err
 			}
+			mu.Unlock()
 			select {
 			case <-done:
 			default:
@@ -151,30 +165,69 @@ func streamEvents(ctx context.Context, w io.Writer, conn *natsgo.Conn, f eventbu
 	case <-ctx.Done():
 	case <-done:
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	return firstErr
 }
 
+// natsEventEnvelope mirrors the operator's JSON wire format in pkg/eventbus/nats/bus.go.
+type natsEventEnvelope struct {
+	EventType string          `json:"event_type"`
+	Timestamp time.Time       `json:"timestamp"`
+	RequestID string          `json:"request_id"`
+	Protocol  string          `json:"protocol"`
+	Provider  string          `json:"provider"`
+	Namespace string          `json:"namespace"`
+	Identity  envelopeAgent   `json:"identity"`
+	Data      json.RawMessage `json:"data"`
+}
+
+type envelopeAgent struct {
+	ID        string `json:"ID"`
+	SourceIP  string `json:"SourceIP"`
+	Namespace string `json:"Namespace"`
+	PodName   string `json:"PodName"`
+}
+
 func unwrap(msg *natsgo.Msg) (*EventView, bool) {
-	var ev pb.PanoptiumEvent
-	if err := proto.Unmarshal(msg.Data, &ev); err != nil {
+	var env natsEventEnvelope
+	if err := json.Unmarshal(msg.Data, &env); err != nil {
 		return nil, false
 	}
+	category, subcategory := splitEventType(env.EventType)
 	view := &EventView{
-		ID:          ev.GetId(),
-		Category:    ev.GetCategory(),
-		Subcategory: ev.GetSubcategory(),
-		Severity:    ev.GetSeverity().String(),
+		ID:          env.RequestID,
+		Timestamp:   env.Timestamp.UTC().Format(time.RFC3339Nano),
+		Category:    category,
+		Subcategory: subcategory,
+		Severity:    "", // severity is in the inner Data payload, not the envelope
+		Namespace:   env.Namespace,
+		PodName:     env.Identity.PodName,
+		AgentName:   env.Identity.PodName,
 		Subject:     msg.Subject,
 	}
-	if ts := ev.GetTimestamp(); ts != nil {
-		view.Timestamp = ts.AsTime().UTC().Format(time.RFC3339Nano)
+	var inner struct {
+		Severity string `json:"severity"`
 	}
-	if a := ev.GetAgent(); a != nil {
-		view.Namespace = a.GetNamespace()
-		view.PodName = a.GetPodName()
-		view.AgentName = a.GetPodName()
+	if json.Unmarshal(env.Data, &inner) == nil && inner.Severity != "" {
+		view.Severity = inner.Severity
+	}
+	if view.Namespace == "" {
+		view.Namespace = env.Identity.Namespace
+	}
+	if view.AgentName == "" {
+		view.AgentName = env.Identity.ID
 	}
 	return view, true
+}
+
+func splitEventType(et string) (string, string) {
+	for i := 0; i < len(et); i++ {
+		if et[i] == '.' {
+			return et[:i], et[i+1:]
+		}
+	}
+	return et, ""
 }
 
 func writeEvent(w io.Writer, format output.Format, view *EventView) error {
