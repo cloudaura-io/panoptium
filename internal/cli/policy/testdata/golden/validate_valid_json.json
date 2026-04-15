@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "source": "<masked>.yaml",
+      "docIndex": 0,
+      "line": 1,
+      "kind": "AgentPolicy",
+      "name": "deny-shell",
+      "namespace": "default",
+      "status": "ok"
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "ok": 1,
+    "errors": 0,
+    "warnings": 0,
+    "skipped": 0
+  }
+}

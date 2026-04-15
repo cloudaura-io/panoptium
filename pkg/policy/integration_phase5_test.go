@@ -28,6 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const categoryKernel = "kernel"
+
 func TestIntegration_CompileEvaluateDecisionTrace(t *testing.T) {
 	pol := &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -42,7 +44,7 @@ func TestIntegration_CompileEvaluateDecisionTrace(t *testing.T) {
 				{
 					Name: "deny-curl-etc",
 					Trigger: v1alpha1.Trigger{
-						EventCategory:    "kernel",
+						EventCategory:    categoryKernel,
 						EventSubcategory: "process_exec",
 					},
 					Predicates: []v1alpha1.Predicate{
@@ -65,7 +67,7 @@ func TestIntegration_CompileEvaluateDecisionTrace(t *testing.T) {
 	tree := policy.NewDecisionTree(compiled)
 
 	event := &policy.PolicyEvent{
-		Category:    "kernel",
+		Category:    categoryKernel,
 		Subcategory: "process_exec",
 		Timestamp:   time.Now(),
 		Fields: map[string]interface{}{
@@ -101,7 +103,6 @@ func TestIntegration_CompileEvaluateDecisionTrace(t *testing.T) {
 func TestIntegration_MultiPolicyComposition(t *testing.T) {
 	compiler := policy.NewPolicyCompiler()
 
-	// High priority deny policy
 	denyPol := &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "deny-policy",
@@ -115,7 +116,7 @@ func TestIntegration_MultiPolicyComposition(t *testing.T) {
 				{
 					Name: "deny-curl",
 					Trigger: v1alpha1.Trigger{
-						EventCategory:    "kernel",
+						EventCategory:    categoryKernel,
 						EventSubcategory: "process_exec",
 					},
 					Predicates: []v1alpha1.Predicate{
@@ -128,7 +129,6 @@ func TestIntegration_MultiPolicyComposition(t *testing.T) {
 		},
 	}
 
-	// Lower priority allow policy
 	allowPol := &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "allow-policy",
@@ -142,7 +142,7 @@ func TestIntegration_MultiPolicyComposition(t *testing.T) {
 				{
 					Name: "allow-all",
 					Trigger: v1alpha1.Trigger{
-						EventCategory:    "kernel",
+						EventCategory:    categoryKernel,
 						EventSubcategory: "process_exec",
 					},
 					Action:   v1alpha1.Action{Type: v1alpha1.ActionTypeAllow},
@@ -163,9 +163,8 @@ func TestIntegration_MultiPolicyComposition(t *testing.T) {
 
 	resolver := policy.NewPolicyCompositionResolver()
 
-	// curl event should be denied (higher priority policy)
 	event := &policy.PolicyEvent{
-		Category:    "kernel",
+		Category:    categoryKernel,
 		Subcategory: "process_exec",
 		Namespace:   "default",
 		PodLabels:   map[string]string{"app": "agent"},
@@ -183,9 +182,8 @@ func TestIntegration_MultiPolicyComposition(t *testing.T) {
 		t.Errorf("expected deny-policy, got %q", decision.PolicyName)
 	}
 
-	// python event should be allowed (only allow-all matches from lower policy, but deny doesn't match)
 	event2 := &policy.PolicyEvent{
-		Category:    "kernel",
+		Category:    categoryKernel,
 		Subcategory: "process_exec",
 		Namespace:   "default",
 		PodLabels:   map[string]string{"app": "agent"},
@@ -210,7 +208,6 @@ func TestIntegration_RateLimitingAcrossEvaluations(t *testing.T) {
 		AutoIncrement: true,
 	}
 
-	// First 2 evaluations: below limit
 	for i := 0; i < 2; i++ {
 		event := &policy.PolicyEvent{
 			Category:    "protocol",
@@ -229,7 +226,6 @@ func TestIntegration_RateLimitingAcrossEvaluations(t *testing.T) {
 		}
 	}
 
-	// Third evaluation: at limit
 	event := &policy.PolicyEvent{
 		Category:    "protocol",
 		Subcategory: "tool_call",
@@ -250,13 +246,12 @@ func TestIntegration_RateLimitingAcrossEvaluations(t *testing.T) {
 func TestIntegration_TemporalSequenceDetection(t *testing.T) {
 	detector := predicate.NewTemporalSequenceDetector()
 
-	// Record a series of events
 	events := []struct {
 		category    string
 		subcategory string
 	}{
-		{"kernel", "process_exec"},
-		{"kernel", "file_write"},
+		{categoryKernel, "process_exec"},
+		{categoryKernel, "file_write"},
 		{"network", "egress_attempt"},
 	}
 
@@ -272,10 +267,9 @@ func TestIntegration_TemporalSequenceDetection(t *testing.T) {
 		detector.RecordEvent("agent-1", ev)
 	}
 
-	// Check: egress was preceded by file_write
 	eval := &predicate.TemporalSequenceEvaluator{
 		Detector:              detector,
-		PrecededByCategory:    "kernel",
+		PrecededByCategory:    categoryKernel,
 		PrecededBySubcategory: "file_write",
 		Window:                5 * time.Second,
 		SessionField:          "agentID",
@@ -306,11 +300,10 @@ func TestIntegration_EscalationChainRepeatedViolations(t *testing.T) {
 
 	registry := action.NewActionExecutorRegistry()
 
-	// Simulate 3 deny actions for agent-1
 	for i := 0; i < 3; i++ {
 		ctx := &action.ActionContext{
 			Event: &policy.PolicyEvent{
-				Category:    "kernel",
+				Category:    categoryKernel,
 				Subcategory: "process_exec",
 			},
 			Rule: &policy.CompiledRule{Name: "deny-curl", Index: 0},
@@ -331,7 +324,6 @@ func TestIntegration_EscalationChainRepeatedViolations(t *testing.T) {
 		proc.RecordAction("agent-1", "deny")
 	}
 
-	// Check for escalation
 	escalated, toAction := proc.CheckEscalation("agent-1", "deny")
 	if !escalated {
 		t.Fatal("expected escalation after 3 denials")
@@ -340,10 +332,9 @@ func TestIntegration_EscalationChainRepeatedViolations(t *testing.T) {
 		t.Errorf("expected escalation to quarantine, got %q", toAction)
 	}
 
-	// Execute the escalated action
 	ctx := &action.ActionContext{
 		Event: &policy.PolicyEvent{
-			Category:    "kernel",
+			Category:    categoryKernel,
 			Subcategory: "process_exec",
 		},
 		Rule: &policy.CompiledRule{Name: "deny-curl", Index: 0},
@@ -376,7 +367,6 @@ func TestIntegration_DecisionEventPublished(t *testing.T) {
 	sub := bus.Subscribe(eventbus.EventTypePolicyDecision)
 	pub := policy.NewDecisionPublisher(bus)
 
-	// Compile a real policy
 	pol := &v1alpha1.AgentPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "publish-test",
@@ -390,7 +380,7 @@ func TestIntegration_DecisionEventPublished(t *testing.T) {
 				{
 					Name: "deny-curl",
 					Trigger: v1alpha1.Trigger{
-						EventCategory:    "kernel",
+						EventCategory:    categoryKernel,
 						EventSubcategory: "process_exec",
 					},
 					Predicates: []v1alpha1.Predicate{
@@ -412,7 +402,7 @@ func TestIntegration_DecisionEventPublished(t *testing.T) {
 	tree := policy.NewDecisionTree(compiled)
 
 	event := &policy.PolicyEvent{
-		Category:    "kernel",
+		Category:    categoryKernel,
 		Subcategory: "process_exec",
 		Timestamp:   time.Now(),
 		Fields:      map[string]interface{}{"processName": "curl"},
@@ -423,10 +413,8 @@ func TestIntegration_DecisionEventPublished(t *testing.T) {
 		t.Fatalf("Evaluate: %v", err)
 	}
 
-	// Publish the decision
 	pub.Publish(decision, event)
 
-	// Verify we receive the event
 	select {
 	case ev := <-sub.Events():
 		pde, ok := ev.(*policy.PolicyDecisionEvent)
@@ -442,7 +430,7 @@ func TestIntegration_DecisionEventPublished(t *testing.T) {
 		if string(pde.ActionTaken) != "deny" {
 			t.Errorf("expected ActionTaken=deny, got %q", pde.ActionTaken)
 		}
-		if pde.TriggerCategory != "kernel" {
+		if pde.TriggerCategory != categoryKernel {
 			t.Errorf("expected TriggerCategory=kernel, got %q", pde.TriggerCategory)
 		}
 	case <-time.After(1 * time.Second):

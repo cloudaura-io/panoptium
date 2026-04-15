@@ -110,6 +110,11 @@ test-e2e-enforcement: ## Run Gateway Enforcement E2E tests on existing Kind clus
 	@command -v kind >/dev/null 2>&1 || { echo "Kind is not installed."; exit 1; }
 	KIND_CLUSTER=$(KIND_CLUSTER) go test ./test/e2e/ -v -ginkgo.v -timeout 300s -ginkgo.label-filter="e2e-enforcement"
 
+.PHONY: test-e2e-cli
+test-e2e-cli: ## Run panoptium CLI E2E tests on existing Kind cluster (expects deployed operator).
+	@command -v kind >/dev/null 2>&1 || { echo "Kind is not installed."; exit 1; }
+	KIND_CLUSTER=$(KIND_CLUSTER) go test ./test/e2e/ -v -ginkgo.v -timeout 300s -ginkgo.label-filter="e2e-cli"
+
 .PHONY: test-e2e-threat-sig
 test-e2e-threat-sig: ## Run ThreatSignature CRD E2E tests on existing Kind cluster.
 	@command -v kind >/dev/null 2>&1 || { echo "Kind is not installed."; exit 1; }
@@ -133,6 +138,27 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
+
+# CLI build flags: inject version metadata via -ldflags -X.
+CLI_VERSION ?= dev
+CLI_COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+CLI_DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+CLI_LDFLAGS := -s -w \
+	-X github.com/panoptium/panoptium/internal/cli/version.Version=$(CLI_VERSION) \
+	-X github.com/panoptium/panoptium/internal/cli/version.Commit=$(CLI_COMMIT) \
+	-X github.com/panoptium/panoptium/internal/cli/version.Date=$(CLI_DATE)
+
+.PHONY: cli-build
+cli-build: fmt vet ## Build panoptium CLI binary to bin/panoptium.
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(CLI_LDFLAGS)" -o bin/panoptium ./cmd/panoptium
+
+.PHONY: cli-smoke
+cli-smoke: cli-build ## Build CLI and run a smoke-test of --help, version, completion.
+	@bin/panoptium --help >/dev/null
+	@bin/panoptium version >/dev/null
+	@bin/panoptium version -o json | grep -q '"version"'
+	@bin/panoptium completion zsh | grep -q '#compdef'
+	@echo "cli-smoke OK"
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.

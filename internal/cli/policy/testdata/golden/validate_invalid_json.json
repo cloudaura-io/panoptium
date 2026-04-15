@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "source": "<masked>.yaml",
+      "docIndex": 0,
+      "line": 1,
+      "kind": "AgentPolicy",
+      "name": "broken-action",
+      "namespace": "default",
+      "status": "error",
+      "diagnostics": [
+        {
+          "severity": "error",
+          "field": "action.type",
+          "message": "unsupported action type \"explode\"; valid types: allow, deny, alert, quarantine, rateLimit"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "ok": 0,
+    "errors": 1,
+    "warnings": 0,
+    "skipped": 0
+  }
+}
